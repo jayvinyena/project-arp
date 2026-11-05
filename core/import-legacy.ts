@@ -63,6 +63,8 @@ const n = (v: Cell): number | null => {
   return Number.isFinite(x) ? x : null;
 };
 /** 옛 도구(06_Utils.js arpToBoolean_)와 같은 규칙: 체크(참) 또는 TRUE·Y·YES·1만 참. 빈칸·그 밖의 글자는 거짓 */
+/** 사용 여부 칸: 시트에 그 칸이 아예 없으면 사용으로 본다(예: 06 템플릿 탭에 ACTIVE 칸이 없는 시트). 칸이 있으면 옛 규칙(bool) */
+const on = (r: Row, col: string): boolean => (col in r ? bool(r[col]) : true);
 /** 정수 칸(순서·수량): 소수는 반올림 */
 const int = (v: Cell): number | null => { const x = n(v); return x == null ? null : Math.round(x); };
 /** 같은 키가 두 번 나오면 뒤의 행을 건너뛴다(앞의 것을 쓴다) */
@@ -125,6 +127,11 @@ const level = (v: Cell): number => {
 const STATUS: Record<string, string> = {
   PLANNED: 'PLANNED', PLAN: 'PLANNED', READY: 'PLANNED', IN_PROGRESS: 'IN_PROGRESS', ACTIVE: 'IN_PROGRESS', PROGRESS: 'IN_PROGRESS',
   DONE: 'DONE', COMPLETED: 'DONE', COMPLETE: 'DONE', RELEASED: 'DONE', CANCELLED: 'CANCELLED', CANCELED: 'CANCELLED', DROPPED: 'CANCELLED',
+  // 한국어 상태(실제 운영 시트에서 씀)
+  '계획': 'PLANNED', '예정': 'PLANNED', '대기': 'PLANNED', '준비': 'PLANNED',
+  '진행': 'IN_PROGRESS', '진행중': 'IN_PROGRESS', '진행 중': 'IN_PROGRESS', '제작중': 'IN_PROGRESS', '제작 중': 'IN_PROGRESS',
+  '완료': 'DONE', '출시': 'DONE', '출시 완료': 'DONE', '출시완료': 'DONE',
+  '취소': 'CANCELLED', '중단': 'CANCELLED', '무산': 'CANCELLED',
 };
 
 /** 옛 시트 → 새 표 행 + 보고서 */
@@ -148,8 +155,8 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   // ───────── 파트 ─────────
   const partRows = uniqueBy(table(sheets, '01_Part_Master').filter(r => s(r.PART_ID)), r => s(r.PART_ID), k => skip(`파트 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
   const parts = partRows.map((r, i) => {
-    const active = bool(r.ACTIVE) && bool(r.IS_CAPACITY_TARGET);
-    if (bool(r.ACTIVE) && !bool(r.IS_CAPACITY_TARGET)) adjust(`파트 ${s(r.PART_NAME) || s(r.PART_ID)}: 작업 가능량 대상이 아니라 "사용 안 함"으로 가져왔어요`);
+    const active = on(r, 'ACTIVE') && on(r, 'IS_CAPACITY_TARGET');
+    if (on(r, 'ACTIVE') && !on(r, 'IS_CAPACITY_TARGET')) adjust(`파트 ${s(r.PART_NAME) || s(r.PART_ID)}: 작업 가능량 대상이 아니라 "사용 안 함"으로 가져왔어요`);
     return { part_id: s(r.PART_ID), name: s(r.PART_NAME) || s(r.PART_ID), sort_order: int(r.SORT_ORDER) ?? i + 1, active: active ? 1 : 0 };
   });
   const partIds = new Set(parts.map(p => p.part_id));
@@ -171,7 +178,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const groups = resRows.filter(isGroup).map((r, i) => ({ group_id: s(r.RESOURCE_ID), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID), sort_order: int(r.SORT_ORDER) ?? i + 1 }));
   const resourceTypes = resRows.filter(r => !isGroup(r)).map((r, i) => ({
     resource_type_id: s(r.RESOURCE_ID), group_id: groupOf(r), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID),
-    sort_order: int(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0,
+    sort_order: int(r.SORT_ORDER) ?? i + 1, active: on(r, 'ACTIVE') ? 1 : 0,
   }));
   const rtIds = new Set(resourceTypes.map(r => r.resource_type_id));
   const nested = resRows.filter(r => !isGroup(r) && s(r.PARENT_RESOURCE_ID) && byId.get(s(r.PARENT_RESOURCE_ID)) && !isGroup(byId.get(s(r.PARENT_RESOURCE_ID))!)).length;
@@ -228,7 +235,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const capStart = capMonths[0];
   const capEnd = capMonths[capMonths.length - 1];
   // 옛 엔진이 계산 기간을 정할 때 본 업데이트(사용 중) 날짜
-  const activeUpd = table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID) && bool(r.ACTIVE));
+  const activeUpd = table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID) && on(r, 'ACTIVE'));
   const releaseMonthOf = (r: Row) => date(r.RELEASE_DATE)?.slice(0, 7) ?? month(r.TARGET_YEAR_MONTH);
   let start = capStart;
   let end = capEnd;
@@ -314,22 +321,32 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const updateTypes = typeRows.map((r, i) => {
     const id = s(r.UPDATE_TYPE_ID);
     const name = s(r.UPDATE_TYPE_NAME) || id;
-    return { update_type_id: id, name, is_launch: id.toUpperCase() === 'LAUNCH' || name.includes('런칭') ? 1 : 0, sort_order: int(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0 };
+    return { update_type_id: id, name, is_launch: id.toUpperCase() === 'LAUNCH' || name.includes('런칭') ? 1 : 0, sort_order: int(r.SORT_ORDER) ?? i + 1, active: on(r, 'ACTIVE') ? 1 : 0 };
   });
   const typeIds = new Set(updateTypes.map(t => t.update_type_id));
   const templates: Record<string, unknown>[] = [];
+  let templateFilled = 0;
   for (const r of table(sheets, '06_Update_Volume_Template')) {
-    if (!bool(r.ACTIVE)) continue;
+    if (!on(r, 'ACTIVE')) continue;
     const t = s(r.UPDATE_TYPE_ID);
     const rt = s(r.RESOURCE_ID);
     if (!typeIds.has(t) || !rtIds.has(rt)) { skip(`템플릿 ${t}|${rt}: 없는 유형이나 리소스`); continue; }
     if (templates.some(x => x.update_type_id === t && x.resource_type_id === rt)) { skip(`템플릿 ${t}|${rt}: 같은 행이 두 번 있어 뒤의 것을 건너뜀`); continue; }
-    templates.push({ update_type_id: t, resource_type_id: rt, min_qty: int(r.MIN_QTY), target_qty: int(r.TARGET_QTY), stretch_qty: int(r.STRETCH_QTY) });
+    // 물량과 같게: 빈(또는 0) 최저 · 빈 확장은 목표와 같게
+    const tTarget = int(r.TARGET_QTY);
+    let tMin = int(r.MIN_QTY);
+    let tStretch = int(r.STRETCH_QTY);
+    if (tTarget != null && (tMin == null || tMin === 0) && tMin !== tTarget) { tMin = tTarget; templateFilled += 1; }
+    if (tTarget != null && tStretch == null) { tStretch = tTarget; templateFilled += 1; }
+    templates.push({ update_type_id: t, resource_type_id: rt, min_qty: tMin, target_qty: tTarget, stretch_qty: tStretch });
   }
+
+  if (templateFilled) adjust(`유형 템플릿의 빈 최저·확장 ${templateFilled}칸: 물량처럼 목표와 같게 넣었어요`);
 
   // ───────── 업데이트: 등급(HIGH/MEDIUM/LOW) → 숫자 순위 ─────────
   const updRows = uniqueBy(table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID)), r => s(r.UPDATE_ID), k => skip(`업데이트 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
   let releaseFilled = 0;
+  let startFilled = 0;
   const statusUnknown = new Set<string>();
   const ups = updRows.map((r, i) => {
     const id = s(r.UPDATE_ID);
@@ -345,17 +362,19 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     const raw = s(r.STATUS).toUpperCase();
     let status = STATUS[raw] ?? 'PLANNED';
     if (raw && !STATUS[raw]) statusUnknown.add(raw);
-    if (compat && bool(r.ACTIVE) && (status === 'DONE' || status === 'CANCELLED')) status = 'PLANNED';
-    if (!bool(r.ACTIVE)) status = 'CANCELLED';
+    if (compat && on(r, 'ACTIVE') && (status === 'DONE' || status === 'CANCELLED')) status = 'PLANNED';
+    if (!on(r, 'ACTIVE')) status = 'CANCELLED';
     return {
       row: {
         update_id: id, name: s(r.UPDATE_NAME) || id, update_type_id: type,
-        start_date: date(r.PLAN_START_DATE), freeze_date: date(r.CONTENT_FREEZE_DATE), release_date: release,
+        // 시작일이 비면 옛 도구처럼 계산 기간의 첫날(arpResolveUpdateStartDate_의 fallback)
+        start_date: date(r.PLAN_START_DATE) ?? (on(r, 'ACTIVE') ? (startFilled += 1, `${start}-01`) : null), freeze_date: date(r.CONTENT_FREEZE_DATE), release_date: release,
         priority: 0, status, sort_order: int(r.SORT_ORDER) ?? i + 1, note: s(r.DESCRIPTION) || null,
       },
       level: level(r.PRIORITY),
     };
   });
+  if (startFilled) adjust(`시작일이 빈 업데이트 ${startFilled}개: 옛 도구처럼 계획 기간 첫날(${start}-01)로 채웠어요. 실제 시작일을 넣어 주세요`);
   if (releaseFilled) adjust(`출시일이 빈 업데이트 ${releaseFilled}개: 옛 도구처럼 목표 월(TARGET_YEAR_MONTH)의 말일로 채웠어요`);
   if (statusUnknown.size) adjust(`알 수 없는 상태(${[...statusUnknown].join(', ')})는 "계획"으로 가져왔어요`);
   const live = (x: { row: { status: string } }) => x.row.status === 'PLANNED' || x.row.status === 'IN_PROGRESS';
@@ -402,7 +421,8 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     const lvl = s(r.REQUIRED_LEVEL).toUpperCase();
     volumes.push({
       update_id: u, resource_type_id: rt, min_qty: min, target_qty: target, stretch_qty: stretch,
-      required: lvl === 'MUST' || lvl === '필수' || lvl === '' ? 1 : 0,
+      // 선택으로 볼 것만 선택(SHOULD·COULD 등). 빈칸과 옛 기본값 UNCLASSIFIED는 필수
+      required: ['SHOULD', 'COULD', 'WONT', "WON'T", 'OPTIONAL', 'NICE', '선택'].includes(lvl) ? 0 : 1,
       priority: Math.max(1, level(r.PRIORITY)),
       difficulty: n(r.DIFFICULTY_FACTOR) || 1,
       reuse_rate: n(r.REUSE_RATE) ?? 0,
@@ -413,7 +433,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   if (folded) adjust(`물량 ${folded}행: 추가·이월·취소 수량을 최저·목표·확장에 합쳤어요(새 구조에는 그 칸이 없어요)`);
   if (minFilled) adjust(`최저가 비었거나 0인 물량 ${minFilled}행: 옛 도구처럼 목표와 같게 넣었어요`);
   if (stretchFilled) adjust(`확장이 빈 물량 ${stretchFilled}행: 목표와 같게 넣었어요`);
-  adjust('필수 여부: MUST만 필수, 나머지(SHOULD 등)는 선택으로 가져왔어요');
+  adjust('필수 여부: SHOULD·COULD 등은 선택, 그 밖(MUST·빈칸·UNCLASSIFIED)은 필수로 가져왔어요');
 
   // ───────── 실적: 완료 + 외주 완료 + 규격 제외 = 완료 수량 ─────────
   const progress: Record<string, unknown>[] = [];
@@ -431,7 +451,9 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     }
     pSeen.add(pk);
     if (!qty) continue;
-    progress.push({ update_id: u, resource_type_id: rt, part_id: part, completed_qty: qty, as_of: date(r.UPDATED_AT) });
+    // 기준일은 AS_OF_DATE(없으면 UPDATED_AT), 실투입 인·일은 ACTUAL_EFFORT_DAYS
+    const spent = n(r.ACTUAL_EFFORT_DAYS);
+    progress.push({ update_id: u, resource_type_id: rt, part_id: part, completed_qty: qty, as_of: date(r.AS_OF_DATE) ?? date(r.UPDATED_AT), spent_days: spent != null && spent > 0 ? spent : null });
   }
 
   const now = options.now ?? new Date().toISOString();

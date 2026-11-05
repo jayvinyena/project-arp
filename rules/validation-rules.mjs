@@ -131,9 +131,10 @@ export const RULES = [
         AND NOT EXISTS (SELECT 1 FROM efforts e WHERE e.resource_type_id = rp.resource_type_id AND e.part_id = rp.part_id AND e.profile_id = 'BASE')`),
   },
   {
-    code: 'E04', level: 'ERROR', title: '공수가 0 이하다',
-    fix: '1개당 인·일을 0보다 크게 입력한다. 그 파트를 거치지 않으면 거치는 파트에서 뺀다.',
-    sql: q(`SELECT resource_type_id || '|' || part_id || '|' || profile_id AS key, printf('공수 %g', days) AS detail FROM efforts WHERE days <= 0`),
+    code: 'E04', level: 'ERROR', title: '공수가 0보다 작다',
+    // 0은 받는다: 옛 도구 데이터에서 "그 파트에서는 할 일 없음"으로 쓰이고, 엔진도 0일 공정으로 옛 엔진과 같게 계산한다(2026-11-05 실제 운영 시트)
+    fix: '1개당 인·일을 0 이상으로 입력한다. 그 파트를 거치지 않으면 거치는 파트에서 빼거나 0으로 둔다.',
+    sql: q(`SELECT resource_type_id || '|' || part_id || '|' || profile_id AS key, printf('공수 %g', days) AS detail FROM efforts WHERE days < 0`),
   },
   {
     code: 'E05', level: 'ERROR', title: '재작업률이 0–1 밖이다',

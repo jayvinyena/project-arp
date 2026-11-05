@@ -91,6 +91,9 @@ test('대조: 옛 근무일 수에 맞추면 옛 엔진과 필요 공수·작업
     assert.ok(Math.abs(p.oldCapacity - p.newCapacity) < 1e-6, `${p.partId} 작업 가능량 ${p.oldCapacity} ≠ ${p.newCapacity}`);
   }
   for (const u of r.updates) assert.equal(u.diffCalendarDays, 0, `${u.updateId} ${u.oldCompletion} → ${u.newCompletion}`);
+  // 일정 짜는 방식까지: 파트×달 배정 공수, 공정별 시작·완료일
+  assert.ok(r.months.length > 0 && r.months.every(m => m.same), JSON.stringify(r.months.filter(m => !m.same).slice(0, 3)));
+  assert.ok(r.stages.length > 0 && r.stages.every(g => g.same), JSON.stringify(r.stages.filter(g => !g.same).slice(0, 3)));
 });
 
 // ───────── 운영 시트 흉내(tools/gen-operating-sheet.mjs): 실제 규모 · 운영 흔적 ─────────
@@ -140,6 +143,9 @@ test('대조(운영 시트): 옛 계산 방식 흉내면 출시 완료·취소�
     assert.ok(Math.abs(p.oldCapacity - p.newCapacity) < 1e-6, `${p.partId} 작업 가능량 ${p.oldCapacity} ≠ ${p.newCapacity}`);
   }
   for (const u of r.updates) assert.equal(u.diffCalendarDays, 0, `${u.updateId} ${u.oldCompletion} → ${u.newCompletion}`);
+  // 일정 짜는 방식까지: 파트×달 배정 공수, 공정별 시작·완료일
+  assert.ok(r.months.length > 0 && r.months.every(m => m.same), JSON.stringify(r.months.filter(m => !m.same).slice(0, 3)));
+  assert.ok(r.stages.length > 0 && r.stages.every(g => g.same), JSON.stringify(r.stages.filter(g => !g.same).slice(0, 3)));
 });
 
 test('가져오기: 중복 행·소수 순서·소수 템플릿 수량·달력에 없는 날짜가 있어도 전체가 실패하지 않고 보고한다(전체 점검에서 찾음)', async () => {
@@ -173,4 +179,40 @@ test('엑셀 읽기: 빈 공유 문자열 <si/> · 빈 조각 <t/> · 날짜형 
   ]);
   const r = await readXlsx(bytes);
   assert.deepEqual(r.S[0], ['', '둘', '셋', '2027-03-15']);
+});
+
+test('실제 운영 시트에서 찾은 것: 빈 시작일 · UNCLASSIFIED · 한국어 상태 · AS_OF_DATE·ACTUAL_EFFORT_DAYS · ACTIVE 칸 없는 템플릿 · 0 공수', async () => {
+  const f = legacy();
+  const um = f.sheets['10_Update_Master'];
+  const h = um[0];
+  const row = um[4]; // UPD_2027_S2
+  row[h.indexOf('PLAN_START_DATE')] = '';
+  row[h.indexOf('STATUS')] = '예정';
+  um[1][h.indexOf('STATUS')] = '진행 중';
+  const vh = f.sheets['11_Update_Volume'][0];
+  f.sheets['11_Update_Volume'][1][vh.indexOf('REQUIRED_LEVEL')] = 'UNCLASSIFIED';
+  f.sheets['11_Update_Volume'][5][vh.indexOf('REQUIRED_LEVEL')] = 'SHOULD';
+  // 실적: 실제 시트처럼 AS_OF_DATE · ACTUAL_EFFORT_DAYS 칸
+  f.sheets['13_Progress_Actual'] = [['UPDATE_ID', 'RESOURCE_ID', 'PART_ID', 'COMPLETED_QTY', 'OUTSOURCE_COMPLETED_QTY', 'SPEC_OUT_QTY', 'AS_OF_DATE', 'ACTUAL_EFFORT_DAYS'],
+    ['UPD_2027_S1', 'CHAR_COSTUME', 'CONCEPT', 3, 0, 0, '2026-11-03', 7.5]];
+  // 템플릿: ACTIVE 칸이 아예 없고 최저가 빔
+  f.sheets['06_Update_Volume_Template'] = [['UPDATE_TYPE_ID', 'RESOURCE_ID', 'MIN_QTY', 'TARGET_QTY', 'STRETCH_QTY'], ['SEASON', 'CHAR_NEW', '', 2, 3]];
+  // 공수 0 = 그 파트에서는 할 일 없음
+  const eh = f.sheets['03_Effort_Standard'][0];
+  f.sheets['03_Effort_Standard'][1][eh.indexOf('BASE_DAYS')] = 0;
+  const { raw, db, report, rows } = await importOf(f.sheets);
+  const session = new ProjectSession(db);
+  const p = session.prepare();
+  raw.close();
+  const s2 = rows.updates.find(u => u.update_id === 'UPD_2027_S2');
+  assert.equal(s2.start_date, `${report.horizon.start}-01`);
+  assert.ok(report.adjustments.some(a => a.includes('시작일이 빈 업데이트 1개')));
+  assert.equal(s2.status, 'PLANNED');
+  assert.equal(rows.updates.find(u => u.update_id === 'LAUNCH_BASE').status, 'IN_PROGRESS');
+  assert.ok(!report.adjustments.some(a => a.includes('알 수 없는 상태')));
+  assert.equal(rows.volumes.find(v => v.update_id === 'LAUNCH_BASE' && v.resource_type_id === 'CHAR_NEW').required, 1, 'UNCLASSIFIED = 필수');
+  assert.equal(rows.volumes.find(v => v.update_id === 'UPD_2027_S1' && v.resource_type_id === 'BG_PROP').required, 0, 'SHOULD = 선택');
+  assert.deepEqual(rows.progress.map(x => [x.as_of, x.spent_days]), [['2026-11-03', 7.5]]);
+  assert.deepEqual(rows.type_templates.map(t => [t.update_type_id, t.resource_type_id, t.min_qty, t.target_qty]), [['SEASON', 'CHAR_NEW', 2, 2]]);
+  assert.equal(p.blocked, false, p.findings.filter(x => x.level === 'ERROR').map(x => x.code).join(','));
 });

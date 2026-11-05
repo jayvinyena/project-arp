@@ -60,12 +60,26 @@ export async function compareLegacy(fixture, { keepLegacyWorkdays }) {
   });
   const updates = (old.updateResults ?? []).map(u => {
     const n = neu.updates.find(x => x.updateId === u.updateId);
-    const a = u.expectedCompletionDate;
+    // 옛 엔진은 못 끝낸 업데이트를 빈 글자로, 새 엔진은 null로 낸다 → 둘 다 못 끝냄이면 같다(차이 0)
+    const a = u.expectedCompletionDate || null;
     const b = n?.expectedCompletionDate ?? null;
-    const days = a && b ? Math.round((Date.parse(b) - Date.parse(a)) / 86400000) : null;
-    return { updateId: u.updateId, oldCompletion: a ?? null, newCompletion: b, diffCalendarDays: days, newStatus: n?.status ?? null };
+    const days = a && b ? Math.round((Date.parse(b) - Date.parse(a)) / 86400000) : (!a && !b && n ? 0 : null);
+    return { updateId: u.updateId, oldCompletion: a, newCompletion: b, diffCalendarDays: days, newStatus: n?.status ?? null };
   });
-  return { keepLegacyWorkdays, parts, updates, report };
+  // 일정 짜는 방식까지: 파트·달별 배정 공수, 공정(스테이지)별 시작·완료일. 모두 못 끝내는 경우에도 차이가 드러난다
+  // 옛 엔진은 배정 공수를 소수 넷째 자리로 반올림해 낸다(arpRound_ 4) → 그 폭까지 같다고 본다
+  const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) <= 5e-5 + 1e-9;
+  const months = (old.monthlyResults ?? []).map(m => {
+    const n = neu.partMonths.find(x => x.partId === m.partId && x.month === m.yearMonth);
+    return { partId: m.partId, month: m.yearMonth, oldAllocated: m.allocatedDays, newAllocated: n ? n.assignedDays : null, same: !!n && near(m.allocatedDays, n.assignedDays) };
+  });
+  const stages = (old.stageRows ?? []).map(g => {
+    const n = neu.stages.find(x => x.updateId === g.updateId && x.resourceTypeId === g.resourceId && x.partId === g.partId);
+    const os = g.startDate || null; const oc = g.completionDate || null;
+    const ns = n?.startDate ?? null; const nc = n?.completionDate ?? null;
+    return { key: `${g.updateId}|${g.resourceId}|${g.partId}`, oldStart: os, newStart: ns, oldCompletion: oc, newCompletion: nc, same: !!n && os === ns && oc === nc };
+  });
+  return { keepLegacyWorkdays, parts, updates, months, stages, report };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
@@ -83,7 +97,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       console.log(`  ${p.partId.padEnd(10)} ${f(p.oldRequired)} → ${f(p.newRequired)}     ${f(p.oldCapacity)} → ${f(p.newCapacity)}`);
     }
     console.log('  업데이트       완료 예정 옛 → 새            차이(일)');
-    for (const u of r.updates) console.log(`  ${u.updateId.padEnd(14)} ${u.oldCompletion ?? '—'} → ${u.newCompletion ?? '—'}   ${u.diffCalendarDays == null ? '—' : (u.diffCalendarDays > 0 ? '+' : '') + u.diffCalendarDays}`);
+    for (const u of r.updates) console.log(`  ${u.updateId.padEnd(14)} ${u.oldCompletion ?? '못 끝냄'} → ${u.newCompletion ?? '못 끝냄'}   ${u.diffCalendarDays == null ? '—' : (u.diffCalendarDays > 0 ? '+' : '') + u.diffCalendarDays}`);
   }
   mkdirSync(`${ROOT}samples/out`, { recursive: true });
   writeFileSync(`${ROOT}samples/out/compare-legacy.json`, JSON.stringify(out, null, 2));
@@ -97,11 +111,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       ...compat.parts.filter(p => Math.abs((p.oldRequired ?? 0) - (p.newRequired ?? 0)) > 1e-6).map(p => `${p.partId} 필요 공수`),
       ...compat.parts.filter(p => Math.abs((p.oldCapacity ?? 0) - (p.newCapacity ?? 0)) > 1e-6).map(p => `${p.partId} 작업 가능량`),
       ...compat.updates.filter(u => u.diffCalendarDays !== 0).map(u => `${u.updateId} 완료 예정(${u.oldCompletion ?? '—'} → ${u.newCompletion ?? '—'})`),
+      ...compat.months.filter(m => !m.same).map(m => `${m.partId} ${m.month} 배정(${m.oldAllocated} → ${m.newAllocated})`),
+      ...compat.stages.filter(g => !g.same).map(g => `${g.key} 공정(${g.oldStart ?? '—'}~${g.oldCompletion ?? '—'} → ${g.newStart ?? '—'}~${g.newCompletion ?? '—'})`),
     ];
     if (bad.length) {
       console.log(`\n[대조 실패] 옛 계산 방식 흉내에서 ${bad.length}곳이 달라요: ${bad.slice(0, 8).join(', ')}${bad.length > 8 ? ' …' : ''}`);
       process.exit(2);
     }
-    console.log(`\n[대조 통과] 옛 계산 방식 흉내에서 파트 ${compat.parts.length}개 · 업데이트 ${compat.updates.length}개가 옛 엔진과 모두 같아요`);
+    console.log(`\n[대조 통과] 옛 계산 방식 흉내에서 파트 ${compat.parts.length}개 · 업데이트 ${compat.updates.length}개 · 파트×달 배정 ${compat.months.length}칸 · 공정 ${compat.stages.length}개가 옛 엔진과 모두 같아요`);
   }
 }
