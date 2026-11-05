@@ -126,6 +126,8 @@ if ($sheets.Count -eq 0) {
     & node tools/compare-legacy.mjs $f.FullName --check
     if ($LASTEXITCODE -eq 0) {
       Add-Result '운영 시트 대조' '통과' "$($f.Name): 옛 계산 방식 흉내에서 모두 같음"
+    } elseif ($LASTEXITCODE -eq 3) {
+      Add-Result '운영 시트 대조' '건너뜀' "$($f.Name): 옛 도구 시트가 아니에요(데이터 점검 엑셀 등)"
     } else {
       Add-Result '운영 시트 대조' '실패' "$($f.Name): 다른 곳이 있어요(위 출력 · samples\out\compare-legacy.json)"
     }

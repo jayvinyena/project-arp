@@ -84,6 +84,13 @@ export async function compareLegacy(fixture, { keepLegacyWorkdays }) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const fixture = await loadFixture();
+  // 옛 도구 시트가 아니면(예: 데이터 점검 엑셀) 대조하지 않고 종료 코드 3으로 알린다
+  const NEED = ['01_Part_Master', '02_Resource_Master', '03_Effort_Standard', '10_Update_Master', '11_Update_Volume', '12_Capacity_Monthly'];
+  const missing = NEED.filter(n => !fixture.sheets?.[n]);
+  if (missing.length) {
+    console.log(`[대조 건너뜀] 옛 도구 시트가 아니에요(없는 시트: ${missing.join(', ')})`);
+    process.exit(3);
+  }
   const out = [];
   for (const keep of [true, false]) {
     const r = await compareLegacy(fixture, { keepLegacyWorkdays: keep });
