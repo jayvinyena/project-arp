@@ -89,4 +89,19 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(`${ROOT}samples/out/compare-legacy.json`, JSON.stringify(out, null, 2));
   if (process.argv.includes('--json')) console.log(JSON.stringify(out, null, 2));
   else console.log('\n원자료: samples/out/compare-legacy.json');
+
+  // --check: 옛 계산 방식 흉내에서 모두 같아야 통과(종료 코드 0), 하나라도 다르면 2
+  if (process.argv.includes('--check')) {
+    const compat = out[0];
+    const bad = [
+      ...compat.parts.filter(p => Math.abs((p.oldRequired ?? 0) - (p.newRequired ?? 0)) > 1e-6).map(p => `${p.partId} 필요 공수`),
+      ...compat.parts.filter(p => Math.abs((p.oldCapacity ?? 0) - (p.newCapacity ?? 0)) > 1e-6).map(p => `${p.partId} 작업 가능량`),
+      ...compat.updates.filter(u => u.diffCalendarDays !== 0).map(u => `${u.updateId} 완료 예정(${u.oldCompletion ?? '—'} → ${u.newCompletion ?? '—'})`),
+    ];
+    if (bad.length) {
+      console.log(`\n[대조 실패] 옛 계산 방식 흉내에서 ${bad.length}곳이 달라요: ${bad.slice(0, 8).join(', ')}${bad.length > 8 ? ' …' : ''}`);
+      process.exit(2);
+    }
+    console.log(`\n[대조 통과] 옛 계산 방식 흉내에서 파트 ${compat.parts.length}개 · 업데이트 ${compat.updates.length}개가 옛 엔진과 모두 같아요`);
+  }
 }

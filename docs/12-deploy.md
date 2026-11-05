@@ -44,6 +44,8 @@ npm run build            # → dist-web/
 
 **새 버전**: `npm run build` 후 같은 프로젝트에서 **Create deployment** → `dist-web`을 다시 올린다. 이전 배포로 되돌리기도 대시보드에서 한 번에 된다.
 
+**한 번에(추천)**: `release-deploy.cmd` 더블클릭 → 검사·빌드·대조 뒤 wrangler로 올린다(README "한 번에 실행").
+
 **명령으로 올리기(선택)**: `npx wrangler login` 한 번 → `npx wrangler pages deploy dist-web --project-name arp`. wrangler는 Cloudflare 공식 도구다.
 
 **Cloudflare가 하는 일과 대응(검사로 고정)**

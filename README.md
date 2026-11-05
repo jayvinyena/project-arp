@@ -63,6 +63,25 @@
 | [core/new-project.ts](core/new-project.ts) · [web/app/ui/NewProject.tsx](web/app/ui/NewProject.tsx) | 새 프로젝트 만들기(4단계 마법사) |
 | [tools/e2e-save.mjs](tools/e2e-save.mjs) · [tools/e2e-new.mjs](tools/e2e-new.mjs) · [tools/capture.mjs](tools/capture.mjs) | 저장 흐름 시험 6개 · 새 프로젝트 시험 8개 · 화면 캡처 |
 
+## 한 번에 실행 (Windows)
+
+`arp-next` 폴더에서 더블클릭한다.
+
+| 파일 | 하는 일 |
+|---|---|
+| `release.cmd` | 준비 확인(Node 24 이상, 패키지 설치) → 검사 → 배포용 빌드(`dist-web`) → `private\*.xlsx` 운영 시트를 옛 엔진과 대조 |
+| `release-deploy.cmd` | 위 + Cloudflare Pages에 올리기(처음 한 번은 브라우저로 Cloudflare 로그인) |
+
+PowerShell에서 옵션을 줄 수도 있다.
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName arp
+```
+
+- `-E2E` 크롬 시험까지(20분 안팎) · `-Deploy` 올리기 · `-SkipTests` 검사 건너뜀 · `-ProjectName` Cloudflare 프로젝트 이름(기본 `arp`)
+- 마지막에 단계별 통과·실패·건너뜀 요약이 나온다. 검사나 빌드가 실패하면 그 자리에서 멈추고, 앞 단계에 실패가 있으면 올리지 않는다.
+- 대조는 "옛 계산 방식 흉내"에서 모두 같아야 통과다(`compare-legacy --check`).
+
 ## 명령
 
 ```bash
