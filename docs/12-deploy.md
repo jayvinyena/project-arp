@@ -39,14 +39,16 @@ npm run build            # → dist-web/
 1. `npm run build` → `D:\00.Project\Dev_N\arp-next\dist-web` 이 생긴다.
 2. Cloudflare 대시보드 → **Workers & Pages** → **Create** → **Pages** → **Upload assets**(직접 올리기).
 3. 프로젝트 이름(예: `arp`)을 넣고 `dist-web` 폴더를 통째로 끌어다 놓는다 → **Deploy**.
-4. 주소는 `https://<프로젝트 이름>.pages.dev/` 이다. 팀에 이 주소를 알린다. 크롬·엣지에서 열고 주소창의 **설치** 버튼으로 앱처럼 쓸 수 있다.
+4. 주소는 `https://<프로젝트 이름>.pages.dev/` 이다(이름이 이미 쓰였으면 뒤에 붙임말이 붙는다). 팀에 이 주소를 알린다. 크롬·엣지에서 열고 주소창의 **설치** 버튼으로 앱처럼 쓸 수 있다.
+
+> **만든 프로젝트(2026-11-05):** 이름 `arp`, 운영 주소 **https://arp-32g.pages.dev**, 운영 브랜치 `main`. wrangler로 만들었다(`wrangler pages project create arp --production-branch main --force`). wrangler 4.157부터 Pages 명령을 Workers 쪽으로 넘기려 해서 처음 만들 때만 `--force`가 필요했다. 올릴 때는 `--branch main`을 꼭 준다(안 주면 git 브랜치 이름으로 미리보기에만 올라간다).
 5. (선택) 회사 사람만 열게 하려면 Cloudflare **Zero Trust → Access**에서 이 주소에 회사 메일 도메인 규칙을 건다(50명까지 무료).
 
 **새 버전**: `npm run build` 후 같은 프로젝트에서 **Create deployment** → `dist-web`을 다시 올린다. 이전 배포로 되돌리기도 대시보드에서 한 번에 된다.
 
 **한 번에(추천)**: `release-deploy.cmd` 더블클릭 → 검사·빌드·대조 뒤 wrangler로 올린다(README "한 번에 실행").
 
-**명령으로 올리기(선택)**: `npx wrangler login` 한 번 → `npx wrangler pages deploy dist-web --project-name arp`. wrangler는 Cloudflare 공식 도구다.
+**명령으로 올리기(선택)**: `npx wrangler login` 한 번 → `npx wrangler pages deploy dist-web --project-name arp --branch main`. wrangler는 Cloudflare 공식 도구다.
 
 **Cloudflare가 하는 일과 대응(검사로 고정)**
 

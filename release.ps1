@@ -8,7 +8,7 @@
   -E2E          크롬 시험까지(1분 안팎, 크롬 필요)
   -Deploy       빌드 결과(dist-web)를 Cloudflare Pages에 올림. 처음 한 번은 브라우저로 Cloudflare 로그인
   -SkipTests    검사를 건너뜀(급할 때만)
-  -ProjectName  Cloudflare Pages 프로젝트 이름(기본 arp → https://arp.pages.dev)
+  -ProjectName  Cloudflare Pages 프로젝트 이름(기본 arp → https://arp-32g.pages.dev, 2026-11-05 만듦)
 #>
 param(
   [switch]$E2E,
@@ -138,11 +138,16 @@ if (-not $Deploy) {
   Add-Result '올리기' '건너뜀' '앞 단계에 실패가 있어 올리지 않았어요'
 } else {
   Write-Host "  wrangler(Cloudflare 공식 도구)로 올려요. 처음이면 브라우저에서 Cloudflare 로그인 창이 열려요."
-  & npx --yes wrangler@4 pages deploy $dist --project-name $ProjectName --commit-dirty=true
+  # --branch main: 운영 브랜치로 올린다(주지 않으면 git 브랜치 이름으로 올라가 미리보기 주소에만 나온다)
+  # wrangler는 진행 메시지를 오류 출력으로 낸다. PowerShell 5.1이 빨간 오류처럼 보이지 않게 cmd 안에서 합쳐 받는다
+  & cmd /c "npx --yes wrangler@4 pages deploy ""$dist"" --project-name $ProjectName --branch main --commit-dirty=true 2>&1" | Tee-Object -Variable deployLog | Out-Host
   if ($LASTEXITCODE -ne 0) {
-    Add-Result '올리기' '실패' 'wrangler pages deploy 실패(위 출력 참고). 프로젝트가 없으면 대시보드에서 먼저 만들어 주세요'
+    Add-Result '올리기' '실패' 'wrangler pages deploy 실패(위 출력 참고). 처음이면 Cloudflare 로그인과 이메일 인증을 확인해 주세요'
   } else {
-    Add-Result '올리기' '통과' "https://$ProjectName.pages.dev"
+    $urls = [regex]::Matches(($deployLog | Out-String), 'https://[A-Za-z0-9.-]+\.pages\.dev') | ForEach-Object { $_.Value } | Select-Object -Unique
+    $detail = '운영 주소 https://arp-32g.pages.dev'
+    if ($urls) { $detail = "$detail · 이번 배포 $($urls -join ', ')" }
+    Add-Result '올리기' '통과' $detail
   }
 }
 
