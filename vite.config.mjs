@@ -64,6 +64,11 @@ const HEADERS = `/app/sw.js
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex, nofollow
+`;
+// 주소는 누구나 열 수 있게 두되(2026-11-05 결정) 검색엔진에는 올리지 않는다
+const ROBOTS = `User-agent: *
+Disallow: /
 `;
 
 function pwa() {
@@ -98,6 +103,7 @@ function pwa() {
       this.emitFile({ type: 'asset', fileName: 'index.html', source: ROOT_HTML });
       // Cloudflare Pages 응답 헤더: 서비스 워커는 매번 확인, 해시 붙은 파일은 오래 담기
       this.emitFile({ type: 'asset', fileName: '_headers', source: HEADERS });
+      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: ROBOTS });
     },
   };
 }

@@ -25,6 +25,8 @@ await withBrowser(async (cdp, base) => {
   check('서비스 워커는 매번 새로 확인(no-cache)', sw.status === 200 && /no-cache/.test(sw.cc ?? ''), JSON.stringify(sw));
   const asset = await cdp.eval("fetch([...document.scripts].find(s => s.src.includes('/assets/')).src).then(r => r.headers.get('cache-control'))");
   check('assets는 오래 담아 둠(immutable)', /immutable/.test(asset ?? ''), asset);
+  const robots = await cdp.eval("Promise.all([fetch('/robots.txt').then(r => r.text()), fetch('/app/').then(r => r.headers.get('x-robots-tag'))])");
+  check('검색엔진에 올리지 않음(robots.txt · noindex)', robots[0].includes('Disallow: /') && /noindex/.test(robots[1] ?? ''), JSON.stringify(robots));
 
   // 4. 설치 정보: 시작 주소가 옮겨지지 않고 바로 열린다
   const start = await cdp.eval(`fetch('/app/manifest.webmanifest').then(r => r.json()).then(m => fetch(new URL(m.start_url, location.origin + '/app/manifest.webmanifest'))).then(r => ({ status: r.status, redirected: r.redirected }))`);

@@ -7,7 +7,7 @@
 ```bash
 npm install
 npm test                 # 검사 80개
-npm run e2e              # 크롬 시험 100개 (크롬 필요, 동시 3개로 1분 안팎)
+npm run e2e              # 크롬 시험 101개 (크롬 필요, 동시 3개로 1분 안팎)
 npm run build            # → dist-web/
 ```
 
@@ -57,7 +57,31 @@ npm run build            # → dist-web/
 | `…/index.html`을 `…/`로 옮김(308) | 서비스 워커가 첫 페이지를 `./`로 담고, 옮겨진 응답은 새 응답으로 담는다. 설치 시작 주소도 `./` |
 | `_headers` 파일로 응답 헤더 | 서비스 워커·첫 페이지·manifest는 `no-cache`, 해시 붙은 `assets/`는 1년 `immutable` |
 
-[tools/e2e-deploy.mjs](../tools/e2e-deploy.mjs)는 이 동작을 흉내 내는 서버([tools/lib/pages-server.mjs](../tools/lib/pages-server.mjs))에서 크롬으로 10가지를 확인한다. 확인 항목은 맨 위 주소, 옮겨진 주소로 예시 열기, 헤더, 설치 시작 주소, 오프라인 세 주소, 서비스 워커가 켜진 채 열기다.
+[tools/e2e-deploy.mjs](../tools/e2e-deploy.mjs)는 이 동작을 흉내 내는 서버([tools/lib/pages-server.mjs](../tools/lib/pages-server.mjs))에서 크롬으로 11가지를 확인한다. 확인 항목은 맨 위 주소, 옮겨진 주소로 예시 열기, 헤더, 검색 차단, 설치 시작 주소, 오프라인 세 주소, 서비스 워커가 켜진 채 열기다.
+
+### 운영 정책 (2026-11-05 결정)
+
+| 항목 | 결정 |
+|---|---|
+| 소유 계정 | 지금 계정(개인 메일) 그대로. 담당자가 혼자일 때 생기는 위험은 **팀원을 계정 멤버로 초대**해서 줄인다 |
+| 접근 | 주소를 아는 누구나 열 수 있다. 올라간 것은 앱 코드와 예시 파일뿐이고 프로젝트 데이터는 각자 파일에만 있다 |
+| 검색 | 검색엔진에는 올리지 않는다(`robots.txt` 전체 차단, 모든 응답에 `X-Robots-Tag: noindex, nofollow`) |
+| 코드 | GitHub `jayvinyena/project-arp`의 `arp-next` 브랜치. 저장소를 잃어도 이 코드로 어느 계정에든 다시 올릴 수 있다 |
+
+**팀원 초대(계정 주인이 대시보드에서)**
+
+1. 평소 브라우저로 Cloudflare 대시보드에 로그인한다.
+2. **Manage Account → Members**(계정 구성원)에서 **Invite**를 누른다.
+3. 팀원 메일을 넣고 역할을 고른다. 배포만 맡길 사람은 Pages 관련 역할(목록에 있으면), 계정 전체를 맡길 사람은 Administrator를 고른다.
+4. 팀원은 초대 메일에서 수락한다. Cloudflare 계정이 없으면 그 메일로 가입한다.
+5. 코드도 받을 수 있게 GitHub 저장소 **Settings → Collaborators**에서 같은 팀원을 초대한다.
+
+**팀원이 올리기**
+
+1. Node 24 이상을 설치하고 `project-arp`를 받아(`git clone`) 폴더에서 `npm ci`를 실행한다.
+2. `npx wrangler login`(평소 브라우저에서 허용)을 한다.
+3. 계정 ID를 넣어 올린다. 계정 ID는 대시보드 주소 `dash.cloudflare.com/<계정 ID>/…`에 있다.
+   `powershell -ExecutionPolicy Bypass -File .\release.ps1 -Deploy -AccountId <계정 ID>`
 
 ### 다른 곳
 

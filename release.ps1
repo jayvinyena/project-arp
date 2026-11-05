@@ -9,12 +9,14 @@
   -Deploy       빌드 결과(dist-web)를 Cloudflare Pages에 올림. 처음 한 번은 브라우저로 Cloudflare 로그인
   -SkipTests    검사를 건너뜀(급할 때만)
   -ProjectName  Cloudflare Pages 프로젝트 이름(기본 arp → https://arp-32g.pages.dev, 2026-11-05 만듦)
+  -AccountId    올릴 Cloudflare 계정 ID. 초대받은 팀원처럼 계정이 여럿이면 넣는다(대시보드 주소 dash.cloudflare.com/<계정 ID>/...)
 #>
 param(
   [switch]$E2E,
   [switch]$Deploy,
   [switch]$SkipTests,
-  [string]$ProjectName = 'arp'
+  [string]$ProjectName = 'arp',
+  [string]$AccountId = ''
 )
 
 $ErrorActionPreference = 'Continue'
@@ -138,6 +140,7 @@ if (-not $Deploy) {
   Add-Result '올리기' '건너뜀' '앞 단계에 실패가 있어 올리지 않았어요'
 } else {
   Write-Host "  wrangler(Cloudflare 공식 도구)로 올려요. 처음이면 브라우저에서 Cloudflare 로그인 창이 열려요."
+  if ($AccountId) { $env:CLOUDFLARE_ACCOUNT_ID = $AccountId; Write-Host "  계정: $AccountId" }
   # --branch main: 운영 브랜치로 올린다(주지 않으면 git 브랜치 이름으로 올라가 미리보기 주소에만 나온다)
   # wrangler는 진행 메시지를 오류 출력으로 낸다. PowerShell 5.1이 빨간 오류처럼 보이지 않게 cmd 안에서 합쳐 받는다
   & cmd /c "npx --yes wrangler@4 pages deploy ""$dist"" --project-name $ProjectName --branch main --commit-dirty=true 2>&1" | Tee-Object -Variable deployLog | Out-Host
