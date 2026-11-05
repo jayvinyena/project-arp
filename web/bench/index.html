@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARP 브라우저 측정</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #111; background: #fff; }
+    table { border-collapse: collapse; margin-top: 16px; }
+    th, td { padding: 6px 10px; border-bottom: 1px solid #ddd; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    caption { text-align: left; padding-bottom: 8px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>ARP 브라우저 측정</h1>
+  <p>단위 ms. 엔진은 아직 메인 스레드에서 돈다(앱에서는 Worker로 옮긴다).</p>
+  <div id="out"></div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

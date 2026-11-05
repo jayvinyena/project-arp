@@ -1,0 +1,414 @@
+// 옛 도구(구글 시트) → 새 프로젝트 파일. 시트 이름과 머리글은 옛 도구 그대로(00_Config, 01_Part_Master …).
+// 바꾼 값·건너뛴 행·가져오지 않은 시트를 보고서로 남긴다. 값 규칙 위반은 그대로 들여와 데이터 점검에서 보이게 한다.
+import type { SqlDb } from './db.ts';
+import type { Cell, Sheets } from './xlsx.ts';
+import { serialToDate } from './xlsx.ts';
+import { migrate } from './migrate.ts';
+import { fixedKoreanHolidays } from './new-project.ts';
+
+export interface ImportOptions {
+  projectName?: string;
+  /** 날짜가 고정된 공휴일을 넣는다(기본 켬). 옛 도구는 휴일을 따로 빼지 않았다 */
+  fixedHolidays?: boolean;
+  /** 옛 월 근무일 수(BUSINESS_DAYS)로 작업 가능량을 맞춘다: 생산성에 (옛 근무일 ÷ 새 근무일)을 곱한다. 대조용(기본 끔) */
+  keepLegacyWorkdays?: boolean;
+  appVersion?: string;
+  now?: string;
+}
+
+export interface ImportReport {
+  counts: Record<string, number>;
+  /** 자동으로 바꾸거나 채운 것 */
+  adjustments: string[];
+  /** 건너뛴 행 */
+  skipped: string[];
+  /** 가져오지 않은 시트 */
+  ignoredSheets: string[];
+  /** 꼭 필요한데 없는 시트 */
+  missingSheets: string[];
+  horizon: { start: string; end: string } | null;
+}
+
+type Row = Record<string, Cell>;
+type Rows = Record<string, Record<string, unknown>[]>;
+
+const REQUIRED = ['01_Part_Master', '02_Resource_Master', '03_Effort_Standard', '10_Update_Master', '11_Update_Volume', '12_Capacity_Monthly'];
+const KNOWN = ['00_Config', ...REQUIRED, '05_Update_Type', '06_Update_Volume_Template', '13_Progress_Actual'];
+const NOT_IMPORTED: Record<string, string> = {
+  '04_Pipeline_Template': '공정 순서는 파트 순서 + 겹침률로 바뀌었어요(인계 방식·묶음·대기일은 쓰지 않아요)',
+  '20_Scenario_Master': '옛 시나리오는 가져오지 않아요. 시뮬레이션에서 다시 만들어 주세요',
+  '21_Scenario_Override': '옛 시나리오는 가져오지 않아요',
+  '90_Change_History': '옛 변경 이력은 가져오지 않아요(새 파일의 이력은 가져온 뒤부터)',
+};
+
+function table(sheets: Sheets, name: string): Row[] {
+  const rows = sheets[name];
+  if (!rows || rows.length === 0) return [];
+  const head = rows[0].map(h => (h == null ? '' : String(h).trim()));
+  return rows.slice(1)
+    .filter(r => r.some(v => v !== null && v !== ''))
+    .map(r => Object.fromEntries(head.map((h, i) => [h, r[i] ?? null])));
+}
+const s = (v: Cell): string => (v == null ? '' : String(v).trim());
+const n = (v: Cell): number | null => {
+  if (v == null || v === '') return null;
+  const x = typeof v === 'number' ? v : Number(String(v).replace(/,/g, ''));
+  return Number.isFinite(x) ? x : null;
+};
+const bool = (v: Cell, dflt = true): boolean => {
+  if (v == null || v === '') return dflt;
+  if (typeof v === 'boolean') return v;
+  return !['false', '0', 'n', 'no', 'x', 'off'].includes(String(v).trim().toLowerCase());
+};
+/** 날짜 칸: 엑셀 일련번호, 'YYYY-MM-DD', 'YYYY.MM.DD', 'YYYY/MM/DD', 날짜+시각 */
+function date(v: Cell): string | null {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return serialToDate(v);
+  const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(String(v).trim());
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+}
+function month(v: Cell): string | null {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return serialToDate(v).slice(0, 7);
+  const m = /^(\d{4})[-./](\d{1,2})/.exec(String(v).trim());
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}` : null;
+}
+const lastDay = (ym: string) => {
+  const [y, m] = ym.split('-').map(Number);
+  return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+};
+function monthsBetween(a: string, b: string): string[] {
+  const out: string[] = [];
+  let [y, m] = a.split('-').map(Number);
+  const [ey, em] = b.split('-').map(Number);
+  while ((y < ey || (y === ey && m <= em)) && out.length < 600) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return out;
+}
+function weekdays(ym: string, holidays: Set<string>): number {
+  const [y, m] = ym.split('-').map(Number);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let c = 0;
+  for (let d = 1; d <= days; d += 1) {
+    const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    if (wd === 0 || wd === 6) continue;
+    if (holidays.has(`${ym}-${String(d).padStart(2, '0')}`)) continue;
+    c += 1;
+  }
+  return c;
+}
+const LEVEL: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, MID: 2, LOW: 3 };
+const level = (v: Cell): number => {
+  const x = n(v);
+  if (x != null) return x;
+  return LEVEL[s(v).toUpperCase()] ?? 2;
+};
+const STATUS: Record<string, string> = {
+  PLANNED: 'PLANNED', PLAN: 'PLANNED', READY: 'PLANNED', IN_PROGRESS: 'IN_PROGRESS', ACTIVE: 'IN_PROGRESS', PROGRESS: 'IN_PROGRESS',
+  DONE: 'DONE', COMPLETED: 'DONE', COMPLETE: 'DONE', RELEASED: 'DONE', CANCELLED: 'CANCELLED', CANCELED: 'CANCELLED', DROPPED: 'CANCELLED',
+};
+
+/** 옛 시트 → 새 표 행 + 보고서 */
+export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { rows: Rows; report: ImportReport } {
+  const report: ImportReport = { counts: {}, adjustments: [], skipped: [], ignoredSheets: [], missingSheets: [], horizon: null };
+  const adjust = (m: string) => report.adjustments.push(m);
+  const skip = (m: string) => report.skipped.push(m);
+  for (const name of Object.keys(sheets)) {
+    if (KNOWN.includes(name)) continue;
+    report.ignoredSheets.push(NOT_IMPORTED[name] ? `${name}: ${NOT_IMPORTED[name]}` : `${name}: 옛 도구의 화면·보조 시트라 가져오지 않아요`);
+  }
+  report.missingSheets = REQUIRED.filter(n2 => !sheets[n2]);
+  if (report.missingSheets.length) {
+    throw Object.assign(new Error(`옛 도구의 시트가 아니거나 빠졌어요: ${report.missingSheets.join(', ')}`), { report });
+  }
+
+  // ───────── 설정 ─────────
+  const config = new Map(table(sheets, '00_Config').map(r => [s(r.CONFIG_KEY), r.CONFIG_VALUE]));
+  const cfgNum = (k: string, d: number) => n(config.get(k) ?? null) ?? d;
+
+  // ───────── 파트 ─────────
+  const partRows = table(sheets, '01_Part_Master');
+  const parts = partRows.filter(r => s(r.PART_ID)).map((r, i) => {
+    const active = bool(r.ACTIVE) && bool(r.IS_CAPACITY_TARGET);
+    if (bool(r.ACTIVE) && !bool(r.IS_CAPACITY_TARGET)) adjust(`파트 ${s(r.PART_NAME) || s(r.PART_ID)}: 작업 가능량 대상이 아니라 "사용 안 함"으로 가져왔어요`);
+    return { part_id: s(r.PART_ID), name: s(r.PART_NAME) || s(r.PART_ID), sort_order: n(r.SORT_ORDER) ?? i + 1, active: active ? 1 : 0 };
+  });
+  const partIds = new Set(parts.map(p => p.part_id));
+
+  // ───────── 리소스: GROUP = 분류, 나머지 = 리소스 종류(가장 가까운 GROUP 조상이 분류) ─────────
+  const resRows = table(sheets, '02_Resource_Master').filter(r => s(r.RESOURCE_ID));
+  const byId = new Map(resRows.map(r => [s(r.RESOURCE_ID), r]));
+  const isGroup = (r: Row) => s(r.RESOURCE_LEVEL).toUpperCase() === 'GROUP';
+  const groupOf = (r: Row): string | null => {
+    let p = s(r.PARENT_RESOURCE_ID);
+    for (let hop = 0; p && hop < 10; hop += 1) {
+      const pr = byId.get(p);
+      if (!pr) return null;
+      if (isGroup(pr)) return p;
+      p = s(pr.PARENT_RESOURCE_ID);
+    }
+    return null;
+  };
+  const groups = resRows.filter(isGroup).map((r, i) => ({ group_id: s(r.RESOURCE_ID), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID), sort_order: n(r.SORT_ORDER) ?? i + 1 }));
+  const resourceTypes = resRows.filter(r => !isGroup(r)).map((r, i) => ({
+    resource_type_id: s(r.RESOURCE_ID), group_id: groupOf(r), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID),
+    sort_order: n(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0,
+  }));
+  const rtIds = new Set(resourceTypes.map(r => r.resource_type_id));
+  const nested = resRows.filter(r => !isGroup(r) && s(r.PARENT_RESOURCE_ID) && byId.get(s(r.PARENT_RESOURCE_ID)) && !isGroup(byId.get(s(r.PARENT_RESOURCE_ID))!)).length;
+  if (nested) adjust(`리소스 ${nested}종은 부모가 GROUP이 아니어서 가장 가까운 GROUP을 분류로 썼어요`);
+
+  // ───────── 공수 ─────────
+  const resourceParts: Record<string, unknown>[] = [];
+  const efforts: Record<string, unknown>[] = [];
+  let aiCount = 0;
+  let noBase = 0;
+  for (const r of table(sheets, '03_Effort_Standard')) {
+    const rt = s(r.RESOURCE_ID);
+    const part = s(r.PART_ID);
+    if (!rtIds.has(rt)) { skip(`공수 ${rt}|${part}: 리소스 마스터에 없는 리소스`); continue; }
+    if (!partIds.has(part)) { skip(`공수 ${rt}|${part}: 파트 마스터에 없는 파트`); continue; }
+    const base = n(r.BASE_DAYS);
+    const ai = n(r.AI_ASSISTED_DAYS);
+    if (base == null && ai == null) { skip(`공수 ${rt}|${part}: 기본·AI 공수가 모두 비어 거치지 않는 파트로 봤어요`); continue; }
+    resourceParts.push({ resource_type_id: rt, part_id: part, rework_rate: n(r.DEFAULT_REWORK_RATE) ?? 0 });
+    if (base != null) efforts.push({ resource_type_id: rt, part_id: part, profile_id: 'BASE', days: base });
+    else noBase += 1;
+    if (ai != null && ai > 0) { efforts.push({ resource_type_id: rt, part_id: part, profile_id: 'AI', days: ai }); aiCount += 1; }
+  }
+  if (noBase) adjust(`기본 공수가 빈 리소스·파트 ${noBase}개: 데이터 점검(E03)에서 채워 주세요`);
+  const profiles = [{ profile_id: 'BASE', name: '기본', sort_order: 1 }, ...(aiCount ? [{ profile_id: 'AI', name: 'AI 사용 시', sort_order: 2 }] : [])];
+  const effortMix: Record<string, unknown>[] = [];
+  const profileCfg = s(config.get('EFFORT_PROFILE') ?? null).toUpperCase();
+  if (aiCount && (profileCfg === 'AI' || profileCfg === 'AI_ASSISTED')) {
+    for (const p of parts) effortMix.push({ part_id: p.part_id, profile_id: 'AI', share: 1 });
+    adjust('옛 설정 EFFORT_PROFILE = AI → 모든 파트를 AI 공수 100%로 섞었어요');
+  }
+
+  // ───────── 겹침률 ─────────
+  // 옛 엔진은 설정에 기본 겹침률이 없으면 코드에 박힌 20%를 썼다(11_StageScheduleEngine.js builtinDefaultOverlapRate).
+  // 새 구조는 숨은 기본값이 없으므로 그 값을 설정에 적는다
+  const LEGACY_BUILTIN_OVERLAP = 0.2;
+  const defaultOverlap = n(config.get('STAGE_OVERLAP_RATE_DEFAULT') ?? null);
+  if (defaultOverlap == null) adjust(`기본 겹침률 설정이 없어 옛 도구가 쓰던 값 ${LEGACY_BUILTIN_OVERLAP * 100}%를 넣었어요`);
+  const overlaps: Record<string, unknown>[] = [];
+  for (const [k, v] of config) {
+    const m = /^STAGE_OVERLAP_RATE:(.+)>(.+)$/.exec(k);
+    if (m && partIds.has(m[1]) && partIds.has(m[2]) && n(v) != null) overlaps.push({ from_part_id: m[1], to_part_id: m[2], overlap_rate: n(v) });
+  }
+
+  // ───────── 인력 · 계획 기간 ─────────
+  const capRows = table(sheets, '12_Capacity_Monthly');
+  const capMonths = capRows.map(r => month(r.YEAR_MONTH)).filter((x): x is string => !!x).sort();
+  if (!capMonths.length) throw Object.assign(new Error('12_Capacity_Monthly에 달이 없어요.'), { report });
+  let start = capMonths[0];
+  let end = capMonths[capMonths.length - 1];
+  let span = monthsBetween(start, end);
+  if (span.length > 60) {
+    end = span[59];
+    adjust(`인력 기간이 ${span.length}개월이라 앞 60개월(${start} ~ ${end})만 계획 기간으로 썼어요`);
+    span = monthsBetween(start, end);
+  }
+  report.horizon = { start, end };
+  const holidays = options.fixedHolidays === false ? [] : fixedKoreanHolidays(start, end);
+  const holidaySet = new Set(holidays.map(h => h.date));
+  const capacity: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  let corrected = 0;
+  for (const r of capRows) {
+    const m = month(r.YEAR_MONTH);
+    const part = s(r.PART_ID);
+    if (!m) { skip(`인력 ${s(r.CAPACITY_ID)}: 달을 읽지 못함`); continue; }
+    if (!partIds.has(part)) { skip(`인력 ${part}|${m}: 파트 마스터에 없는 파트`); continue; }
+    if (m < start || m > end) continue;
+    const key = `${part}|${m}`;
+    if (seen.has(key)) { skip(`인력 ${key}: 같은 달이 두 번 있어 뒤의 것을 건너뜀`); continue; }
+    seen.add(key);
+    let productivity = n(r.PRODUCTIVITY_FACTOR) ?? cfgNum('DEFAULT_PRODUCTIVITY_FACTOR', 1);
+    const legacyDays = n(r.BUSINESS_DAYS);
+    if (options.keepLegacyWorkdays && legacyDays != null) {
+      const wd = weekdays(m, holidaySet);
+      if (wd > 0 && wd !== legacyDays) { productivity *= legacyDays / wd; corrected += 1; }
+    }
+    capacity.push({
+      part_id: part, month: m,
+      headcount: n(r.HEADCOUNT) ?? 0,
+      utilization: n(r.UTILIZATION_RATE) ?? cfgNum('DEFAULT_UTILIZATION_RATE', 0.8),
+      productivity,
+      outsource_days: n(r.OUTSOURCE_CAPACITY_DAYS) ?? 0,
+      support_days: n(r.TEMP_SUPPORT_DAYS) ?? 0,
+      note: s(r.NOTE) || null,
+    });
+  }
+  if (corrected) adjust(`옛 월 근무일 수에 맞추려고 인력 ${corrected}행의 생산성을 보정했어요(대조용 설정)`);
+  else if (!options.keepLegacyWorkdays) adjust('월 근무일 수는 옛 BUSINESS_DAYS 대신 근무 달력(월–금' + (holidays.length ? ', 고정 공휴일 제외' : '') + ')으로 계산해요. 작업 가능량이 옛 값과 조금 다를 수 있어요');
+  const missingCap = parts.filter(p => p.active).flatMap(p => span.filter(m => !seen.has(`${p.part_id}|${m}`)).map(m => `${p.name} ${m}`));
+  if (missingCap.length) adjust(`인력 행이 없는 달 ${missingCap.length}개(예: ${missingCap.slice(0, 3).join(', ')}): 데이터 점검(C01)에서 채워 주세요`);
+
+  // ───────── 업데이트 유형 · 템플릿 ─────────
+  const typeRows = table(sheets, '05_Update_Type').filter(r => s(r.UPDATE_TYPE_ID));
+  const updateTypes = typeRows.map((r, i) => {
+    const id = s(r.UPDATE_TYPE_ID);
+    const name = s(r.UPDATE_TYPE_NAME) || id;
+    return { update_type_id: id, name, is_launch: id.toUpperCase() === 'LAUNCH' || name.includes('런칭') ? 1 : 0, sort_order: n(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0 };
+  });
+  const typeIds = new Set(updateTypes.map(t => t.update_type_id));
+  const templates: Record<string, unknown>[] = [];
+  for (const r of table(sheets, '06_Update_Volume_Template')) {
+    if (!bool(r.ACTIVE)) continue;
+    const t = s(r.UPDATE_TYPE_ID);
+    const rt = s(r.RESOURCE_ID);
+    if (!typeIds.has(t) || !rtIds.has(rt)) { skip(`템플릿 ${t}|${rt}: 없는 유형이나 리소스`); continue; }
+    templates.push({ update_type_id: t, resource_type_id: rt, min_qty: n(r.MIN_QTY), target_qty: n(r.TARGET_QTY), stretch_qty: n(r.STRETCH_QTY) });
+  }
+
+  // ───────── 업데이트: 등급(HIGH/MEDIUM/LOW) → 숫자 순위 ─────────
+  const updRows = table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID));
+  let releaseFilled = 0;
+  const statusUnknown = new Set<string>();
+  const ups = updRows.map((r, i) => {
+    const id = s(r.UPDATE_ID);
+    let type = s(r.UPDATE_TYPE_ID);
+    if (!typeIds.has(type)) {
+      skip(`업데이트 ${id}: 유형 "${type}"이 없어 "업데이트" 유형으로 넣었어요`);
+      if (!typeIds.has('UPDATE')) { updateTypes.push({ update_type_id: 'UPDATE', name: '업데이트', is_launch: 0, sort_order: 999, active: 1 }); typeIds.add('UPDATE'); }
+      type = 'UPDATE';
+    }
+    let release = date(r.RELEASE_DATE);
+    const ym = month(r.TARGET_YEAR_MONTH);
+    if (!release && ym) { release = lastDay(ym); releaseFilled += 1; }
+    const raw = s(r.STATUS).toUpperCase();
+    let status = STATUS[raw] ?? 'PLANNED';
+    if (raw && !STATUS[raw]) statusUnknown.add(raw);
+    if (!bool(r.ACTIVE)) status = 'CANCELLED';
+    return {
+      row: {
+        update_id: id, name: s(r.UPDATE_NAME) || id, update_type_id: type,
+        start_date: date(r.PLAN_START_DATE), freeze_date: date(r.CONTENT_FREEZE_DATE), release_date: release,
+        priority: 0, status, sort_order: n(r.SORT_ORDER) ?? i + 1, note: s(r.DESCRIPTION) || null,
+      },
+      level: level(r.PRIORITY),
+    };
+  });
+  if (releaseFilled) adjust(`출시일이 빈 업데이트 ${releaseFilled}개: 옛 도구처럼 목표 월(TARGET_YEAR_MONTH)의 말일로 채웠어요`);
+  if (statusUnknown.size) adjust(`알 수 없는 상태(${[...statusUnknown].join(', ')})는 "계획"으로 가져왔어요`);
+  const live = (x: { row: { status: string } }) => x.row.status === 'PLANNED' || x.row.status === 'IN_PROGRESS';
+  const ordered = [...ups].sort((a, b) =>
+    Number(!live(a)) - Number(!live(b)) || a.level - b.level
+    || (a.row.release_date ?? '9999') .localeCompare(b.row.release_date ?? '9999') || a.row.sort_order - b.row.sort_order);
+  ordered.forEach((x, i) => { x.row.priority = i + 1; });
+  if (ups.length) adjust('우선순위 등급(HIGH/MEDIUM/LOW)을 숫자 순위로 바꿨어요: 등급 → 출시일 → 표시 순서');
+  const updates = ups.map(x => x.row);
+  const updIds = new Set(updates.map(u => u.update_id));
+  const liveLaunch = updates.filter(u => (u.status === 'PLANNED' || u.status === 'IN_PROGRESS') && updateTypes.find(t => t.update_type_id === u.update_type_id)?.is_launch);
+  if (liveLaunch.length > 1) adjust(`런칭 유형 업데이트가 ${liveLaunch.length}개예요(${liveLaunch.map(u => u.name).join(', ')}). 하나만 남겨 주세요(U05)`);
+
+  // ───────── 물량: 추가·이월·취소 수량을 물량에 합친다 ─────────
+  const volumes: Record<string, unknown>[] = [];
+  let folded = 0; let minFilled = 0; let stretchFilled = 0;
+  const vSeen = new Set<string>();
+  for (const r of table(sheets, '11_Update_Volume')) {
+    const u = s(r.UPDATE_ID);
+    const rt = s(r.RESOURCE_ID);
+    if (!updIds.has(u)) { skip(`물량 ${u}|${rt}: 업데이트 마스터에 없는 업데이트`); continue; }
+    if (!rtIds.has(rt)) { skip(`물량 ${u}|${rt}: 리소스 마스터에 없는 리소스`); continue; }
+    if (vSeen.has(`${u}|${rt}`)) { skip(`물량 ${u}|${rt}: 같은 행이 두 번 있어 뒤의 것을 건너뜀`); continue; }
+    vSeen.add(`${u}|${rt}`);
+    const delta = (n(r.ADDED_QTY) ?? 0) + (n(r.CARRYOVER_IN_QTY) ?? 0) - (n(r.CANCELLED_QTY) ?? 0);
+    if (delta) folded += 1;
+    const fold = (x: number | null) => (x == null ? null : Math.max(0, Math.round(x + delta)));
+    let target = fold(n(r.TARGET_QTY));
+    let min = fold(n(r.MIN_QTY));
+    let stretch = fold(n(r.STRETCH_QTY));
+    if (target == null) target = 0;
+    if (min == null || n(r.MIN_QTY) === 0) { if (min !== target) minFilled += 1; min = target; }
+    if (stretch == null) { stretch = target; stretchFilled += 1; }
+    const lvl = s(r.REQUIRED_LEVEL).toUpperCase();
+    volumes.push({
+      update_id: u, resource_type_id: rt, min_qty: min, target_qty: target, stretch_qty: stretch,
+      required: lvl === 'MUST' || lvl === '필수' || lvl === '' ? 1 : 0,
+      priority: Math.max(1, level(r.PRIORITY)),
+      difficulty: n(r.DIFFICULTY_FACTOR) || 1,
+      reuse_rate: n(r.REUSE_RATE) ?? 0,
+      outsource_qty: Math.max(0, Math.round(n(r.OUTSOURCE_QTY) ?? 0)),
+      note: s(r.CHANGE_REASON) || null,
+    });
+  }
+  if (folded) adjust(`물량 ${folded}행: 추가·이월·취소 수량을 최저·목표·확장에 합쳤어요(새 구조에는 그 칸이 없어요)`);
+  if (minFilled) adjust(`최저가 비었거나 0인 물량 ${minFilled}행: 옛 도구처럼 목표와 같게 넣었어요`);
+  if (stretchFilled) adjust(`확장이 빈 물량 ${stretchFilled}행: 목표와 같게 넣었어요`);
+  adjust('필수 여부: MUST만 필수, 나머지(SHOULD 등)는 선택으로 가져왔어요');
+
+  // ───────── 실적: 완료 + 외주 완료 + 규격 제외 = 완료 수량 ─────────
+  const progress: Record<string, unknown>[] = [];
+  const pSeen = new Set<string>();
+  for (const r of table(sheets, '13_Progress_Actual')) {
+    const u = s(r.UPDATE_ID); const rt = s(r.RESOURCE_ID); const part = s(r.PART_ID);
+    if (!updIds.has(u) || !rtIds.has(rt) || !partIds.has(part)) { skip(`실적 ${u}|${rt}|${part}: 없는 업데이트·리소스·파트`); continue; }
+    const qty = Math.round((n(r.COMPLETED_QTY) ?? 0) + (n(r.OUTSOURCE_COMPLETED_QTY) ?? 0) + (n(r.SPEC_OUT_QTY) ?? 0));
+    if (!qty || pSeen.has(`${u}|${rt}|${part}`)) continue;
+    pSeen.add(`${u}|${rt}|${part}`);
+    progress.push({ update_id: u, resource_type_id: rt, part_id: part, completed_qty: qty, as_of: date(r.UPDATED_AT) });
+  }
+
+  const now = options.now ?? new Date().toISOString();
+  const rows: Rows = {
+    meta: [
+      { key: 'project_name', value: options.projectName?.trim() || '가져온 프로젝트' },
+      { key: 'created_at', value: now },
+      { key: 'data_version', value: '1' },
+      { key: 'saved_by_app', value: options.appVersion ?? 'arp-next' },
+      { key: 'imported_from', value: 'legacy-google-sheet' },
+    ],
+    settings: [{
+      id: 1, horizon_start_month: start, horizon_end_month: end, work_weekdays: '1111100',
+      buffer_rate: cfgNum('DEFAULT_BUFFER_RATE', 0), default_overlap_rate: defaultOverlap ?? LEGACY_BUILTIN_OVERLAP,
+      load_warn_rate: cfgNum('CAPACITY_YELLOW_THRESHOLD', 0.8), load_over_rate: cfgNum('CAPACITY_ORANGE_THRESHOLD', 1), load_critical_rate: cfgNum('CAPACITY_RED_THRESHOLD', 1.2),
+      late_warn_workdays: 10, default_plan_mode: ['MIN', 'TARGET', 'STRETCH'].includes(s(config.get('DEFAULT_PLAN_MODE') ?? null)) ? s(config.get('DEFAULT_PLAN_MODE') ?? null) : 'TARGET',
+    }],
+    holidays,
+    parts,
+    part_overlaps: overlaps,
+    resource_groups: groups,
+    resource_types: resourceTypes,
+    resource_parts: resourceParts,
+    effort_profiles: profiles,
+    efforts,
+    effort_mix: effortMix,
+    update_types: updateTypes,
+    type_templates: templates,
+    updates,
+    volumes,
+    progress,
+    capacity,
+  };
+  for (const [k, v] of Object.entries(rows)) if (k !== 'meta' && k !== 'settings') report.counts[k] = v.length;
+  return { rows, report };
+}
+
+const ORDER = [
+  'meta', 'settings', 'holidays', 'parts', 'part_overlaps', 'resource_groups', 'resource_types', 'resource_parts',
+  'effort_profiles', 'efforts', 'effort_mix', 'update_types', 'type_templates', 'updates', 'volumes', 'progress', 'capacity',
+];
+
+/** 빈 DB에 구조를 만들고 가져온 행을 넣는다(한 트랜잭션) */
+export function writeImported(db: SqlDb, schemaSql: string, rows: Rows): void {
+  db.exec(schemaSql);
+  migrate(db);
+  db.exec('BEGIN');
+  try {
+    for (const t of ORDER) {
+      for (const row of rows[t] ?? []) {
+        const cols = Object.keys(row);
+        db.run(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(c => row[c]));
+      }
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw new Error(`가져온 값을 저장하지 못했어요: ${(error as Error).message}`);
+  }
+}
