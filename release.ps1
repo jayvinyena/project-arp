@@ -5,7 +5,7 @@
                  release-deploy.cmd   (위 + Cloudflare Pages 올리기)
   PowerShell:    powershell -ExecutionPolicy Bypass -File .\release.ps1 [-E2E] [-Deploy] [-SkipTests] [-ProjectName arp]
 
-  -E2E          크롬 시험까지(20분 안팎, 크롬 필요)
+  -E2E          크롬 시험까지(1분 안팎, 크롬 필요)
   -Deploy       빌드 결과(dist-web)를 Cloudflare Pages에 올림. 처음 한 번은 브라우저로 Cloudflare 로그인
   -SkipTests    검사를 건너뜀(급할 때만)
   -ProjectName  Cloudflare Pages 프로젝트 이름(기본 arp → https://arp.pages.dev)
@@ -87,7 +87,7 @@ if ($SkipTests) {
   }
   Add-Result '검사' '통과' 'npm test'
   if ($E2E) {
-    Write-Host '  크롬 시험(20분 안팎)...'
+    Write-Host '  크롬 시험(1분 안팎)...'
     & npm run e2e
     if ($LASTEXITCODE -ne 0) {
       Add-Result '크롬 시험' '실패' 'npm run e2e 실패(위 출력 참고)'

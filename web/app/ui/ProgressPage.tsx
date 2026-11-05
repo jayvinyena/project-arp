@@ -5,32 +5,36 @@ import type { ProgressView, ProgressRow } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
 import { fmtInt, fmtPct, fmtDate } from '../lib/format.ts';
 import { IconCheck } from './icons.tsx';
+import { afterCommit } from './commit.ts';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function DoneInput(props: { value: number | null; label: string; flag: string | null; disabled: boolean; onCommit: (v: number | null) => void }) {
+function DoneInput(props: { value: number | null; label: string; flag: string | null; disabled: boolean; onCommit: (v: number | null) => unknown }) {
   const [text, setText] = useState(props.value == null ? '' : String(props.value));
   useEffect(() => setText(props.value == null ? '' : String(props.value)), [props.value]);
+  const reset = () => setText(props.value == null ? '' : String(props.value));
   const commit = () => {
     const t = text.trim();
     const n = t === '' ? null : Number(t);
-    if (n !== null && (!Number.isInteger(n) || n < 0)) { setText(props.value == null ? '' : String(props.value)); return; }
-    if ((n || null) !== (props.value || null)) props.onCommit(n);
+    if (n !== null && (!Number.isInteger(n) || n < 0)) { reset(); return; }
+    if ((n || null) !== (props.value || null)) afterCommit(props.onCommit(n), reset);
   };
   return <input class={`qty${props.flag ? ' warn' : ''}`} inputMode="numeric" aria-label={props.label} title={props.flag ?? ''} value={text} placeholder="—" disabled={props.disabled}
     onInput={e => setText((e.target as HTMLInputElement).value)} onBlur={commit}
     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setText(props.value == null ? '' : String(props.value)); (e.target as HTMLInputElement).blur(); } }} />;
 }
 
-function SpentInput(props: { value: number | null; label: string; disabled: boolean; onCommit: (v: number | null) => void }) {
+function SpentInput(props: { value: number | null; label: string; disabled: boolean; onCommit: (v: number | null) => unknown }) {
   const show = (v: number | null) => (v == null ? '' : String(Math.round(v * 100) / 100));
   const [text, setText] = useState(show(props.value));
   useEffect(() => setText(show(props.value)), [props.value]);
+  const reset = () => setText(show(props.value));
   const commit = () => {
+    if (text.trim() === show(props.value)) return; // 고치지 않았으면 반올림한 표시값을 저장하지 않는다
     const t = text.trim().replace(/,/g, '');
     const n = t === '' ? null : Number(t);
-    if (n !== null && (!Number.isFinite(n) || n < 0)) { setText(show(props.value)); return; }
-    if ((n || null) !== (props.value || null)) props.onCommit(n);
+    if (n !== null && (!Number.isFinite(n) || n < 0)) { reset(); return; }
+    if ((n || null) !== (props.value || null)) afterCommit(props.onCommit(n), reset);
   };
   return <input class="qty spent" inputMode="decimal" aria-label={props.label} value={text} placeholder="—" disabled={props.disabled}
     onInput={e => setText((e.target as HTMLInputElement).value)} onBlur={commit}
@@ -50,7 +54,7 @@ export function ProgressPage(props: {
   if (!view.updateId) return <div class="page"><p class="muted">업데이트가 없어요. 업데이트 계획에서 먼저 만들어 주세요.</p></div>;
   const updateId = view.updateId;
   const rate = view.summary.totalDays > 0 ? view.summary.doneDays / view.summary.totalDays : 0;
-  const apply = (e: Edit) => void props.onApply(e);
+  const apply = (e: Edit) => props.onApply(e);
   const groups: { name: string; rows: ProgressRow[] }[] = [];
   for (const r of view.rows) {
     const last = groups[groups.length - 1];

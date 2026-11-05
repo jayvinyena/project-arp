@@ -230,7 +230,10 @@ export function compareLaunchModes(db: SqlDb, session: ProjectSession): LaunchCo
 
 function launchMeetsDeadline(data: ProjectData, launchId: string, planMode: PlanMode): { ok: boolean; launch: UpdateResult | undefined } {
   const launch = runPlan(data, { planMode }).updates.find(u => u.updateId === launchId);
-  return { ok: launch?.status === 'ON_TRACK', launch };
+  // 출시일 없이 제작 완료 목표일만 있으면 판정이 "출시일 없음"이라, 판정 대신 날짜를 직접 비교한다
+  const deadline = launch?.freezeDate ?? launch?.releaseDate ?? null;
+  const ok = launch?.status === 'ON_TRACK' || (!!launch && launch.status !== 'UNFINISHED' && !!launch.expectedCompletionDate && !!deadline && launch.expectedCompletionDate <= deadline);
+  return { ok, launch };
 }
 
 export interface MaxScaleResult {

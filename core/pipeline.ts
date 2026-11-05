@@ -75,6 +75,18 @@ export function tableColumns(db: SqlDb, table: string): Set<string> {
 
 export interface SkippedChange { seq: number; target: string; target_key: string; why: string }
 
+/** 시나리오 SET 값 {"add": n}: 원본 값에 더한다(0 밑으로는 안 내려감). 같은 칸에 동작이 쌓여도 더해진다 */
+export const isAdd = (v: unknown): v is { add: number } => !!v && typeof v === 'object' && typeof (v as { add?: unknown }).add === 'number';
+
+/** 행 넣기. 기본 키가 이미 있으면 그 행을 새 값으로 바꾼다(같은 시나리오 줄이 두 번 · 원본에 이미 반영된 가상 업데이트) */
+export function upsertRow(db: SqlDb, table: string, row: Record<string, unknown>, columns = tableColumns(db, table)): void {
+  const cols = Object.keys(row).filter(k => columns.has(k));
+  const keys = KEY_COLUMNS[table as EngineTable] ?? [];
+  const rest = cols.filter(c => !keys.includes(c));
+  const conflict = keys.length && rest.length ? ` ON CONFLICT (${keys.join(', ')}) DO UPDATE SET ${rest.map(c => `${c} = excluded.${c}`).join(', ')}` : '';
+  db.run(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})${conflict}`, cols.map(k => row[k]));
+}
+
 /**
  * 시나리오 변경을 원본에 잠시 얹고 fn을 부른 뒤 되돌린다(SAVEPOINT). 원본은 바뀌지 않는다.
  */
@@ -92,15 +104,26 @@ export function withScenario<T>(db: SqlDb, scenarioId: string | undefined, fn: (
       const where = keyWhere(c.target, c.target_key);
       if (!where) { skip(c, '대상 표·키가 아님'); continue; }
       const columns = tableColumns(db, c.target);
-      if (c.op === 'SET') {
-        if (!c.field || !columns.has(c.field)) { skip(c, '없는 항목'); continue; }
-        if (db.run(`UPDATE ${c.target} SET ${c.field} = ? WHERE ${where.sql}`, [JSON.parse(c.value_json ?? 'null'), ...where.params]) === 0) skip(c, '대상 행 없음');
-      } else if (c.op === 'DELETE') {
-        if (db.run(`DELETE FROM ${c.target} WHERE ${where.sql}`, where.params) === 0) skip(c, '대상 행 없음');
-      } else if (c.op === 'INSERT') {
-        const row = JSON.parse(c.value_json ?? '{}') as Record<string, unknown>;
-        const cols = Object.keys(row).filter(k => columns.has(k));
-        db.run(`INSERT INTO ${c.target} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(k => row[k]));
+      // 줄 하나가 실패해도(키 겹침·형식 위반) 나머지는 얹는다. 실패한 줄은 이유와 함께 알린다
+      db.exec('SAVEPOINT scenario_row');
+      try {
+        if (c.op === 'SET') {
+          if (!c.field || !columns.has(c.field)) { skip(c, '없는 항목'); db.exec('RELEASE scenario_row'); continue; }
+          const v = JSON.parse(c.value_json ?? 'null') as unknown;
+          const n = db.run(isAdd(v)
+            ? `UPDATE ${c.target} SET ${c.field} = max(0, coalesce(${c.field}, 0) + ?) WHERE ${where.sql}`
+            : `UPDATE ${c.target} SET ${c.field} = ? WHERE ${where.sql}`, [isAdd(v) ? v.add : v, ...where.params]);
+          if (n === 0) skip(c, '대상 행 없음');
+        } else if (c.op === 'DELETE') {
+          if (db.run(`DELETE FROM ${c.target} WHERE ${where.sql}`, where.params) === 0) skip(c, '대상 행 없음');
+        } else if (c.op === 'INSERT') {
+          upsertRow(db, c.target, JSON.parse(c.value_json ?? '{}') as Record<string, unknown>, columns);
+        }
+        db.exec('RELEASE scenario_row');
+      } catch (error) {
+        db.exec('ROLLBACK TO scenario_row');
+        db.exec('RELEASE scenario_row');
+        skip(c, `넣을 수 없음: ${(error as Error).message}`);
       }
     }
     return { value: fn(), skipped };

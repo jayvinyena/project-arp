@@ -1,20 +1,22 @@
 // 유형 템플릿: 업데이트 유형과 유형별 기본 물량(새 업데이트를 만들 때 복사)
 import { useState, useEffect } from 'preact/hooks';
+import { afterCommit } from './commit.ts';
 import { rpc } from '../lib/rpc.ts';
 import type { TypeView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
 import { fmtInt } from '../lib/format.ts';
 import { IconPlus, IconX } from './icons.tsx';
 
-function Qty(props: { value: number | null; label: string; disabled: boolean; onCommit: (v: number | null) => void }) {
+function Qty(props: { value: number | null; label: string; disabled: boolean; onCommit: (v: number | null) => unknown }) {
   const [text, setText] = useState(props.value == null ? '' : String(props.value));
   useEffect(() => setText(props.value == null ? '' : String(props.value)), [props.value]);
+  const reset = () => setText(props.value == null ? '' : String(props.value));
   const commit = () => {
     const t = text.trim();
-    if (t === '') { if (props.value !== null) props.onCommit(null); return; }
+    if (t === '') { if (props.value !== null) afterCommit(props.onCommit(null), reset); return; }
     const n = Number(t);
-    if (!Number.isInteger(n) || n < 0) { setText(props.value == null ? '' : String(props.value)); return; }
-    if (n !== props.value) props.onCommit(n);
+    if (!Number.isInteger(n) || n < 0) { reset(); return; }
+    if (n !== props.value) afterCommit(props.onCommit(n), reset);
   };
   return <input class="qty" inputMode="numeric" aria-label={props.label} value={text} placeholder="—" disabled={props.disabled}
     onInput={e => setText((e.target as HTMLInputElement).value)} onBlur={commit}
@@ -29,7 +31,7 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
   if (!types) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const editable = types.filter(t => !t.isLaunch);
   const cur = editable.find(t => t.typeId === selected) ?? editable[0];
-  const apply = (e: Edit) => void props.onApply(e);
+  const apply = (e: Edit) => props.onApply(e);
   const sum = (k: 'min' | 'target' | 'stretch') => cur?.rows.reduce((a, r) => a + (r[k] ?? 0), 0) ?? 0;
 
   return (

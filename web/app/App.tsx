@@ -1,6 +1,6 @@
 // 앱 틀: 시작 화면, 옆 메뉴, 파일 열기·저장(자동 저장, 편집 중 표시, 저장 전 충돌 확인)
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { rpc } from './lib/rpc.ts';
+import { rpc, DEVICE } from './lib/rpc.ts';
 import type { View } from './lib/rpc.ts';
 import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveInPlace, pickXlsx, fetchBytes } from './lib/files.ts';
 import { ImportReport } from './ui/ImportReport.tsx';
@@ -63,9 +63,18 @@ export function App() {
   fileRef.current = file;
   const saveTimer = useRef<number | undefined>(undefined);
   const saving = useRef(false);
+  const viewRef = useRef<View | null>(null);
+  viewRef.current = view;
+  /** 지금 연 파일의 세대: 열기·만들기·닫기마다 바뀐다. 늦게 끝난 저장이 닫은 파일을 되살리지 않게 */
+  const fileGen = useRef(0);
+  /** 마지막으로 저장한 고침 번호(editSeq). 같으면 저장 안 된 고침이 없다 */
+  const savedSeq = useRef(0);
+  const unsaved = () => editSeq.current !== savedSeq.current;
 
   const showToast = (m: string) => { setToast(m); window.setTimeout(() => setToast(null), 4000); };
   const me = editor.trim() || '이름 없음';
+  const meRef = useRef(me);
+  meRef.current = me;
 
   // ───────── 저장 ─────────
   // 경쟁 상태 막기:
@@ -77,6 +86,22 @@ export function App() {
   const writeRef = useRef<() => Promise<boolean>>(async () => false);
 
   const setFileNow = (next: FileState) => { fileRef.current = next; setFile(next); };
+  const projectKey = (v: View | null) => (v ? `${v.meta.project_name ?? ''}|${v.meta.created_at ?? ''}` : '');
+
+  /** 이 프로젝트의 복구 사본만 지운다(다른 프로젝트 사본은 남긴다) */
+  const dropRecoveryFor = async (key: string) => {
+    const r = await idb.get<Recovery>('recovery');
+    if (r && r.projectKey && r.projectKey === key) { await idb.del('recovery'); setRecovery(null); }
+  };
+  /** 지금 상태를 복구 사본으로(세대가 바뀌었으면 남기지 않는다) */
+  const snapshotNow = async (gen: number, name: string, projectName: string, key: string) => {
+    try {
+      if (gen !== fileGen.current) return;
+      const { bytes } = await rpc.snapshot();
+      if (gen !== fileGen.current) return;
+      await idb.set('recovery', { name, at: Date.now(), bytes, projectName, projectKey: key } satisfies Recovery);
+    } catch { /* 사본을 못 남겨도 작업은 계속 */ }
+  };
 
   const scheduleAutosave = () => {
     const f = fileRef.current;
@@ -91,21 +116,30 @@ export function App() {
     if (saving.current) { pendingSave.current = true; return false; }
     saving.current = true;
     const seq = editSeq.current;
+    const gen = fileGen.current;
+    const key = projectKey(viewRef.current);
     setSave({ state: 'saving' });
     let ok = false;
     try {
+      // 새 위치에 처음 저장할 때도 편집 중 표시를 남긴다
+      if (!f.handle) await rpc.lock(meRef.current);
       const { bytes } = await rpc.export();
+      if (gen !== fileGen.current) return false;
       const cur = fileRef.current ?? f;
       if (cur.handle) {
         const lastModified = await saveInPlace(cur.handle, bytes, cur.lastModified);
+        if (gen !== fileGen.current) return true; // 그 사이 닫았다: 저장은 됐지만 닫은 파일을 되살리지 않는다
         setFileNow({ ...cur, lastModified });
       } else {
         const r = await saveAs(bytes, cur.name.endsWith('.arp') ? cur.name : `${cur.name}.arp`);
+        if (gen !== fileGen.current) return !!r;
         if (!r) { setSave({ state: 'dirty' }); return false; }
         setFileNow({ ...cur, handle: r.handle, lastModified: r.lastModified, name: r.name, isSample: false });
       }
       ok = true;
-      void idb.del('recovery');
+      savedSeq.current = seq;
+      // 고친 것을 저장했을 때만 그 프로젝트의 복구 사본을 지운다(열 때의 편집 중 표시 저장으로는 지우지 않는다)
+      if (seq > 0) void dropRecoveryFor(key);
       void refreshSeen(false);
       const savedFile = fileRef.current;
       if (savedFile?.handle) void rememberRecent(savedFile.handle, savedFile.name);
@@ -122,10 +156,31 @@ export function App() {
       saving.current = false;
       if (pendingSave.current) {
         pendingSave.current = false;
-        if (ok) void writeRef.current();
+        if (ok && gen === fileGen.current) void writeRef.current();
       }
     }
   }, []);
+
+  /** 충돌·오류 때 빠져나갈 길: 지금 내용을 다른 이름(새 파일)으로 저장하고 그 파일로 계속 편집 */
+  const saveAsNew = async () => {
+    const f = fileRef.current;
+    if (!f || saving.current) return;
+    const gen = fileGen.current;
+    try {
+      await rpc.lock(me);
+      const { bytes } = await rpc.export();
+      const r = await saveAs(bytes, f.name.endsWith('.arp') ? f.name : `${f.name}.arp`);
+      if (!r || gen !== fileGen.current) return;
+      setFileNow({ ...f, handle: r.handle, lastModified: r.lastModified, name: r.name, isSample: false, readOnly: false, lockedBy: null });
+      savedSeq.current = editSeq.current;
+      setSave({ state: 'saved', at: Date.now() });
+      void dropRecoveryFor(projectKey(viewRef.current));
+      if (r.handle) void rememberRecent(r.handle, r.name);
+      showToast(`"${r.name}"(으)로 저장했어요. 이제 이 파일을 고쳐요.`);
+    } catch (error) {
+      showToast(`저장하지 못했어요: ${(error as Error).message}`);
+    }
+  };
   writeRef.current = writeNow;
 
   // 예기치 못한 비동기 오류(main.tsx가 'arp:error'로 알린다)
@@ -153,7 +208,7 @@ export function App() {
 
   // 저장 안 된 변경이 있으면 떠나기 전에 묻는다
   useEffect(() => {
-    const onLeave = (e: BeforeUnloadEvent) => { if (save.state === 'dirty' || save.state === 'saving') { e.preventDefault(); } };
+    const onLeave = (e: BeforeUnloadEvent) => { if (save.state === 'dirty' || save.state === 'saving' || ((save.state === 'conflict' || save.state === 'error') && unsaved())) { e.preventDefault(); } };
     window.addEventListener('beforeunload', onLeave);
     return () => window.removeEventListener('beforeunload', onLeave);
   }, [save.state]);
@@ -173,13 +228,19 @@ export function App() {
       }
       const holder = v.meta.lock_holder;
       const beat = v.meta.lock_heartbeat_at ? Date.parse(v.meta.lock_heartbeat_at) : 0;
-      const lockedByOther = !!holder && holder !== me && Date.now() - beat < LOCK_FRESH_MS;
+      // 다른 사람이거나, 같은 이름이라도 다른 PC(브라우저)에서 편집 중이면 읽기 전용
+      const otherDevice = !!v.meta.lock_device && v.meta.lock_device !== DEVICE;
+      const lockedByOther = !!holder && (holder !== me || otherDevice) && Date.now() - beat < LOCK_FRESH_MS;
       const state: FileState = {
         name: opened.name, handle: opened.handle, lastModified: opened.lastModified,
         readOnly: lockedByOther, lockedBy: lockedByOther ? holder : null, isSample,
       };
+      fileGen.current += 1;
+      window.clearTimeout(saveTimer.current);
+      window.clearTimeout(snapshotTimer.current);
       setFileNow(state);
       editSeq.current = 0;
+      savedSeq.current = 0;
       setView(v);
       setVersion(x => x + 1);
       setPage(p => (p === 'check' ? 'launch' : p));
@@ -198,8 +259,24 @@ export function App() {
   };
 
   const close = async () => {
+    // 진행 중인 저장이 끝날 때까지 기다린다(최대 15초)
+    for (let i = 0; i < 150 && saving.current; i += 1) await new Promise(r => setTimeout(r, 100));
+    window.clearTimeout(saveTimer.current);
     const f = fileRef.current;
-    if (f?.handle && !f.readOnly) { await rpc.lock(null); await writeNow(); }
+    if (f?.handle && !f.readOnly) {
+      await rpc.lock(null);
+      const ok = await writeNow();
+      if (!ok && unsaved()) {
+        await snapshotNow(fileGen.current, f.name, viewRef.current?.snapshot.projectName ?? f.name, projectKey(viewRef.current));
+        if (!window.confirm('저장하지 못했어요. 그래도 닫을까요?\n고친 내용은 이 브라우저의 복구 사본에 남아 있어요.')) { await rpc.lock(me); return; }
+      }
+    } else if (f && !f.readOnly && !f.isSample && unsaved()) {
+      await snapshotNow(fileGen.current, f.name, viewRef.current?.snapshot.projectName ?? f.name, projectKey(viewRef.current));
+      if (!window.confirm('저장하지 않은 변경이 있어요. 그래도 닫을까요?\n고친 내용은 이 브라우저의 복구 사본에 남아 있어요.')) return;
+    }
+    fileGen.current += 1;
+    window.clearTimeout(snapshotTimer.current);
+    fileRef.current = null;
     setFile(null);
     setView(null);
   };
@@ -246,8 +323,10 @@ export function App() {
       const state: FileState = saved?.handle
         ? { name: saved.name, handle: saved.handle, lastModified: saved.lastModified, readOnly: false, lockedBy: null, isSample: false }
         : { name: fileName, handle: null, lastModified: Date.now(), readOnly: false, lockedBy: null, isSample: false };
+      fileGen.current += 1;
       setFileNow(state);
       editSeq.current = 0;
+      savedSeq.current = saved?.handle ? 0 : -1;
       setView(await rpc.view());
       setVersion(x => x + 1);
       setPage('launch');
@@ -261,20 +340,20 @@ export function App() {
 
   // ───────── 작업 복구 사본 · 최근 파일 ─────────
   useEffect(() => {
-    void idb.get<Recovery>('recovery').then(r => { if (r) setRecovery(r); });
+    void idb.get<Recovery>('recovery').then(r => setRecovery(r ?? null));
     void idb.get<RecentFile[]>('recent').then(r => setRecent(r ?? []));
   }, [file]);
 
   // 저장 안 된 변경이 생기면 1.5초 뒤 브라우저 저장소에 사본을 둔다(창을 닫아도 복구)
   useEffect(() => {
-    if (save.state !== 'dirty' || !file || file.readOnly) return;
     window.clearTimeout(snapshotTimer.current);
-    snapshotTimer.current = window.setTimeout(async () => {
-      try {
-        const { bytes } = await rpc.snapshot();
-        await idb.set('recovery', { name: file.name, at: Date.now(), bytes, projectName: view?.snapshot.projectName ?? file.name } satisfies Recovery);
-      } catch { /* 사본을 못 남겨도 작업은 계속 */ }
-    }, 1500);
+    const pendingEdits = save.state === 'dirty' || ((save.state === 'conflict' || save.state === 'error') && unsaved());
+    if (!pendingEdits || !file || file.readOnly) return;
+    const gen = fileGen.current;
+    const name = file.name;
+    const projectName = view?.snapshot.projectName ?? file.name;
+    const key = projectKey(view);
+    snapshotTimer.current = window.setTimeout(() => { void snapshotNow(gen, name, projectName, key); }, 1500);
   }, [version, save.state]);
 
   const restore = async (r: Recovery) => {
@@ -282,6 +361,7 @@ export function App() {
     const restored = fileRef.current;
     if (restored) setFileNow({ ...restored, isSample: false });
     editSeq.current = 1;
+    savedSeq.current = 0;
     setSave({ state: 'dirty' });
     setRecovery(null);
     showToast('저장하지 않았던 작업을 되살렸어요. 다른 이름으로 저장해 주세요.');
@@ -462,8 +542,8 @@ export function App() {
   };
 
   // ───────── 고치기 ─────────
-  const onEdit = async (edit: LaunchEdit) => {
-    if (fileRef.current?.readOnly) return;
+  const onEdit = async (edit: LaunchEdit): Promise<boolean> => {
+    if (fileRef.current?.readOnly) return false;
     try {
       const v = await rpc.edit(edit, me);
       setView(v);
@@ -473,8 +553,10 @@ export function App() {
         setSave(s => (s.state === 'conflict' ? s : { state: 'dirty' }));
         scheduleAutosave();
       }
+      return true;
     } catch (error) {
       showToast((error as Error).message);
+      return false;
     }
   };
 
@@ -584,6 +666,7 @@ export function App() {
           {!file.handle && <div class="small faint editor">고친 내용을 남기려면 다른 이름으로 저장해 주세요</div>}
           <div style="display: flex; gap: 6px">
             <button class="btn sm" disabled={file.readOnly || save.state === 'saving'} onClick={() => void writeNow()} title="저장 (Ctrl+S)"><IconSave />{file.handle ? '저장' : '다른 이름으로 저장'}</button>
+            {file.handle && !file.readOnly && (save.state === 'conflict' || save.state === 'error') && <button class="btn sm" onClick={() => void saveAsNew()}>다른 이름으로</button>}
             <button class="btn sm ghost" onClick={() => void close()}>닫기</button>
           </div>
           <button class="btn sm ghost" style="justify-content: flex-start" onClick={() => void exportXlsx()}><IconDownload />엑셀로 내보내기</button>
@@ -627,7 +710,8 @@ export function App() {
         )}
         {save.state === 'conflict' && (
           <div class="page" style="margin-bottom: 16px">
-            <div class="banner bad"><IconAlert /><div><b>저장하지 않았어요</b><p class="small muted">{save.message}</p></div></div>
+            <div class="banner bad"><IconAlert /><div style="flex: 1"><b>저장하지 않았어요</b><p class="small muted">{save.message}</p>
+              <div class="inline" style="margin-top: 8px"><button class="btn sm primary" onClick={() => void saveAsNew()}><IconSave />다른 이름으로 저장</button></div></div></div>
           </div>
         )}
         {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} />}

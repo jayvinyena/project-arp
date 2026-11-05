@@ -7,24 +7,26 @@ import type { Finding } from '../../../core/pipeline.ts';
 import type { PlanMode } from '../../../engine/types.ts';
 import { fmtDays, fmtInt } from '../lib/format.ts';
 import { IconPlus, IconX } from './icons.tsx';
+import { afterCommit } from './commit.ts';
 
 type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 
 function QtyInput(props: {
   value: number | null; field: QtyField; label: string; invalid?: boolean; disabled?: boolean; nullable: boolean;
-  onCommit: (v: number | null) => void;
+  onCommit: (v: number | null) => unknown;
 }) {
   const [text, setText] = useState(props.value == null ? '' : String(props.value));
   useEffect(() => { setText(props.value == null ? '' : String(props.value)); }, [props.value]);
+  const reset = () => setText(props.value == null ? '' : String(props.value));
   const commit = () => {
     const t = text.trim().replace(/,/g, '');
     if (t === '') {
-      if (props.nullable) { if (props.value !== null) props.onCommit(null); } else setText(String(props.value ?? 0));
+      if (props.nullable) { if (props.value !== null) afterCommit(props.onCommit(null), reset); } else setText(String(props.value ?? 0));
       return;
     }
     const n = Number(t);
-    if (!Number.isInteger(n) || n < 0) { setText(props.value == null ? '' : String(props.value)); return; }
-    if (n !== props.value) props.onCommit(n);
+    if (!Number.isInteger(n) || n < 0) { reset(); return; }
+    if (n !== props.value) afterCommit(props.onCommit(n), reset);
   };
   return (
     <input
@@ -56,7 +58,7 @@ export function VolumeTable(props: {
   findings: Finding[];
   blocked: boolean;
   readOnly: boolean;
-  onEdit: (e: VolumeEdit) => void;
+  onEdit: (e: VolumeEdit) => unknown;
 }) {
   const { byResource, totalDays, readOnly, onEdit } = props;
   const launchId = props.updateId;

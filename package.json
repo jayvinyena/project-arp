@@ -18,7 +18,7 @@
     "bench:browser": "node tools/bench-browser.mjs",
     "dev": "vite",
     "capture": "node tools/capture.mjs",
-    "e2e": "node tools/e2e-save.mjs && node tools/e2e-new.mjs --no-build && node tools/e2e-plan.mjs --no-build && node tools/e2e-progress.mjs --no-build && node tools/e2e-sim.mjs --no-build && node tools/e2e-import.mjs --no-build && node tools/e2e-stable.mjs --no-build && node tools/e2e-ext.mjs --no-build && node tools/e2e-advisor.mjs --no-build && node tools/e2e-deploy.mjs --no-build",
+    "e2e": "node tools/e2e-all.mjs",
     "compare-legacy": "node tools/compare-legacy.mjs",
     "build": "node tools/build-samples.mjs && vite build"
   },

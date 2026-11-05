@@ -153,3 +153,16 @@ test('최저 물량 동작: 목표·최대를 최저로 맞추는 변경 줄, �
   raw.close();
   assert.ok(v.rows.find(x => x.updateId === 'LAUNCH').cells[1].delta < 0, '물량을 줄이면 당겨진다');
 });
+
+test('물량 줄이기는 지금 물량 구간 기준: 확장안이면 확장 → 최저, 최저안이면 제안하지 않는다(전체 점검에서 찾음)', () => {
+  const { raw, session } = tight();
+  const data = session.currentData();
+  raw.close();
+  // 목표 = 최저, 확장만 크다 → 목표안 기준으로는 줄일 것이 없지만 확장안에서는 있다
+  const flat = { ...data, volumes: data.volumes.map(v => (v.update_id === 'LAUNCH' ? { ...v, target_qty: v.min_qty, stretch_qty: (v.min_qty ?? 0) + 5 } : v)) };
+  const stretch = adviseDeadlines(flat, { planMode: 'STRETCH', levers: { headcount: false, priority: false } });
+  assert.ok(stretch.steps.some(s => s.kind === 'volumeToMin'), JSON.stringify(stretch.steps));
+  assert.ok(stretch.totals.cutUnits > 0);
+  const min = adviseDeadlines(data, { planMode: 'MIN', levers: { headcount: false, priority: false } });
+  assert.ok(!min.steps.some(s => s.kind === 'volumeToMin'));
+});

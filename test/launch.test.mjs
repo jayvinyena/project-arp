@@ -136,3 +136,15 @@ test('역산(필요 인원): 이미 맞으면 더하지 않는다', () => {
   assert.equal(r.currentOk, true);
   assert.deepEqual(r.additions, []);
 });
+
+test('출시일 없이 제작 완료 목표일만 있어도 거꾸로 계산이 된다(전체 점검에서 찾음)', () => {
+  const { raw, session } = open('normal');
+  const data = session.currentData();
+  raw.close();
+  const noRelease = { ...data, updates: data.updates.map(u => (u.update_id === 'LAUNCH' ? { ...u, release_date: null } : u)) };
+  const withRelease = maxLaunchScale(data, 'LAUNCH');
+  const r = maxLaunchScale(noRelease, 'LAUNCH');
+  assert.equal(r.currentOk, true);
+  assert.equal(r.scale, withRelease.scale);
+  assert.equal(headcountForLaunch(noRelease, 'LAUNCH').feasible, headcountForLaunch(data, 'LAUNCH').feasible);
+});

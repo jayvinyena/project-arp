@@ -199,7 +199,17 @@ const handlers: Record<string, (payload: any) => unknown> = {
     const { sql: s, session: ss } = need();
     const ctx = { editor: p.editor || '이름 없음', batchId: newBatchId() };
     let changed = 0;
-    for (const pick of p.picks) if (applyEdit(s, ss, { kind: 'effortScale', ...pick }, ctx).changed) changed += 1;
+    // 고른 보정은 한꺼번에: 하나라도 실패하면 모두 되돌린다
+    s.exec('SAVEPOINT calibrate');
+    try {
+      for (const pick of p.picks) if (applyEdit(s, ss, { kind: 'effortScale', ...pick }, ctx).changed) changed += 1;
+      s.exec('RELEASE calibrate');
+    } catch (error) {
+      s.exec('ROLLBACK TO calibrate');
+      s.exec('RELEASE calibrate');
+      ss.markDirty('efforts');
+      throw error;
+    }
     return { changed };
   },
 
@@ -270,9 +280,10 @@ const handlers: Record<string, (payload: any) => unknown> = {
   },
 
   /** 편집 중 표시 쓰기·지우기 (저장은 화면 쪽이 export 후 한다) */
-  lock(p: { holder: string | null }) {
+  lock(p: { holder: string | null; device?: string | null }) {
     const { sql: s } = need();
     setMeta(s, 'lock_holder', p.holder);
+    setMeta(s, 'lock_device', p.device ?? null);
     setMeta(s, 'lock_heartbeat_at', p.holder ? new Date().toISOString() : null);
     return meta(s);
   },

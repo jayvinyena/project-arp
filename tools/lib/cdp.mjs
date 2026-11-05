@@ -32,6 +32,8 @@ export class Cdp {
     this.pending = new Map();
     this.ws.onmessage = ev => {
       const msg = JSON.parse(ev.data);
+      // 확인 창(떠나기 전 확인·confirm)은 수락한다. 화면 없는 크롬에서 창이 뜨면 이동·요청이 끝나지 않는다
+      if (msg.method === 'Page.javascriptDialogOpening') { this.dialogs = (this.dialogs ?? 0) + 1; void this.send('Page.handleJavaScriptDialog', { accept: true }).catch(() => {}); return; }
       if (msg.id && this.pending.has(msg.id)) {
         const { resolve, reject } = this.pending.get(msg.id);
         this.pending.delete(msg.id);
@@ -40,10 +42,14 @@ export class Cdp {
     };
   }
   open() { return new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; }); }
-  send(method, params = {}) {
+  /** 응답이 60초 안에 없으면 실패로 끝낸다(시험이 끝없이 멈추지 않게) */
+  send(method, params = {}, timeoutMs = 60000) {
     const id = ++this.id;
     this.ws.send(JSON.stringify({ id, method, params }));
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { if (this.pending.delete(id)) reject(new Error(`응답 없음(${timeoutMs / 1000}초): ${method}`)); }, timeoutMs);
+      this.pending.set(id, { resolve: v => { clearTimeout(t); resolve(v); }, reject: e => { clearTimeout(t); reject(e); } });
+    });
   }
   async eval(expression) {
     const r = await this.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
@@ -63,7 +69,8 @@ export class Cdp {
 
 /** 빌드 → 미리보기 서버 → 크롬. fn(cdp, baseUrl) 실행 뒤 모두 끈다 */
 /** server: 'preview'(vite 미리보기) 또는 'pages'(Cloudflare Pages 흉내, tools/lib/pages-server.mjs) */
-export async function withBrowser(fn, { port = 4317, debugPort = 9333, chrome = CHROME_DEFAULT, build = true, server: kind = 'preview' } = {}) {
+// 포트는 ARP_E2E_PORT · ARP_CDP_PORT 로 바꿀 수 있다(tools/e2e-all.mjs가 여러 시험을 동시에 돌릴 때)
+export async function withBrowser(fn, { port = Number(process.env.ARP_E2E_PORT) || 4317, debugPort = Number(process.env.ARP_CDP_PORT) || 9333, chrome = CHROME_DEFAULT, build = true, server: kind = 'preview' } = {}) {
   if (build) {
     // 앱이 내보내는 예시 파일(samples/out/*.arp)도 최신으로
     await run(process.execPath, ['tools/build-samples.mjs'], { stdio: 'ignore' });

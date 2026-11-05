@@ -164,7 +164,7 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
 }
 
 export function LaunchPage(props: {
-  view: View; version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean; onEdit: (e: LaunchEdit) => void;
+  view: View; version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean; onEdit: (e: LaunchEdit) => unknown;
 }) {
   const { snapshot, compare } = props.view;
   const launch = snapshot.launch;

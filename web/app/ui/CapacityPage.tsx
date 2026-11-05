@@ -3,6 +3,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { rpc } from '../lib/rpc.ts';
 import type { CapacityView, CapacityCell } from '../../../core/plan.ts';
 import type { Edit, CapacityField } from '../../../core/edits.ts';
+import { afterCommit } from './commit.ts';
 
 const FIELDS: { key: CapacityField; label: string; unit: string; pct?: boolean; help: string }[] = [
   { key: 'headcount', label: '인원', unit: '명', help: '정규 인원. 0.5 = 반달 또는 반일 근무' },
@@ -14,14 +15,17 @@ const FIELDS: { key: CapacityField; label: string; unit: string; pct?: boolean; 
 
 const show = (v: number, pct?: boolean) => (pct ? String(Math.round(v * 1000) / 10) : String(Math.round(v * 100) / 100));
 
-function Cell(props: { value: number; pct?: boolean; label: string; disabled: boolean; onCommit: (v: number) => void }) {
+function Cell(props: { value: number; pct?: boolean; label: string; disabled: boolean; onCommit: (v: number) => unknown }) {
   const [text, setText] = useState(show(props.value, props.pct));
   useEffect(() => setText(show(props.value, props.pct)), [props.value, props.pct]);
+  const reset = () => setText(show(props.value, props.pct));
   const commit = () => {
+    // 보이는 글자를 고치지 않았으면 반영하지 않는다(표시는 반올림이라 0.875가 0.88로 저장되지 않게)
+    if (text.trim() === show(props.value, props.pct)) return;
     const n = Number(text.trim());
-    if (text.trim() === '' || !Number.isFinite(n)) { setText(show(props.value, props.pct)); return; }
+    if (text.trim() === '' || !Number.isFinite(n)) { reset(); return; }
     const v = props.pct ? n / 100 : n;
-    if (Math.abs(v - props.value) > 1e-9) props.onCommit(v);
+    if (Math.abs(v - props.value) > 1e-9) afterCommit(props.onCommit(v), reset);
   };
   return <input class="qty cap-cell" inputMode="decimal" aria-label={props.label} value={text} disabled={props.disabled}
     onInput={e => setText((e.target as HTMLInputElement).value)} onBlur={commit}
@@ -36,7 +40,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
   useEffect(() => { void rpc.capacity().then(v => { setView(v); setHorizon(v.horizon); setFill(f => ({ ...f, partId: f.partId || v.parts[0]?.partId || '', from: f.from || v.months[0] || '', to: f.to || v.months[v.months.length - 1] || '' })); }); }, [props.version]);
   if (!view) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const meta = FIELDS.find(f => f.key === field)!;
-  const apply = (e: Edit) => void props.onApply(e);
+  const apply = (e: Edit) => props.onApply(e);
   const yearOf = (m: string, i: number) => (i === 0 || m.endsWith('-01') ? `${m.slice(0, 4)}년` : '');
 
   return (

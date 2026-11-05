@@ -133,3 +133,20 @@ test('열 때 변화 알림: 지난번 본 뒤 완료 예정 변화 · 새 업�
   assert.equal(n.editsByOthers, 2);
   assert.deepEqual(n.editors, ['김아트']);
 });
+
+test('실적 엑셀: "완료일"은 기준일로, "완료 수량"이 수량으로(전체 점검에서 찾음) · 영어·밑줄 머리글', async () => {
+  const { importProgress } = await import('../core/progress-io.ts');
+  const { writeXlsx } = await import('../core/xlsx-write.ts');
+  const { readXlsx } = await import('../core/xlsx.ts');
+  const { raw, db, session } = open();
+  const ko = await readXlsx(writeXlsx({ A: [['업데이트', '리소스', '파트', '완료일', '완료 수량'], ['런칭', '신규 캐릭터', '원화', 46000, 5]] }));
+  const r1 = importProgress(db, session, ko, { editor: '검사', batchId: 'K' }, '2026-12-01');
+  assert.equal(r1.changedCells, 1, JSON.stringify(r1));
+  const row = db.get("SELECT completed_qty, as_of FROM progress WHERE update_id = 'LAUNCH' AND resource_type_id = 'CHAR_NEW' AND part_id = 'CONCEPT'");
+  assert.equal(row.completed_qty, 5);
+  assert.equal(row.as_of, '2025-12-09');
+  const en = await readXlsx(writeXlsx({ A: [['UPDATE_ID', 'RESOURCE_ID', 'PART_ID', 'department', 'COMPLETED_QTY', 'UPDATED_AT'], ['LAUNCH', 'CHAR_NEW', 'CONCEPT', '아트', 6, '2026-12-02']] }));
+  importProgress(db, session, en, { editor: '검사', batchId: 'E' }, '2026-12-01');
+  assert.equal(db.get("SELECT completed_qty FROM progress WHERE update_id = 'LAUNCH' AND resource_type_id = 'CHAR_NEW' AND part_id = 'CONCEPT'").completed_qty, 6);
+  raw.close();
+});

@@ -28,7 +28,8 @@ export const idb = {
   del: async (key: string): Promise<void> => { try { await tx('readwrite', s => s.delete(key)); } catch { /* 무시 */ } },
 };
 
-export interface Recovery { name: string; at: number; bytes: ArrayBuffer; projectName: string }
+/** projectKey = 프로젝트 이름|만든 시각. 그 프로젝트를 저장했을 때만 사본을 지운다 */
+export interface Recovery { name: string; at: number; bytes: ArrayBuffer; projectName: string; projectKey?: string }
 export interface RecentFile { name: string; at: number; handle: FileSystemFileHandle }
 
 /** 최근 파일: 같은 파일이면 앞으로, 최대 6개 */

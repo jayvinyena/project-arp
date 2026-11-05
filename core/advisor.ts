@@ -164,8 +164,12 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     const to = toRaw > s.horizon_end_month ? s.horizon_end_month : toRaw;
     return to >= from ? monthsBetween(from, to) : [];
   };
-  const hasMinRoom = (updateId: string, onlyOptional: boolean) => data.volumes.some(v =>
-    v.update_id === updateId && v.min_qty != null && v.target_qty != null && v.min_qty < v.target_qty && (!onlyOptional || v.required === 0));
+  // 지금 물량 구간의 수량(엔진과 같은 칸). 최저안이면 줄일 것이 없다
+  const planQty = (v: ProjectData['volumes'][number]) => (planMode === 'MIN' ? v.min_qty : planMode === 'STRETCH' ? v.stretch_qty : v.target_qty);
+  const hasMinRoom = (updateId: string, onlyOptional: boolean) => data.volumes.some(v => {
+    const q = planQty(v);
+    return v.update_id === updateId && v.min_qty != null && q != null && v.min_qty < q && (!onlyOptional || v.required === 0);
+  });
 
   while (!out()) {
     const late = cur.oc.filter(o => o.late > 0 && !stuck.has(o.updateId))
@@ -213,10 +217,12 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
         const b = runPlan(build(data, st, initial), { planMode }).updates.find(u => u.updateId === target.updateId)?.requiredDays ?? 0;
         return Math.max(0, a - b) / 20 * 1.5; // 물량을 줄이는 것은 인원보다 비싸게 본다
       };
+      // 선택 리소스만 · 모든 리소스 두 후보를 함께 본다(선택 리소스가 늦음의 원인이 아니면 "모든"만 효과가 있다)
       if (!mode && hasMinRoom(target.updateId, true)) {
         const st = clone(state); st.mins.set(target.updateId, 'optional');
         cands.push({ st, step: { kind: 'volumeToMin', label: `${name} 선택 리소스를 최저 물량으로`, amount: 1, forUpdate: name, cost: cutCost(st) } });
-      } else if (mode !== 'all' && hasMinRoom(target.updateId, false)) {
+      }
+      if (mode !== 'all' && hasMinRoom(target.updateId, false)) {
         const st = clone(state); st.mins.set(target.updateId, 'all');
         cands.push({ st, step: { kind: 'volumeToMin', label: `${name} 모든 리소스를 최저 물량으로`, amount: 1, forUpdate: name, cost: cutCost(st) } });
       }
@@ -322,8 +328,8 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
   }
 
   const cutUnits = [...state.mins].reduce((a, [updateId, mode]) => a + data.volumes
-    .filter(v => v.update_id === updateId && v.min_qty != null && v.target_qty != null && (mode === 'all' || v.required === 0))
-    .reduce((x, v) => x + Math.max(0, (v.target_qty ?? 0) - (v.min_qty ?? 0)), 0), 0);
+    .filter(v => v.update_id === updateId && v.min_qty != null && planQty(v) != null && (mode === 'all' || v.required === 0))
+    .reduce((x, v) => x + Math.max(0, (planQty(v) ?? 0) - (v.min_qty ?? 0)), 0), 0);
   const after = cur.oc;
   return {
     alreadyOk: before.every(o => o.late === 0),

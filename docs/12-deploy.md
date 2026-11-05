@@ -7,7 +7,7 @@
 ```bash
 npm install
 npm test                 # 검사 80개
-npm run e2e              # 크롬 시험 91개 (크롬 필요, 20분 안팎)
+npm run e2e              # 크롬 시험 100개 (크롬 필요, 동시 3개로 1분 안팎)
 npm run build            # → dist-web/
 ```
 

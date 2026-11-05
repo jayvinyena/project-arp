@@ -187,3 +187,71 @@ test('검증 줄이기: 모든 규칙에 읽는 표가 적혀 있고, 시나리�
   }
   raw.close();
 });
+
+// ───────── 전체 점검(2026-11-05)에서 찾아 고친 것 ─────────
+const capOf = (session, id, part, month) => session.prepare(id).data.capacity.find(c => c.part_id === part && c.month === month).headcount;
+
+test('인원 동작을 같은 칸에 두 번: 더해지고(+2 +1 = +3), 앞 동작을 빼도 뒤 동작은 그대로(+1)', () => {
+  const { raw, db, session } = open();
+  const base = capOf(session, undefined, 'MODELING', '2027-02');
+  const id = applyScenarioOp(db, { kind: 'create', name: '충원 두 번' }).createdId;
+  const g1 = add(db, id, { kind: 'headcount', partId: 'MODELING', fromMonth: '2027-01', toMonth: '2027-03', delta: 2 }).groupNo;
+  add(db, id, { kind: 'headcount', partId: 'MODELING', fromMonth: '2027-02', toMonth: '2027-02', delta: 1 });
+  assert.equal(capOf(session, id, 'MODELING', '2027-02'), base + 3);
+  assert.equal(capOf(session, id, 'MODELING', '2027-01'), base + 2);
+  applyScenarioOp(db, { kind: 'removeAction', scenarioId: id, groupNo: g1 });
+  assert.equal(capOf(session, id, 'MODELING', '2027-02'), base + 1);
+  assert.equal(capOf(session, id, 'MODELING', '2027-01'), base);
+  // 줄이기는 0 밑으로 가지 않는다
+  add(db, id, { kind: 'headcount', partId: 'MODELING', fromMonth: '2027-01', toMonth: '2027-01', delta: -99 });
+  assert.equal(capOf(session, id, 'MODELING', '2027-01'), 0);
+  // 원본에 반영해도 같은 값
+  applyScenarioToBase(db, session, id, ctx);
+  assert.equal(db.get("SELECT headcount FROM capacity WHERE part_id = 'MODELING' AND month = '2027-02'").headcount, base + 1);
+  assert.equal(db.get("SELECT headcount FROM capacity WHERE part_id = 'MODELING' AND month = '2027-01'").headcount, 0);
+  raw.close();
+});
+
+test('반영한 시나리오의 복제본(가상 업데이트가 이미 원본에 있음) · AI 비율 두 번: 비교가 멈추지 않는다', () => {
+  const { raw, db, session } = open();
+  const a = applyScenarioOp(db, { kind: 'create', name: 'A' }).createdId;
+  add(db, a, { kind: 'addUpdate', name: '가상', typeId: 'MINI', startDate: '2027-03-01', freezeDate: null, releaseDate: '2027-05-15' });
+  const b = applyScenarioOp(db, { kind: 'create', name: 'B', copyFrom: a }).createdId;
+  applyScenarioToBase(db, session, a, ctx);
+  add(db, b, { kind: 'aiShare', partId: 'MODELING', share: 0.5 });
+  add(db, b, { kind: 'aiShare', partId: 'MODELING', share: 0.3 });
+  const v = compareScenarios(db, session, [b]);
+  assert.ok(v.columns.every(c => !c.blocked));
+  assert.ok(v.rows.some(r => r.updateId === 'X001'));
+  // 두 번째 AI 비율이 이긴다
+  const mix = session.prepare(b).data.effort_mix.filter(m => m.part_id === 'MODELING');
+  assert.deepEqual(mix.map(m => [m.profile_id, m.share]).sort(), [['AI', 0.3], ['BASE', 0.7]]);
+  // 복제본도 원본에 반영된다(이미 있는 가상 업데이트는 넣지 않고 다른 칸만 바꾼다)
+  applyScenarioToBase(db, session, b, ctx, true);
+  assert.equal(db.get("SELECT count(*) AS n FROM updates WHERE update_id = 'X001'").n, 1);
+  raw.close();
+});
+
+test('시나리오 줄 하나가 넣을 수 없어도 나머지는 계산하고 이유를 알린다 · 달력에 없는 날짜는 거절', () => {
+  const { raw, db, session } = open();
+  const id = applyScenarioOp(db, { kind: 'create', name: '깨진 줄' }).createdId;
+  assert.throws(() => add(db, id, { kind: 'updateDates', updateId: 'S1', releaseDate: '2027-09-31' }), /날짜/);
+  // 파일에 직접 들어간 깨진 줄(형식 위반)
+  db.run("INSERT INTO scenario_changes (scenario_id, seq, op, target, target_key, field, value_json, group_no, label) VALUES (?, 1, 'SET', 'updates', 'S1', 'release_date', '\"2027-09-31\"', 1, '깨진 줄')", [id]);
+  add(db, id, { kind: 'headcount', partId: 'FX', fromMonth: '2027-01', toMonth: '2027-01', delta: 1 });
+  const p = session.prepare(id);
+  assert.ok(p.data, '계산은 된다');
+  assert.ok(p.skipped.some(x => x.target_key === 'S1' && x.why.startsWith('넣을 수 없음')), JSON.stringify(p.skipped));
+  assert.equal(p.data.capacity.find(c => c.part_id === 'FX' && c.month === '2027-01').headcount, capOf(session, undefined, 'FX', '2027-01') + 1);
+  raw.close();
+});
+
+test('가상 업데이트: 사용 안 함 리소스는 템플릿에 있어도 넣지 않는다(진짜 업데이트 만들기와 같게)', () => {
+  const { raw, db } = open();
+  db.run("UPDATE resource_types SET active = 0 WHERE resource_type_id = 'VFX'");
+  const id = applyScenarioOp(db, { kind: 'create', name: '가상' }).createdId;
+  add(db, id, { kind: 'addUpdate', name: '가상 미니', typeId: 'MINI', startDate: '2027-03-01', freezeDate: null, releaseDate: '2027-05-15' });
+  const vols = db.all("SELECT target_key FROM scenario_changes WHERE scenario_id = ? AND target = 'volumes'", [id]).map(r => r.target_key.split('|')[1]).sort();
+  raw.close();
+  assert.deepEqual(vols, ['COSTUME', 'ICON']);
+});

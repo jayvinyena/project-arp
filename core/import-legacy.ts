@@ -63,6 +63,13 @@ const n = (v: Cell): number | null => {
   return Number.isFinite(x) ? x : null;
 };
 /** 옛 도구(06_Utils.js arpToBoolean_)와 같은 규칙: 체크(참) 또는 TRUE·Y·YES·1만 참. 빈칸·그 밖의 글자는 거짓 */
+/** 정수 칸(순서·수량): 소수는 반올림 */
+const int = (v: Cell): number | null => { const x = n(v); return x == null ? null : Math.round(x); };
+/** 같은 키가 두 번 나오면 뒤의 행을 건너뛴다(앞의 것을 쓴다) */
+function uniqueBy<T>(rows: T[], key: (r: T) => string, onDup: (k: string) => void): T[] {
+  const seen = new Set<string>();
+  return rows.filter(r => { const k = key(r); if (seen.has(k)) { onDup(k); return false; } seen.add(k); return true; });
+}
 const bool = (v: Cell): boolean => {
   if (typeof v === 'boolean') return v;
   return ['TRUE', 'Y', 'YES', '1'].includes(String(v ?? '').trim().toUpperCase());
@@ -70,9 +77,11 @@ const bool = (v: Cell): boolean => {
 /** 날짜 칸: 엑셀 일련번호, 'YYYY-MM-DD', 'YYYY.MM.DD', 'YYYY/MM/DD', 날짜+시각 */
 function date(v: Cell): string | null {
   if (v == null || v === '') return null;
-  if (typeof v === 'number') return serialToDate(v);
+  if (typeof v === 'number') return Number.isFinite(v) ? serialToDate(v) : null;
   const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(String(v).trim());
-  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+  if (!m) return null;
+  const d = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 2027-02-30 같은 날은 빈칸으로
 }
 function month(v: Cell): string | null {
   if (v == null || v === '') return null;
@@ -137,16 +146,16 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const cfgNum = (k: string, d: number) => n(config.get(k) ?? null) ?? d;
 
   // ───────── 파트 ─────────
-  const partRows = table(sheets, '01_Part_Master');
-  const parts = partRows.filter(r => s(r.PART_ID)).map((r, i) => {
+  const partRows = uniqueBy(table(sheets, '01_Part_Master').filter(r => s(r.PART_ID)), r => s(r.PART_ID), k => skip(`파트 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
+  const parts = partRows.map((r, i) => {
     const active = bool(r.ACTIVE) && bool(r.IS_CAPACITY_TARGET);
     if (bool(r.ACTIVE) && !bool(r.IS_CAPACITY_TARGET)) adjust(`파트 ${s(r.PART_NAME) || s(r.PART_ID)}: 작업 가능량 대상이 아니라 "사용 안 함"으로 가져왔어요`);
-    return { part_id: s(r.PART_ID), name: s(r.PART_NAME) || s(r.PART_ID), sort_order: n(r.SORT_ORDER) ?? i + 1, active: active ? 1 : 0 };
+    return { part_id: s(r.PART_ID), name: s(r.PART_NAME) || s(r.PART_ID), sort_order: int(r.SORT_ORDER) ?? i + 1, active: active ? 1 : 0 };
   });
   const partIds = new Set(parts.map(p => p.part_id));
 
   // ───────── 리소스: GROUP = 분류, 나머지 = 리소스 종류(가장 가까운 GROUP 조상이 분류) ─────────
-  const resRows = table(sheets, '02_Resource_Master').filter(r => s(r.RESOURCE_ID));
+  const resRows = uniqueBy(table(sheets, '02_Resource_Master').filter(r => s(r.RESOURCE_ID)), r => s(r.RESOURCE_ID), k => skip(`리소스 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
   const byId = new Map(resRows.map(r => [s(r.RESOURCE_ID), r]));
   const isGroup = (r: Row) => s(r.RESOURCE_LEVEL).toUpperCase() === 'GROUP';
   const groupOf = (r: Row): string | null => {
@@ -159,10 +168,10 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     }
     return null;
   };
-  const groups = resRows.filter(isGroup).map((r, i) => ({ group_id: s(r.RESOURCE_ID), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID), sort_order: n(r.SORT_ORDER) ?? i + 1 }));
+  const groups = resRows.filter(isGroup).map((r, i) => ({ group_id: s(r.RESOURCE_ID), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID), sort_order: int(r.SORT_ORDER) ?? i + 1 }));
   const resourceTypes = resRows.filter(r => !isGroup(r)).map((r, i) => ({
     resource_type_id: s(r.RESOURCE_ID), group_id: groupOf(r), name: s(r.RESOURCE_NAME) || s(r.RESOURCE_ID),
-    sort_order: n(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0,
+    sort_order: int(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0,
   }));
   const rtIds = new Set(resourceTypes.map(r => r.resource_type_id));
   const nested = resRows.filter(r => !isGroup(r) && s(r.PARENT_RESOURCE_ID) && byId.get(s(r.PARENT_RESOURCE_ID)) && !isGroup(byId.get(s(r.PARENT_RESOURCE_ID))!)).length;
@@ -173,9 +182,12 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const efforts: Record<string, unknown>[] = [];
   let aiCount = 0;
   let noBase = 0;
+  const effortSeen = new Set<string>();
   for (const r of table(sheets, '03_Effort_Standard')) {
     const rt = s(r.RESOURCE_ID);
     const part = s(r.PART_ID);
+    if (effortSeen.has(`${rt}|${part}`)) { skip(`공수 ${rt}|${part}: 같은 행이 두 번 있어 뒤의 것을 건너뜀`); continue; }
+    effortSeen.add(`${rt}|${part}`);
     if (!rtIds.has(rt)) { skip(`공수 ${rt}|${part}: 리소스 마스터에 없는 리소스`); continue; }
     if (!partIds.has(part)) { skip(`공수 ${rt}|${part}: 파트 마스터에 없는 파트`); continue; }
     const base = n(r.BASE_DAYS);
@@ -298,11 +310,11 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   if (missingCap.length) adjust(`인력 행이 없는 달 ${missingCap.length}개(예: ${missingCap.slice(0, 3).join(', ')}): 데이터 점검(C01)에서 채워 주세요`);
 
   // ───────── 업데이트 유형 · 템플릿 ─────────
-  const typeRows = table(sheets, '05_Update_Type').filter(r => s(r.UPDATE_TYPE_ID));
+  const typeRows = uniqueBy(table(sheets, '05_Update_Type').filter(r => s(r.UPDATE_TYPE_ID)), r => s(r.UPDATE_TYPE_ID), k => skip(`업데이트 유형 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
   const updateTypes = typeRows.map((r, i) => {
     const id = s(r.UPDATE_TYPE_ID);
     const name = s(r.UPDATE_TYPE_NAME) || id;
-    return { update_type_id: id, name, is_launch: id.toUpperCase() === 'LAUNCH' || name.includes('런칭') ? 1 : 0, sort_order: n(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0 };
+    return { update_type_id: id, name, is_launch: id.toUpperCase() === 'LAUNCH' || name.includes('런칭') ? 1 : 0, sort_order: int(r.SORT_ORDER) ?? i + 1, active: bool(r.ACTIVE) ? 1 : 0 };
   });
   const typeIds = new Set(updateTypes.map(t => t.update_type_id));
   const templates: Record<string, unknown>[] = [];
@@ -311,11 +323,12 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     const t = s(r.UPDATE_TYPE_ID);
     const rt = s(r.RESOURCE_ID);
     if (!typeIds.has(t) || !rtIds.has(rt)) { skip(`템플릿 ${t}|${rt}: 없는 유형이나 리소스`); continue; }
-    templates.push({ update_type_id: t, resource_type_id: rt, min_qty: n(r.MIN_QTY), target_qty: n(r.TARGET_QTY), stretch_qty: n(r.STRETCH_QTY) });
+    if (templates.some(x => x.update_type_id === t && x.resource_type_id === rt)) { skip(`템플릿 ${t}|${rt}: 같은 행이 두 번 있어 뒤의 것을 건너뜀`); continue; }
+    templates.push({ update_type_id: t, resource_type_id: rt, min_qty: int(r.MIN_QTY), target_qty: int(r.TARGET_QTY), stretch_qty: int(r.STRETCH_QTY) });
   }
 
   // ───────── 업데이트: 등급(HIGH/MEDIUM/LOW) → 숫자 순위 ─────────
-  const updRows = table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID));
+  const updRows = uniqueBy(table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID)), r => s(r.UPDATE_ID), k => skip(`업데이트 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
   let releaseFilled = 0;
   const statusUnknown = new Set<string>();
   const ups = updRows.map((r, i) => {
@@ -338,7 +351,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
       row: {
         update_id: id, name: s(r.UPDATE_NAME) || id, update_type_id: type,
         start_date: date(r.PLAN_START_DATE), freeze_date: date(r.CONTENT_FREEZE_DATE), release_date: release,
-        priority: 0, status, sort_order: n(r.SORT_ORDER) ?? i + 1, note: s(r.DESCRIPTION) || null,
+        priority: 0, status, sort_order: int(r.SORT_ORDER) ?? i + 1, note: s(r.DESCRIPTION) || null,
       },
       level: level(r.PRIORITY),
     };
@@ -409,8 +422,15 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     const u = s(r.UPDATE_ID); const rt = s(r.RESOURCE_ID); const part = s(r.PART_ID);
     if (!updIds.has(u) || !rtIds.has(rt) || !partIds.has(part)) { skip(`실적 ${u}|${rt}|${part}: 없는 업데이트·리소스·파트`); continue; }
     const qty = Math.round((n(r.COMPLETED_QTY) ?? 0) + (n(r.OUTSOURCE_COMPLETED_QTY) ?? 0) + (n(r.SPEC_OUT_QTY) ?? 0));
-    if (!qty || pSeen.has(`${u}|${rt}|${part}`)) continue;
-    pSeen.add(`${u}|${rt}|${part}`);
+    const pk = `${u}|${rt}|${part}`;
+    if (pSeen.has(pk)) {
+      // 같은 실적 행이 또 나오면 뒤의 값을 쓴다(시트가 시간 순이면 최신 값)
+      const i = progress.findIndex(p => `${p.update_id}|${p.resource_type_id}|${p.part_id}` === pk);
+      if (i >= 0) progress.splice(i, 1);
+      skip(`실적 ${pk}: 같은 행이 두 번 있어 뒤의 값을 썼어요`);
+    }
+    pSeen.add(pk);
+    if (!qty) continue;
     progress.push({ update_id: u, resource_type_id: rt, part_id: part, completed_qty: qty, as_of: date(r.UPDATED_AT) });
   }
 

@@ -19,6 +19,24 @@ const worker = new Worker(new URL('../worker.ts', import.meta.url), { type: 'mod
 let seq = 0;
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
+// 계산 스레드가 뜨지 못하거나 메시지를 못 읽으면 기다리는 요청을 모두 실패로 끝내고 알린다(멈춘 채로 두지 않는다)
+const failAll = (message: string) => {
+  for (const p of pending.values()) p.reject(new Error(message));
+  pending.clear();
+  window.dispatchEvent(new CustomEvent('arp:error', { detail: message }));
+};
+worker.onerror = e => { e.preventDefault(); failAll(`계산 스레드를 시작하지 못했어요(${e.message || '알 수 없는 오류'}). 페이지를 새로 고쳐 주세요.`); };
+worker.onmessageerror = () => failAll('계산 스레드 응답을 읽지 못했어요. 페이지를 새로 고쳐 주세요.');
+
+/** 이 브라우저의 표시(편집 중 표시에 같이 남긴다: 같은 이름이라도 다른 PC면 읽기 전용으로 연다) */
+export const DEVICE = (() => {
+  try {
+    let d = localStorage.getItem('arp.device');
+    if (!d) { d = `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; localStorage.setItem('arp.device', d); }
+    return d;
+  } catch { return 'unknown'; }
+})();
+
 worker.onmessage = (ev: MessageEvent<{ id: number; ok: boolean; result?: unknown; error?: string }>) => {
   const p = pending.get(ev.data.id);
   if (!p) return;
@@ -68,6 +86,6 @@ export const rpc = {
   calibrationPreview: (picks: { resourceTypeId: string; partId: string; ratio: number }[]) => call<CalibrationPreview>('calibrationPreview', { picks }),
   calibrate: (picks: { resourceTypeId: string; partId: string; ratio: number }[], editor: string) => call<{ changed: number }>('calibrate', { picks, editor }),
   notice: (prev: Seen | null, me: string) => call<{ now: Seen['updates'] | null; notice: Notice | null }>('notice', { prev, me }),
-  lock: (holder: string | null) => call<Record<string, string | null>>('lock', { holder }),
+  lock: (holder: string | null) => call<Record<string, string | null>>('lock', { holder, device: holder ? DEVICE : null }),
   export: () => call<{ bytes: ArrayBuffer; dataVersion: number }>('export'),
 };

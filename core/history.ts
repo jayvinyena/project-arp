@@ -86,8 +86,11 @@ function where(target: string, key: string): { sql: string; params: unknown[] } 
 /** 이 묶음 뒤에 같은 칸을 고친 묶음들(되돌리면 그 값도 덮어쓴다) */
 export function laterConflicts(db: SqlDb, batchId: string): string[] {
   const first = Number(db.get('SELECT min(log_id) AS f FROM change_log WHERE batch_id = ?', [batchId])?.f ?? 0);
+  // 같은 칸을 고친 뒤 묶음. 만들기·지우기는 같은 행의 어느 칸이든, 그 행에 딸린 행(키가 "그 키|…": 물량·실적·템플릿·인력)까지 충돌로 본다
   return db.all(`SELECT DISTINCT later.batch_id AS b FROM change_log mine JOIN change_log later
-      ON later.target = mine.target AND later.target_key = mine.target_key AND coalesce(later.field, '') = coalesce(mine.field, '')
+      ON (later.target = mine.target AND later.target_key = mine.target_key
+          AND (coalesce(later.field, '') = coalesce(mine.field, '') OR mine.action <> 'UPDATE' OR later.action <> 'UPDATE'))
+      OR (mine.action <> 'UPDATE' AND substr(later.target_key, 1, length(mine.target_key) + 1) = mine.target_key || '|')
       WHERE mine.batch_id = ? AND later.log_id > ? AND later.batch_id <> ?`, [batchId, first, batchId]).map(r => String(r.b));
 }
 
@@ -108,6 +111,9 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
     db.run(`INSERT INTO ${target} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(c => row[c]));
   };
   const touched = new Set<string>();
+  // 되돌리기 전부터 있던 오류는 되돌리기를 막지 않는다(되돌려서 새로 생긴 오류만 본다)
+  const errKey = (f: { code: string; key: string }) => `${f.code}|${f.key}`;
+  const errorsBefore = new Set(validate(db).filter(f => f.level === 'ERROR').map(errKey));
   db.exec('SAVEPOINT undo_batch');
   try {
     for (const r of rows) {
@@ -125,30 +131,48 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
           continue;
         }
         const w = where(target, key);
+        // 칸 이름은 파일에서 읽은 값이라 실제 칸인지 확인한다(조작된 파일로 다른 SQL이 돌지 않게)
+        if (!field || !tableColumns(db, target).has(field)) throw new Error(`되돌릴 수 없는 칸이에요: ${target}.${field}`);
         db.run(`UPDATE ${target} SET ${field} = ? WHERE ${w.sql}`, [oldV ?? null, ...w.params]);
         log('UPDATE', target, key, field, newV, oldV);
       } else if (r.action === 'INSERT') {
         const w = where(target, key);
         const now = db.get(`SELECT * FROM ${target} WHERE ${w.sql}`, w.params);
         if (now) {
+          // 함께 지워지는 딸린 행도 남긴다(이 되돌리기를 다시 되돌리면 함께 돌아오게)
+          const snapshot: Record<string, unknown> = { ...now };
+          if (target === 'updates') {
+            snapshot.volumes = db.all('SELECT * FROM volumes WHERE update_id = ?', [key]);
+            snapshot.progress = db.all('SELECT * FROM progress WHERE update_id = ?', [key]);
+            touched.add('volumes'); touched.add('progress');
+          } else if (target === 'update_types') {
+            snapshot.template = db.all('SELECT * FROM type_templates WHERE update_type_id = ?', [key]);
+          }
           db.run(`DELETE FROM ${target} WHERE ${w.sql}`, w.params);
-          log('DELETE', target, key, field, now, undefined);
+          log('DELETE', target, key, field, snapshot, undefined);
         }
       } else {
         // 지운 행을 다시 넣는다. 업데이트는 함께 지워진 물량, 유형은 템플릿도
         const row = { ...(oldV as Record<string, unknown>) };
         const volumes = Array.isArray(row.volumes) ? row.volumes as Record<string, unknown>[] : [];
+        const progress = Array.isArray(row.progress) ? row.progress as Record<string, unknown>[] : [];
         const template = Array.isArray(row.template) ? row.template as Record<string, unknown>[] : [];
         delete row.volumes;
+        delete row.progress;
         delete row.template;
+        if (db.get(`SELECT 1 AS ok FROM ${target} WHERE ${where(target, key).sql}`, where(target, key).params)) {
+          throw new Error(`같은 ID(${key})가 이미 있어 되돌릴 수 없어요.`);
+        }
         insertRow(target, row);
         for (const v of volumes) insertRow('volumes', v);
+        for (const p of progress) insertRow('progress', p);
         for (const t of template) insertRow('type_templates', t);
         if (volumes.length) touched.add('volumes');
+        if (progress.length) touched.add('progress');
         log('INSERT', target, key, null, undefined, oldV);
       }
     }
-    const errors = validate(db).filter(f => f.level === 'ERROR');
+    const errors = validate(db).filter(f => f.level === 'ERROR' && !errorsBefore.has(errKey(f)));
     if (errors.length) {
       throw new Error(`되돌리면 계산할 수 없는 상태가 돼서 취소했어요: ${errors.slice(0, 3).map(e => `${e.title}(${e.key})`).join(', ')}`);
     }

@@ -55,6 +55,7 @@ await withBrowser(async (cdp, base) => {
   await setQty(cdp, '배경 맵 목표', 6);
   await cdp.waitUntil(`${saveText}.includes('충돌')`, 8000);
   check('다른 곳에서 바뀌면 저장 거부(충돌)', await cdp.eval("Boolean(document.querySelector('.banner.bad'))"));
+  check('충돌이면 "다른 이름으로 저장"으로 빠져나갈 수 있다', await cdp.eval("[...document.querySelectorAll('.banner.bad button')].some(b => b.textContent.includes('다른 이름으로 저장'))"));
 
   // 5. 다른 사람이 편집 중이면 읽기 전용
   await cdp.eval("localStorage.setItem('arp.editor', '다른 사람')");
@@ -64,6 +65,19 @@ await withBrowser(async (cdp, base) => {
   const ro = await cdp.eval("document.querySelector('.banner.warn')?.textContent ?? ''");
   const disabled = await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').disabled`);
   check('다른 사람이 편집 중이면 읽기 전용', ro.includes('검사자') && disabled, ro.slice(0, 40));
+
+  // 6. 같은 이름이라도 다른 PC(브라우저)에서 편집 중이면 읽기 전용, 원래 PC면 고칠 수 있다
+  const device = await cdp.eval("localStorage.getItem('arp.device')");
+  await cdp.eval("localStorage.setItem('arp.editor', '검사자'); localStorage.setItem('arp.device', 'other-pc')");
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
+  await cdp.waitUntil(ready);
+  await sleep(500);
+  check('같은 이름 · 다른 PC면 읽기 전용', await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').disabled`));
+  await cdp.eval(`localStorage.setItem('arp.device', ${JSON.stringify(device)})`);
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
+  await cdp.waitUntil(ready);
+  await sleep(500);
+  check('같은 이름 · 같은 PC면 고칠 수 있다', !(await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').disabled`)));
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(r => !r.ok).length;

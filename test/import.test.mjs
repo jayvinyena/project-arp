@@ -141,3 +141,36 @@ test('대조(운영 시트): 옛 계산 방식 흉내면 출시 완료·취소�
   }
   for (const u of r.updates) assert.equal(u.diffCalendarDays, 0, `${u.updateId} ${u.oldCompletion} → ${u.newCompletion}`);
 });
+
+test('가져오기: 중복 행·소수 순서·소수 템플릿 수량·달력에 없는 날짜가 있어도 전체가 실패하지 않고 보고한다(전체 점검에서 찾음)', async () => {
+  const f = legacy();
+  f.sheets['01_Part_Master'].push([...f.sheets['01_Part_Master'][1]]);
+  f.sheets['03_Effort_Standard'].push([...f.sheets['03_Effort_Standard'][1]]);
+  f.sheets['06_Update_Volume_Template'].push([...f.sheets['06_Update_Volume_Template'][1]]);
+  f.sheets['06_Update_Volume_Template'][2][3] = 2.5;
+  f.sheets['10_Update_Master'][1][13] = 1.5;
+  f.sheets['10_Update_Master'][2][5] = '2027-02-30';
+  f.sheets['13_Progress_Actual'].push(['UPD_2027_S1', 'CHAR_COSTUME', 'CONCEPT', 5, 0, 0, '2026-11-20']);
+  const { raw, db, report, rows } = await importOf(f.sheets);
+  raw.close();
+  assert.equal(rows.parts.length, 4);
+  assert.ok(report.skipped.some(x => x.includes('파트 CONCEPT')));
+  assert.ok(report.skipped.some(x => x.includes('공수 CHAR_COSTUME|CONCEPT')));
+  assert.ok(report.skipped.some(x => x.includes('템플릿 SEASON|CHAR_NEW')));
+  assert.equal(rows.updates.find(u => u.update_id === 'LAUNCH_BASE').sort_order, 2);
+  assert.equal(rows.progress.find(p => p.update_id === 'UPD_2027_S1' && p.resource_type_id === 'CHAR_COSTUME').completed_qty, 5, '같은 실적은 뒤의 값');
+});
+
+test('엑셀 읽기: 빈 공유 문자열 <si/> · 빈 조각 <t/> · 날짜형 칸 · 작은따옴표 속성(전체 점검에서 찾음)', async () => {
+  const { zipFiles } = await import('../core/xlsx-write.ts');
+  const X = '<?xml version="1.0" encoding="UTF-8"?>';
+  const NS = 'http://schemas.openxmlformats.org';
+  const bytes = zipFiles([
+    ['xl/workbook.xml', `${X}<workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets><sheet name='S' sheetId='1' r:id='rId1'/></sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `${X}<Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="x" Target="worksheets/sheet1.xml"/></Relationships>`],
+    ['xl/sharedStrings.xml', `${X}<sst><si/><si><t>둘</t></si><si><r><t/></r><r><t>셋</t></r></si></sst>`],
+    ['xl/worksheets/sheet1.xml', `${X}<worksheet><sheetData><row r='1'><c r='A1' t='s'><v>0</v></c><c r='B1' t='s'><v>1</v></c><c r='C1' t='s'><v>2</v></c><c r='D1' t='d'><v>2027-03-15T00:00:00</v></c></row></sheetData></worksheet>`],
+  ]);
+  const r = await readXlsx(bytes);
+  assert.deepEqual(r.S[0], ['', '둘', '셋', '2027-03-15']);
+});

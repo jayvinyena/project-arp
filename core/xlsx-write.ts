@@ -99,3 +99,4 @@ export function writeXlsx(sheets: Record<string, Cell[][]>, options: { deflate?:
   files.push(['xl/sharedStrings.xml', `${XML}<sst xmlns="${NS}/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${strings.map(s => `<si><t xml:space="preserve">${esc(s)}</t></si>`).join('')}</sst>`]);
   return zip(files, options.deflate);
 }
+export { zip as zipFiles };

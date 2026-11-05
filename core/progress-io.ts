@@ -42,16 +42,17 @@ type Col = 'uid' | 'uname' | 'rid' | 'rname' | 'pid' | 'pname' | 'done' | 'spent
 
 function columns(head: ReadCell[]): Partial<Record<Col, number>> {
   const out: Partial<Record<Col, number>> = {};
+  // 칸 이름 전체로 맞춘다(부분 일치는 "완료일" → 완료 수량, "department" → 파트처럼 잘못 고른다). 공백·_·- 는 무시
   head.forEach((h, i) => {
-    const t = String(h ?? '').replace(/\s+/g, '').toLowerCase();
+    const t = String(h ?? '').replace(/[\s_\-]+/g, '').toLowerCase();
     if (!t) return;
     const id = /id$/.test(t);
-    if (/업데이트|update/.test(t)) out[id ? 'uid' : 'uname'] ??= i;
-    else if (/리소스|resource/.test(t)) out[id ? 'rid' : 'rname'] ??= i;
-    else if (/파트|part/.test(t)) out[id ? 'pid' : 'pname'] ??= i;
-    else if (/실투입|투입|spent|공수/.test(t)) out.spent ??= i;
-    else if (/완료|completed|done/.test(t)) out.done ??= i;
-    else if (/기준일|날짜|asof|date/.test(t)) out.asof ??= i;
+    if (/^(기준일|기준일자|완료일|완료일자|날짜|일자|asof|date|updatedat)$/.test(t)) out.asof ??= i;
+    else if (/^(업데이트|update)(id|명|이름|name)?$/.test(t)) out[id ? 'uid' : 'uname'] ??= i;
+    else if (/^(리소스|resource)(종류|type)?(id|명|이름|name)?$/.test(t)) out[id ? 'rid' : 'rname'] ??= i;
+    else if (/^(파트|part)(id|명|이름|name)?$/.test(t)) out[id ? 'pid' : 'pname'] ??= i;
+    else if (/^(실투입|투입|spent)/.test(t)) out.spent ??= i;
+    else if (/^(완료|completed|done)(수량|개수|qty|quantity)?$/.test(t)) out.done ??= i;
   });
   return out;
 }
@@ -63,9 +64,11 @@ const num = (v: ReadCell): number | null => {
 };
 const date = (v: ReadCell): string | null => {
   if (v == null || v === '') return null;
-  if (typeof v === 'number') return serialToDate(v);
+  if (typeof v === 'number') return Number.isFinite(v) ? serialToDate(v) : null;
   const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(String(v).trim());
-  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+  if (!m) return null;
+  const d = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 달력에 없는 날은 버린다
 };
 
 /** 엑셀 실적을 넣는다. 한 묶음(ctx.batchId). 맞지 않는 행은 건너뛰고 이유를 남긴다 */

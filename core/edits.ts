@@ -38,7 +38,9 @@ export type Edit =
 export interface EditContext { editor: string; batchId: string; reason?: string }
 export interface EditResult { changed: boolean; createdId?: string }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** 달력에 있는 날짜만(2027-02-30 같은 날은 거절) */
+const DATE = { test: (d: string) => DATE_RE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d };
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const STATUSES = new Set(['PLANNED', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
 
@@ -53,7 +55,11 @@ function log(db: SqlDb, ctx: EditContext, action: string, target: string, key: s
 }
 
 function nextId(db: SqlDb, table: string, column: string, prefix: string, width: number): string {
-  const rows = db.all(`SELECT ${column} AS id FROM ${table} WHERE ${column} LIKE ?`, [`${prefix}%`]);
+  // 지운 ID도 다시 쓰지 않는다(지우기를 되돌릴 수 있게, 이력·시나리오가 다른 행을 가리키지 않게): 변경 이력에 남은 ID까지 본다
+  const rows = [
+    ...db.all(`SELECT ${column} AS id FROM ${table} WHERE ${column} LIKE ?`, [`${prefix}%`]),
+    ...db.all("SELECT target_key AS id FROM change_log WHERE target = ? AND target_key LIKE ? AND instr(target_key, '|') = 0", [table, `${prefix}%`]),
+  ];
   const max = rows.reduce((m, r) => Math.max(m, Number(String(r.id).slice(prefix.length)) || 0), 0);
   return `${prefix}${String(max + 1).padStart(width, '0')}`;
 }
@@ -135,8 +141,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const old = db.get('SELECT * FROM updates WHERE update_id = ?', [edit.updateId]);
       if (!old) return { changed: false };
       const volumes = db.all('SELECT * FROM volumes WHERE update_id = ?', [edit.updateId]);
-      db.run('DELETE FROM updates WHERE update_id = ?', [edit.updateId]); // 물량·실적은 함께 지워진다
-      log(db, ctx, 'DELETE', 'updates', edit.updateId, null, { ...old, volumes }, undefined);
+      const progress = db.all('SELECT * FROM progress WHERE update_id = ?', [edit.updateId]);
+      db.run('DELETE FROM updates WHERE update_id = ?', [edit.updateId]); // 물량·실적은 함께 지워진다 → 되돌릴 수 있게 함께 남긴다
+      log(db, ctx, 'DELETE', 'updates', edit.updateId, null, { ...old, volumes, progress }, undefined);
       dirty('updates', 'volumes', 'progress');
       return { changed: true };
     }
@@ -163,9 +170,14 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'removeResource': {
       const old = db.get('SELECT * FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId]);
       if (!old) return { changed: false };
+      // 그 리소스의 실적도 함께 지운다(남기면 물량 없는 실적). 되돌리면 함께 돌아온다
+      for (const p of db.all('SELECT * FROM progress WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])) {
+        db.run('DELETE FROM progress WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', [p.update_id, p.resource_type_id, p.part_id]);
+        log(db, ctx, 'DELETE', 'progress', `${p.update_id}|${p.resource_type_id}|${p.part_id}`, null, p, undefined);
+      }
       db.run('DELETE FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId]);
       log(db, ctx, 'DELETE', 'volumes', `${edit.updateId}|${edit.resourceTypeId}`, null, old, undefined);
-      dirty('volumes');
+      dirty('volumes', 'progress');
       return { changed: true };
     }
 
@@ -272,6 +284,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
           const next = t.field === 'completed_qty' ? completed : spent;
           if (old === next) continue;
           db.run(`UPDATE progress SET ${t.field} = ?, as_of = coalesce(?, as_of) WHERE update_id = ? AND resource_type_id = ? AND part_id = ?`, [next, edit.asOf, ...keyParams]);
+          // 기준일도 바뀌면 남긴다(되돌리면 기준일도 돌아오게)
+          if (edit.asOf != null && before.as_of !== edit.asOf) log(db, ctx, 'UPDATE', 'progress', key, 'as_of', before.as_of ?? null, edit.asOf);
           log(db, ctx, 'UPDATE', 'progress', key, t.field, old, next);
         }
         changed = true;

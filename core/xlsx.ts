@@ -55,14 +55,14 @@ function unescapeXml(s: string): string {
     e[0] === '#' ? String.fromCodePoint(e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e]);
 }
 function attr(tag: string, name: string): string | null {
-  const m = new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(tag);
-  return m ? unescapeXml(m[1]) : null;
+  const m = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(tag);
+  return m ? unescapeXml(m[1] ?? m[2]) : null;
 }
 /** <t> 조각들을 이어 붙인 글자 (서식 조각 <r><t>도 포함, 발음 <rPh>는 뺀다) */
 function textOf(xml: string): string {
   const clean = xml.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '');
   let s = '';
-  for (const m of clean.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>|<t\b[^>]*\/>/g)) s += m[1] ? unescapeXml(m[1]) : '';
+  for (const m of clean.matchAll(/<t\b[^>]*?\/>|<t\b[^>]*>([\s\S]*?)<\/t>/g)) s += m[1] ? unescapeXml(m[1]) : '';
   return s;
 }
 function colIndex(ref: string): number {
@@ -89,7 +89,7 @@ export async function readXlsx(bytes: Uint8Array): Promise<Sheets> {
   }
   const shared: string[] = [];
   const sst = await get('xl/sharedStrings.xml');
-  if (sst) for (const m of sst.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>|<si\b[^>]*\/>/g)) shared.push(m[1] ? textOf(m[1]) : '');
+  if (sst) for (const m of sst.matchAll(/<si\b[^>]*?\/>|<si\b[^>]*>([\s\S]*?)<\/si>/g)) shared.push(m[1] ? textOf(m[1]) : '');
 
   const sheets: Sheets = {};
   for (const m of workbook.matchAll(/<sheet\b([^>]*)\/?>/g)) {
@@ -116,6 +116,7 @@ export async function readXlsx(bytes: Uint8Array): Promise<Sheets> {
         else if (t === 'inlineStr') value = textOf(inner);
         else if (t === 'b') value = v === '1';
         else if (t === 'str' || t === 'e') value = v == null ? null : unescapeXml(v);
+        else if (t === 'd') value = v == null ? null : unescapeXml(v).slice(0, 10); // 날짜형 칸(ISO 글자)
         else if (v != null && v !== '') value = Number(v);
         row[ci] = value;
       }
