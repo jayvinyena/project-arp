@@ -269,9 +269,10 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     }
     state = best.st;
     cur = best.next;
-    // 같은 파트·같은 기간 인원(외주)을 이어서 더했으면 한 걸음으로 묶는다
-    const last = steps[steps.length - 1];
-    if (last && (best.step.kind === 'headcount' || best.step.kind === 'outsource') && last.kind === best.step.kind && last.label === best.step.label && last.forUpdate === best.step.forUpdate) {
+    // 같은 업데이트를 위해 같은 파트·같은 기간에 더한 인원(외주)은 앞서 나온 걸음에 합친다(다른 걸음과 번갈아 나와도)
+    const last = (best.step.kind === 'headcount' || best.step.kind === 'outsource')
+      ? steps.find(x => x.kind === best!.step.kind && x.label === best!.step.label && x.forUpdate === best!.step.forUpdate) : undefined;
+    if (last) {
       last.amount += best.step.amount; last.gain += best.step.gain; last.cost += best.step.cost;
       last.days += best.step.days; last.rescued += best.step.rescued;
     } else steps.push(best.step);

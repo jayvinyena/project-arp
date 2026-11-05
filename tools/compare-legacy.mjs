@@ -2,13 +2,13 @@
 //   ① 옛 도구 엔진(../arp, Apps Script 코드를 Node 하네스로)으로 계산하고
 //   ② 엑셀로 내보냈다가 새 가져오기로 들여와 새 엔진으로 계산해
 // 파트별 필요 공수·작작업 가능량과 업데이트별 완료 예정을 나란히 놓는다.
-//   node tools/compare-legacy.mjs [옛 fixture 경로(.json 또는 .cjs)] [--json]
+//   node tools/compare-legacy.mjs [구글 시트에서 내려받은 .xlsx · 옛 fixture(.json · .cjs)] [--json]
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { writeXlsx } from './lib/xlsx-write.mjs';
-import { readXlsx } from '../core/xlsx.ts';
+import { toExportedXlsx } from './gen-operating-sheet.mjs';
+import { readXlsx, serialToDate } from '../core/xlsx.ts';
 import { legacyToRows, writeImported } from '../core/import-legacy.ts';
 import { SCHEMA_SQL } from './lib/project-db.mjs';
 import { nodeDb, readProjectData } from './lib/pipeline.mjs';
@@ -19,9 +19,21 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const LEGACY = `${ROOT}../arp`;
 const arg = process.argv.slice(2).find(a => !a.startsWith('--'));
 
-function loadFixture() {
+/** 구글 시트에서 내려받은 .xlsx → 옛 하네스가 읽는 모양(날짜 칸의 엑셀 날짜는 'YYYY-MM-DD' 글자 → 하네스가 Date로 바꾼다) */
+export async function fixtureFromXlsx(bytes) {
+  const sheets = await readXlsx(new Uint8Array(bytes));
+  const isDateCol = h => /DATE|YEAR_MONTH|_AT$|^EFFECTIVE_/.test(String(h ?? ''));
+  for (const rows of Object.values(sheets)) {
+    const head = rows[0] ?? [];
+    for (const row of rows.slice(1)) head.forEach((h, i) => { if (isDateCol(h) && typeof row[i] === 'number') row[i] = serialToDate(row[i]); });
+  }
+  return { name: 'xlsx', sheets };
+}
+
+async function loadFixture() {
   if (!arg) return require('../test/fixtures/legacy-sample.cjs')();
   if (arg.endsWith('.json')) return JSON.parse(readFileSync(arg, 'utf8'));
+  if (arg.endsWith('.xlsx')) return fixtureFromXlsx(readFileSync(arg));
   return require(arg)();
 }
 
@@ -31,16 +43,20 @@ export async function compareLegacy(fixture, { keepLegacyWorkdays }) {
   const rt = createRuntime(fixture);
   const old = rt.call('arpRunSimulation', { planMode: 'TARGET', scheduler: 'STAGE' });
 
-  const sheets = await readXlsx(writeXlsx(fixture.sheets));
-  const { rows, report } = legacyToRows(sheets, { fixedHolidays: !keepLegacyWorkdays, keepLegacyWorkdays });
+  // 구글 시트 → 엑셀 내보내기와 같은 모양(날짜 칸은 엑셀 날짜)
+  const sheets = await readXlsx(toExportedXlsx(fixture));
+  const { rows, report } = legacyToRows(sheets, { fixedHolidays: !keepLegacyWorkdays, keepLegacyWorkdays, legacyCompat: keepLegacyWorkdays });
   const raw = new DatabaseSync(':memory:');
   writeImported(nodeDb(raw), SCHEMA_SQL, rows);
   const neu = runPlan(readProjectData(raw), { planMode: 'TARGET' });
   raw.close();
 
+  // 옛 결과의 작업 가능량은 시트에 적힌 인력 행만 더한 값이다 → 새 쪽도 같은 달만 더해 비교한다
+  const capMonths = new Set(fixture.sheets['12_Capacity_Monthly'].slice(1).map(r => String(r[1] ?? '').slice(0, 7)).filter(Boolean));
   const parts = (old.partResults ?? []).map(p => {
     const n = neu.parts.find(x => x.partId === p.partId);
-    return { partId: p.partId, oldRequired: p.requiredDays, newRequired: n?.requiredDays ?? null, oldCapacity: p.capacityDays ?? p.totalCapacityDays ?? null, newCapacity: n?.capacityDays ?? null };
+    const explicit = neu.partMonths.filter(m => m.partId === p.partId && capMonths.has(m.month)).reduce((a, m) => a + m.capacityDays, 0);
+    return { partId: p.partId, oldRequired: p.requiredDays, newRequired: n?.requiredDays ?? null, oldCapacity: p.capacityDays ?? p.totalCapacityDays ?? null, newCapacity: n ? explicit : null };
   });
   const updates = (old.updateResults ?? []).map(u => {
     const n = neu.updates.find(x => x.updateId === u.updateId);
@@ -53,13 +69,14 @@ export async function compareLegacy(fixture, { keepLegacyWorkdays }) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const fixture = loadFixture();
+  const fixture = await loadFixture();
   const out = [];
   for (const keep of [true, false]) {
     const r = await compareLegacy(fixture, { keepLegacyWorkdays: keep });
     out.push(r);
     if (process.argv.includes('--json')) continue;
-    console.log(`\n■ ${keep ? '옛 근무일 수에 맞춤(대조용)' : '새 근무 달력(기본: 월–금, 고정 공휴일 제외)'}`);
+    console.log(`\n■ ${keep ? '옛 계산 방식 흉내(대조용: 옛 근무일 수 · 상태 무시 · 인력 없는 달은 마지막 달 되풀이)' : '새 방식(기본: 근무 달력 · 출시 완료·취소 제외 · 인력 있는 달만)'}`);
+    if (!keep) for (const a of r.report.adjustments.filter(x => /옛 도구는/.test(x))) console.log(`  · ${a}`);
     console.log('  파트        필요 공수 옛 → 새        작업 가능량 옛 → 새');
     for (const p of r.parts) {
       const f = x => (x == null ? '—' : x.toFixed(1)).padStart(7);

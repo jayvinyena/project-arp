@@ -62,13 +62,16 @@ export class Cdp {
 }
 
 /** 빌드 → 미리보기 서버 → 크롬. fn(cdp, baseUrl) 실행 뒤 모두 끈다 */
-export async function withBrowser(fn, { port = 4317, debugPort = 9333, chrome = CHROME_DEFAULT, build = true } = {}) {
+/** server: 'preview'(vite 미리보기) 또는 'pages'(Cloudflare Pages 흉내, tools/lib/pages-server.mjs) */
+export async function withBrowser(fn, { port = 4317, debugPort = 9333, chrome = CHROME_DEFAULT, build = true, server: kind = 'preview' } = {}) {
   if (build) {
     // 앱이 내보내는 예시 파일(samples/out/*.arp)도 최신으로
     await run(process.execPath, ['tools/build-samples.mjs'], { stdio: 'ignore' });
     await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--logLevel', 'warn']);
   }
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(port), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
+  const server = kind === 'pages'
+    ? await (await import('./pages-server.mjs')).startPagesServer(join(ROOT, 'dist-web'), port)
+    : spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(port), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
   const profile = mkdtempSync(join(tmpdir(), 'arp-cdp-'));
   const browser = spawn(chrome, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' });
   try {
@@ -87,7 +90,7 @@ export async function withBrowser(fn, { port = 4317, debugPort = 9333, chrome = 
     }
   } finally {
     browser.kill();
-    server.kill();
+    if (kind === 'pages') server.close(); else server.kill();
     await sleep(500);
     try { rmSync(profile, { recursive: true, force: true }); } catch { /* 크롬이 잡고 있으면 남긴다 */ }
   }

@@ -31,6 +31,9 @@ export async function buildSamples(outDir = `${ROOT}samples/out`) {
   // 옛 도구 시트 예시(.xlsx): 가져오기 화면 시험용
   const legacy = createRequire(import.meta.url)('../test/fixtures/legacy-sample.cjs')();
   writeFileSync(`${outDir}/legacy-sample.xlsx`, writeXlsx(legacy.sheets));
+  // 운영 시트 흉내(구글 시트에서 내보낸 모양, 날짜는 엑셀 날짜): 실제 규모 가져오기 시험용
+  const { buildOperatingFixture, toExportedXlsx } = await import('./gen-operating-sheet.mjs');
+  writeFileSync(`${outDir}/operating-sheet.xlsx`, toExportedXlsx(buildOperatingFixture()));
   return built;
 }
 

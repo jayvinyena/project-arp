@@ -12,6 +12,13 @@ export interface ImportOptions {
   fixedHolidays?: boolean;
   /** 옛 월 근무일 수(BUSINESS_DAYS)로 작업 가능량을 맞춘다: 생산성에 (옛 근무일 ÷ 새 근무일)을 곱한다. 대조용(기본 끔) */
   keepLegacyWorkdays?: boolean;
+  /**
+   * 옛 도구 계산 방식 흉내(대조용, 기본 끔). keepLegacyWorkdays를 포함한다.
+   *  - 상태(출시 완료·취소)는 보지 않고 사용(ACTIVE)이면 계산한다
+   *  - 계산 기간: 사용 중 업데이트의 가장 이른 시작 달 ~ max(인력 마지막 달, 가장 늦은 출시 달, 시작 + ALLOCATION_FORECAST_HORIZON_MONTHS)
+   *  - 인력 행이 없는 달은 그 파트의 마지막 인력 행을 되풀이한다(옛 CAPACITY_EXTENSION_MODE = REPEAT_LAST)
+   */
+  legacyCompat?: boolean;
   appVersion?: string;
   now?: string;
 }
@@ -55,10 +62,10 @@ const n = (v: Cell): number | null => {
   const x = typeof v === 'number' ? v : Number(String(v).replace(/,/g, ''));
   return Number.isFinite(x) ? x : null;
 };
-const bool = (v: Cell, dflt = true): boolean => {
-  if (v == null || v === '') return dflt;
+/** 옛 도구(06_Utils.js arpToBoolean_)와 같은 규칙: 체크(참) 또는 TRUE·Y·YES·1만 참. 빈칸·그 밖의 글자는 거짓 */
+const bool = (v: Cell): boolean => {
   if (typeof v === 'boolean') return v;
-  return !['false', '0', 'n', 'no', 'x', 'off'].includes(String(v).trim().toLowerCase());
+  return ['TRUE', 'Y', 'YES', '1'].includes(String(v ?? '').trim().toUpperCase());
 };
 /** 날짜 칸: 엑셀 일련번호, 'YYYY-MM-DD', 'YYYY.MM.DD', 'YYYY/MM/DD', 날짜+시각 */
 function date(v: Cell): string | null {
@@ -201,11 +208,26 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   }
 
   // ───────── 인력 · 계획 기간 ─────────
+  const compat = !!options.legacyCompat;
+  const keepWorkdays = compat || !!options.keepLegacyWorkdays;
   const capRows = table(sheets, '12_Capacity_Monthly');
   const capMonths = capRows.map(r => month(r.YEAR_MONTH)).filter((x): x is string => !!x).sort();
   if (!capMonths.length) throw Object.assign(new Error('12_Capacity_Monthly에 달이 없어요.'), { report });
-  let start = capMonths[0];
-  let end = capMonths[capMonths.length - 1];
+  const capStart = capMonths[0];
+  const capEnd = capMonths[capMonths.length - 1];
+  // 옛 엔진이 계산 기간을 정할 때 본 업데이트(사용 중) 날짜
+  const activeUpd = table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID) && bool(r.ACTIVE));
+  const releaseMonthOf = (r: Row) => date(r.RELEASE_DATE)?.slice(0, 7) ?? month(r.TARGET_YEAR_MONTH);
+  let start = capStart;
+  let end = capEnd;
+  if (compat) {
+    const starts = activeUpd.map(r => month(r.PLAN_START_DATE)).filter((x): x is string => !!x).sort();
+    const releases = activeUpd.map(releaseMonthOf).filter((x): x is string => !!x).sort();
+    if (starts[0] && starts[0] < start) start = starts[0];
+    const forecast = Math.max(1, Math.floor(cfgNum('ALLOCATION_FORECAST_HORIZON_MONTHS', 240)));
+    const ends = [capEnd, releases[releases.length - 1], monthsBetween(start, '9999-12').slice(0, forecast).pop()].filter((x): x is string => !!x).sort();
+    end = ends[ends.length - 1];
+  }
   let span = monthsBetween(start, end);
   if (span.length > 60) {
     end = span[59];
@@ -229,7 +251,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     seen.add(key);
     let productivity = n(r.PRODUCTIVITY_FACTOR) ?? cfgNum('DEFAULT_PRODUCTIVITY_FACTOR', 1);
     const legacyDays = n(r.BUSINESS_DAYS);
-    if (options.keepLegacyWorkdays && legacyDays != null) {
+    if (keepWorkdays && legacyDays != null) {
       const wd = weekdays(m, holidaySet);
       if (wd > 0 && wd !== legacyDays) { productivity *= legacyDays / wd; corrected += 1; }
     }
@@ -242,6 +264,33 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
       support_days: n(r.TEMP_SUPPORT_DAYS) ?? 0,
       note: s(r.NOTE) || null,
     });
+  }
+  if (compat) {
+    // 옛 REPEAT_LAST: 인력 행이 없는 달은 그 파트의 마지막 인력 행(달 순서로 마지막)을 되풀이한다
+    let repeated = 0;
+    for (const p of parts.filter(x => x.active)) {
+      const own = capRows.filter(r => s(r.PART_ID) === p.part_id && month(r.YEAR_MONTH)).sort((a, b) => month(a.YEAR_MONTH)!.localeCompare(month(b.YEAR_MONTH)!));
+      const last = own[own.length - 1];
+      for (const m of span) {
+        if (seen.has(`${p.part_id}|${m}`)) continue;
+        seen.add(`${p.part_id}|${m}`);
+        repeated += 1;
+        const legacyDays = (last && n(last.BUSINESS_DAYS)) || cfgNum('DEFAULT_BUSINESS_DAYS_PER_MONTH', 20);
+        const wd = weekdays(m, holidaySet);
+        let productivity = (last && n(last.PRODUCTIVITY_FACTOR)) || cfgNum('DEFAULT_PRODUCTIVITY_FACTOR', 1);
+        if (wd > 0 && wd !== legacyDays) { productivity *= legacyDays / wd; corrected += 1; }
+        capacity.push({
+          part_id: p.part_id, month: m,
+          headcount: (last && n(last.HEADCOUNT)) || 0,
+          utilization: (last && n(last.UTILIZATION_RATE)) || cfgNum('DEFAULT_UTILIZATION_RATE', 1),
+          productivity,
+          outsource_days: (last && n(last.OUTSOURCE_CAPACITY_DAYS)) || 0,
+          support_days: (last && n(last.TEMP_SUPPORT_DAYS)) || 0,
+          note: '옛 도구처럼 마지막 달 인력을 되풀이(대조용)',
+        });
+      }
+    }
+    if (repeated) adjust(`대조용: 인력 행이 없는 ${repeated}칸(파트 × 달)을 옛 도구처럼 그 파트의 마지막 인력 행으로 채웠어요`);
   }
   if (corrected) adjust(`옛 월 근무일 수에 맞추려고 인력 ${corrected}행의 생산성을 보정했어요(대조용 설정)`);
   else if (!options.keepLegacyWorkdays) adjust('월 근무일 수는 옛 BUSINESS_DAYS 대신 근무 달력(월–금' + (holidays.length ? ', 고정 공휴일 제외' : '') + ')으로 계산해요. 작업 가능량이 옛 값과 조금 다를 수 있어요');
@@ -283,6 +332,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     const raw = s(r.STATUS).toUpperCase();
     let status = STATUS[raw] ?? 'PLANNED';
     if (raw && !STATUS[raw]) statusUnknown.add(raw);
+    if (compat && bool(r.ACTIVE) && (status === 'DONE' || status === 'CANCELLED')) status = 'PLANNED';
     if (!bool(r.ACTIVE)) status = 'CANCELLED';
     return {
       row: {
@@ -303,6 +353,16 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   if (ups.length) adjust('우선순위 등급(HIGH/MEDIUM/LOW)을 숫자 순위로 바꿨어요: 등급 → 출시일 → 표시 순서');
   const updates = ups.map(x => x.row);
   const updIds = new Set(updates.map(u => u.update_id));
+  if (!compat) {
+    const liveRows = updates.filter(u => u.status === 'PLANNED' || u.status === 'IN_PROGRESS');
+    const early = liveRows.filter(u => u.start_date && u.start_date.slice(0, 7) < capStart);
+    if (early.length) adjust(`업데이트 ${early.length}개(${early.slice(0, 3).map(u => u.name).join(', ')})가 인력 첫 달(${capStart})보다 먼저 시작해요. 옛 도구는 그 앞 달에도 마지막 달 인원이 있다고 보고 계산해 완료 예정이 더 빨랐어요. 새 도구는 인력이 있는 달부터 계산해요. 이미 한 작업은 진행 실적에 넣어 주세요`);
+    const late = liveRows.filter(u => u.release_date && u.release_date.slice(0, 7) > capEnd);
+    if (late.length) adjust(`업데이트 ${late.length}개(${late.slice(0, 3).map(u => u.name).join(', ')})의 출시가 인력 마지막 달(${capEnd}) 뒤예요. 옛 도구는 마지막 달 인원이 계속된다고 보고 계산했어요. 인력 화면에서 계획 기간을 늘려 주세요`);
+    const volUpd = new Set(table(sheets, '11_Update_Volume').map(r => s(r.UPDATE_ID)));
+    const closed = activeUpd.filter(r => { const st = STATUS[s(r.STATUS).toUpperCase()]; return (st === 'DONE' || st === 'CANCELLED') && volUpd.has(s(r.UPDATE_ID)); });
+    if (closed.length) adjust(`출시 완료·취소 상태인 업데이트 ${closed.length}개(${closed.slice(0, 3).map(r => s(r.UPDATE_NAME) || s(r.UPDATE_ID)).join(', ')})는 계산에서 빠져요. 옛 도구는 상태와 관계없이 사용(ACTIVE)이면 물량을 계산했어요`);
+  }
   const liveLaunch = updates.filter(u => (u.status === 'PLANNED' || u.status === 'IN_PROGRESS') && updateTypes.find(t => t.update_type_id === u.update_type_id)?.is_launch);
   if (liveLaunch.length > 1) adjust(`런칭 유형 업데이트가 ${liveLaunch.length}개예요(${liveLaunch.map(u => u.name).join(', ')}). 하나만 남겨 주세요(U05)`);
 

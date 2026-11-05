@@ -67,10 +67,10 @@
 
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
-npm test                                  # 검사 80개 (0단계 8 + 엔진 15 + 런칭 9 + 새 프로젝트 4 + 계획 7 + 실적 5 + 시나리오 9 + 가져오기 5 + 안정화 5 + 확장 5 + 마감 맞추기 8)
-npm run e2e                               # 크롬 시험 81개: 저장 6 · 새 프로젝트 8 · 업데이트 계획 14 · 진행 실적 5 · 시뮬레이션 8 · 가져오기 7 · 안정화 9 · 확장 10 · 마감 맞추기 14
-npm run build                             # 배포용 → dist-web/ (docs/12-deploy.md)
-npm run compare-legacy                    # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요)
+npm test                                  # 검사 83개 (0단계 8 + 엔진 15 + 런칭 9 + 새 프로젝트 4 + 계획 7 + 실적 5 + 시나리오 9 + 가져오기 8 + 안정화 5 + 확장 5 + 마감 맞추기 8)
+npm run e2e                               # 크롬 시험 97개: 저장 6 · 새 프로젝트 8 · 업데이트 계획 14 · 진행 실적 5 · 시뮬레이션 8 · 가져오기 13 · 안정화 9 · 확장 10 · 마감 맞추기 14 · 배포 10
+npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
+npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run capture                           # 화면 캡처 (크롬)
 npm run samples                           # samples/out/*.arp 만들기
 npm run validate -- samples/out/broken.arp
@@ -148,6 +148,14 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 | [core/advisor.ts](core/advisor.ts) | 제안 로직 `adviseDeadlines` · 시나리오로 만들기 `adviceToScenario` |
 | [web/app/ui/AdvisorPage.tsx](web/app/ui/AdvisorPage.tsx) | 화면 |
 | [test/advisor.test.mjs](test/advisor.test.mjs) · [tools/e2e-advisor.mjs](tools/e2e-advisor.mjs) | 검사 8개 · 크롬 시험 14개 |
+
+## 실사용 준비 (2026-11-05)
+
+| 파일 | 내용 |
+|---|---|
+| [docs/15-operating-sheet.md](docs/15-operating-sheet.md) | **운영 시트 준비 가이드**: 읽는 시트·칸, 점검표, 옛 도구와 달라지는 곳, 운영 규모 시험 결과 |
+| [tools/gen-operating-sheet.mjs](tools/gen-operating-sheet.mjs) | 운영 규모 합성 시트(옛 구조, 엑셀 날짜·보조 시트·운영 흔적) → `samples/out/operating-sheet.xlsx` |
+| [docs/12-deploy.md](docs/12-deploy.md) · [tools/e2e-deploy.mjs](tools/e2e-deploy.mjs) · [tools/lib/pages-server.mjs](tools/lib/pages-server.mjs) | Cloudflare Pages 배포(결과물 정리, 주소 옮김 대응, `_headers`) · 배포 시험 10개 |
 
 ## 0단계 결정 (2026-11-05, 추천안대로 확정)
 

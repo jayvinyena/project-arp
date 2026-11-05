@@ -3,6 +3,7 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 
 const r = p => fileURLToPath(new URL(p, import.meta.url));
 
@@ -12,8 +13,15 @@ function swSource(cache, precache) {
   return `// ARP 서비스 워커(빌드할 때 생성). 한 번 열면 인터넷 없이도 앱이 뜬다. 데이터는 항상 사용자 파일에 있다.
 const CACHE = ${JSON.stringify(cache)};
 const PRECACHE = ${JSON.stringify(precache)};
+// 정적 호스팅이 주소를 옮기면(예: index.html → ./) 옮겨진 응답이 된다. 그대로 담으면 화면 이동에 쓸 수 없어 새 응답으로 담는다
+const clean = r => (r.redirected ? new Response(r.body, { status: r.status, statusText: r.statusText, headers: r.headers }) : r);
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE)
+    .then(c => Promise.all(PRECACHE.map(u => fetch(u, { cache: 'reload' }).then(r => {
+      if (!r.ok) throw new Error(u + ' ' + r.status);
+      return c.put(u, clean(r));
+    }))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
@@ -31,7 +39,7 @@ self.addEventListener('fetch', e => {
       return await fetch(req);
     } catch (error) {
       if (navigate) {
-        const page = await caches.match('./index.html');
+        const page = await caches.match('./');
         if (page) return page;
       }
       throw error;
@@ -41,14 +49,32 @@ self.addEventListener('fetch', e => {
 `;
 }
 
+const ROOT_HTML = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARP</title>
+<meta http-equiv="refresh" content="0; url=./app/"><script>location.replace('./app/' + location.search + location.hash)</script></head>
+<body><a href="./app/">ARP 열기</a></body></html>
+`;
+const HEADERS = `/app/sw.js
+  Cache-Control: no-cache
+/app/
+  Cache-Control: no-cache
+/app/manifest.webmanifest
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+`;
+
 function pwa() {
   return {
     name: 'arp-pwa',
     apply: 'build',
     generateBundle(_, bundle) {
-      // 앱이 쓰는 파일만 미리 담는다(측정 페이지 제외). 경로는 app/sw.js 기준
-      const files = Object.keys(bundle).filter(f => !f.endsWith('.map') && !f.startsWith('bench/') && !/bench-[\w-]+\.js$/.test(f));
-      const precache = ['./index.html', './icon.svg', './manifest.webmanifest', ...files.filter(f => f !== 'app/index.html').map(f => `../${f}`)];
+      // 앱이 쓰는 파일만 미리 담는다(측정 페이지·예시 파일 제외). 경로는 app/sw.js 기준
+      const files = Object.keys(bundle).filter(f => !f.endsWith('.map') && !f.startsWith('bench/') && !/bench-[\w-]+\.js$/.test(f) && !/\.(arp|xlsx)$/i.test(f));
+      // 첫 페이지는 ./ 로 담는다(호스팅이 index.html을 ./ 로 옮겨도 같은 주소)
+      const precache = ['./', './icon.svg', './manifest.webmanifest', ...files.filter(f => f !== 'app/index.html').map(f => `../${f}`)];
       const cache = `arp-${createHash('sha256').update(files.sort().join('|')).digest('hex').slice(0, 12)}`;
       this.emitFile({ type: 'asset', fileName: 'app/sw.js', source: swSource(cache, precache) });
       this.emitFile({ type: 'asset', fileName: 'app/icon.svg', source: ICON_SVG });
@@ -60,7 +86,7 @@ function pwa() {
           short_name: 'ARP',
           description: '런칭과 업데이트에 필요한 아트 물량을 설계해요',
           lang: 'ko',
-          start_url: './index.html',
+          start_url: './',
           scope: './',
           display: 'standalone',
           background_color: '#f6f6f7',
@@ -68,17 +94,37 @@ function pwa() {
           icons: [{ src: './icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
         }, null, 2),
       });
+      // 맨 위 주소(/)로 열면 앱으로 보낸다
+      this.emitFile({ type: 'asset', fileName: 'index.html', source: ROOT_HTML });
+      // Cloudflare Pages 응답 헤더: 서비스 워커는 매번 확인, 해시 붙은 파일은 오래 담기
+      this.emitFile({ type: 'asset', fileName: '_headers', source: HEADERS });
     },
   };
 }
 
-export default defineConfig({
+// 예시·측정용 샘플: samples/out 맨 위의 .arp·.xlsx만 배포에 넣는다.
+// 같은 폴더에 검사·시험이 쓰는 하위 폴더(test-*, shots, downloads)와 측정 기록(.json)이 있어 폴더째 복사하지 않는다.
+function samples() {
+  return {
+    name: 'arp-samples',
+    apply: 'build',
+    generateBundle() {
+      const dir = r('./samples/out');
+      for (const f of readdirSync(dir)) {
+        if (!/\.(arp|xlsx)$/i.test(f) || !statSync(`${dir}/${f}`).isFile()) continue;
+        this.emitFile({ type: 'asset', fileName: f, source: readFileSync(`${dir}/${f}`) });
+      }
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
   root: r('./web'),
   base: './',
-  // 예시·측정용 샘플 파일(samples/out/*.arp)을 그대로 내보낸다
-  publicDir: r('./samples/out'),
+  // 개발 서버는 샘플 폴더를 그대로 쓴다. 빌드는 samples()가 예시 파일만 넣는다
+  publicDir: command === 'serve' ? r('./samples/out') : false,
   esbuild: { jsx: 'automatic', jsxImportSource: 'preact' },
-  plugins: [pwa()],
+  plugins: [samples(), pwa()],
   build: {
     outDir: r('./dist-web'),
     emptyOutDir: true,
@@ -93,4 +139,4 @@ export default defineConfig({
   worker: { format: 'es' },
   // sqlite-wasm은 미리 묶지 않는다(패키지 안내)
   optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
-});
+}));

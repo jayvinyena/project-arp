@@ -5,6 +5,8 @@ npm run compare-legacy        # 옛 엔진 ↔ 새 엔진 대조 (옛 도구 폴
 npm run dev                   # → /app/index.html?importSample=legacy-sample  (예시 옛 시트를 바로 가져오기)
 ```
 
+> 실제 운영 시트를 준비하는 법과 운영 규모 시험 결과는 [15-operating-sheet.md](15-operating-sheet.md)에 있다.
+
 ## 쓰는 법
 
 1. 구글 시트(옛 도구)에서 **파일 → 다운로드 → Microsoft Excel(.xlsx)**을 고른다.
@@ -52,7 +54,9 @@ npm run dev                   # → /app/index.html?importSample=legacy-sample  
 | 업데이트 완료 예정 | **4개 모두 0일 차이** | 2~9일 빠름 |
 
 - **찾은 것:** 옛 엔진은 기본 겹침률 설정이 없으면 코드에 박힌 20%를 썼다. 처음 가져오기는 이것을 몰라 완료 예정이 7~12일 늦게 나왔다. 가져올 때 20%를 설정에 적도록 고쳐 같아졌다.
-- 실제 운영 시트로 대조하려면 내보낸 데이터를 JSON(시트별 2차원 배열)으로 바꿔 `npm run compare-legacy -- 경로.json`으로 돌린다.
+- 실제 운영 시트는 내려받은 .xlsx를 그대로 넣어 대조한다: `npm run compare-legacy -- private/운영시트.xlsx`.
+- 대조 모드("옛 계산 방식 흉내", `legacyCompat`)는 옛 근무일 수를 쓰고, 상태를 무시하고, 인력이 없는 달은 마지막 달로 되풀이한다. 운영 규모 시트에서도 모두 0 차이다([15-operating-sheet.md](15-operating-sheet.md)).
+- 사용 여부(`ACTIVE`)는 옛 도구와 같은 규칙이다. 체크·`TRUE`·`Y`·`YES`·`1`만 사용이고 빈칸은 사용 안 함이다(2026-11-05 운영 시트 시험에서 찾아 고침).
 
 ## 검사
 

@@ -1,6 +1,6 @@
 // 최소 .xlsx 쓰기: 시트 = 2차원 배열. 글자는 공유 문자열, 숫자·참/거짓은 그대로.
 // 브라우저(내보내기)와 Node(검사·대조)가 같이 쓴다. deflate를 주면 압축(8), 없으면 저장(0) 방식.
-export type Cell = string | number | boolean | null | undefined;
+export type Cell = string | number | boolean | Date | null | undefined;
 export type DeflateRaw = (data: Uint8Array) => Uint8Array;
 
 const CRC_TABLE = (() => {
@@ -76,6 +76,11 @@ export function writeXlsx(sheets: Record<string, Cell[][]>, options: { deflate?:
       if (v == null || v === '') return '';
       const ref = `${colName(c)}${r + 1}`;
       const style = r === 0 ? ' s="1"' : '';
+      if (v instanceof Date) {
+        // 날짜: 엑셀 일련번호(1899-12-30부터 일 수) + 날짜 서식(구글 시트·엑셀이 내보내는 모양)
+        const serial = (Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate()) - Date.UTC(1899, 11, 30)) / 86400000;
+        return Number.isFinite(serial) ? `<c r="${ref}" s="2"><v>${serial}</v></c>` : '';
+      }
       if (typeof v === 'number') return Number.isFinite(v) ? `<c r="${ref}"${style}><v>${v}</v></c>` : '';
       if (typeof v === 'boolean') return `<c r="${ref}" t="b"${style}><v>${v ? 1 : 0}</v></c>`;
       return `<c r="${ref}" t="s"${style}><v>${si(String(v))}</v></c>`;
@@ -88,7 +93,7 @@ export function writeXlsx(sheets: Record<string, Cell[][]>, options: { deflate?:
     ['_rels/.rels', `${XML}<Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${NS}/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
     ['xl/workbook.xml', `${XML}<workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`],
     ['xl/_rels/workbook.xml.rels', `${XML}<Relationships xmlns="${NS}/package/2006/relationships">${names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${names.length + 1}" Type="${NS}/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId${names.length + 2}" Type="${NS}/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
-    ['xl/styles.xml', `${XML}<styleSheet xmlns="${NS}/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Malgun Gothic"/></font><font><b/><sz val="11"/><name val="Malgun Gothic"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf fontId="0"/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>`],
+    ['xl/styles.xml', `${XML}<styleSheet xmlns="${NS}/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Malgun Gothic"/></font><font><b/><sz val="11"/><name val="Malgun Gothic"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="3"><xf fontId="0"/><xf fontId="1" applyFont="1"/><xf fontId="0" numFmtId="164" applyNumberFormat="1"/></cellXfs></styleSheet>`],
     ...names.map((n, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sheets[n])]),
   ];
   files.push(['xl/sharedStrings.xml', `${XML}<sst xmlns="${NS}/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${strings.map(s => `<si><t xml:space="preserve">${esc(s)}</t></si>`).join('')}</sst>`]);

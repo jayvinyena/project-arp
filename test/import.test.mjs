@@ -92,3 +92,52 @@ test('대조: 옛 근무일 수에 맞추면 옛 엔진과 필요 공수·작업
   }
   for (const u of r.updates) assert.equal(u.diffCalendarDays, 0, `${u.updateId} ${u.oldCompletion} → ${u.newCompletion}`);
 });
+
+// ───────── 운영 시트 흉내(tools/gen-operating-sheet.mjs): 실제 규모 · 운영 흔적 ─────────
+const { buildOperatingFixture, toExportedXlsx } = await import('../tools/gen-operating-sheet.mjs');
+
+test('사용 여부(ACTIVE): 옛 도구처럼 체크·TRUE·Y·YES·1만 사용, 빈칸·그 밖의 글자는 사용 안 함', async () => {
+  const f = legacy();
+  const p = f.sheets['01_Part_Master'];
+  p[1][3] = 'Y'; p[2][3] = ''; p[3][3] = '사용'; p[4][3] = 'yes';
+  const { raw, rows } = await importOf(f.sheets);
+  raw.close();
+  assert.deepEqual(rows.parts.map(x => [x.part_id, x.active]), [['CONCEPT', 1], ['MODEL', 0], ['ANIM', 0], ['UI', 1]]);
+});
+
+test('운영 시트: 엑셀 날짜·보조 시트·보조 칸이 있어도 막힘 없이 계산되고, 옛 도구와 달라지는 이유를 알린다', async () => {
+  const sheets = await readXlsx(toExportedXlsx(buildOperatingFixture()));
+  const { rows, report } = legacyToRows(sheets, { projectName: '운영' });
+  assert.deepEqual(report.horizon, { start: '2026-11', end: '2028-10' });
+  assert.equal(report.skipped.length, 0, report.skipped.join(' / '));
+  assert.equal(report.ignoredSheets.length, 8);
+  assert.equal(rows.updates.length, 14);
+  assert.deepEqual(rows.updates.filter(u => u.status === 'DONE' || u.status === 'CANCELLED').map(u => u.update_id).sort(), ['CBT_2026', 'UPD_COLLAB', 'UPD_MINI3']);
+  assert.ok(report.adjustments.some(a => a.includes('인력 첫 달(2026-11)보다 먼저') && a.includes('정식 런칭')));
+  assert.ok(report.adjustments.some(a => a.includes('출시 완료·취소') && a.includes('CBT 빌드') && a.includes('콜라보')));
+  assert.equal(rows.updates.find(u => u.update_id === 'UPD_S4').release_date, '2028-07-31', '빈 출시일 → 목표 월 말일');
+  assert.equal(rows.updates.find(u => u.update_id === 'LAUNCH_2027').start_date, '2026-09-01', '엑셀 날짜 → 날짜');
+  const raw = new DatabaseSync(':memory:');
+  const db = nodeDb(raw);
+  writeImported(db, SCHEMA_SQL, rows);
+  const session = new ProjectSession(db);
+  const p = session.prepare();
+  const result = session.calculate().result;
+  raw.close();
+  assert.equal(p.blocked, false, p.findings.map(x => x.code).join(','));
+  assert.equal(result.updates.length, 11);
+  assert.ok(result.updates.every(u => u.expectedCompletionDate), '모두 계획 기간 안에 끝난다');
+});
+
+test('대조(운영 시트): 옛 계산 방식 흉내면 출시 완료·취소까지 13개 업데이트·6파트가 옛 엔진과 모두 같다', { skip: !existsSync(LEGACY_ENGINE) && '옛 도구 폴더(../arp)가 없어 건너뜀' }, async () => {
+  const { compareLegacy, fixtureFromXlsx } = await import('../tools/compare-legacy.mjs');
+  // 구글 시트에서 내려받은 .xlsx를 그대로 넣는 길(엑셀 날짜 → 날짜)로 대조한다
+  const r = await compareLegacy(await fixtureFromXlsx(toExportedXlsx(buildOperatingFixture())), { keepLegacyWorkdays: true });
+  assert.equal(r.parts.length, 6);
+  assert.equal(r.updates.length, 13);
+  for (const p of r.parts) {
+    assert.ok(Math.abs(p.oldRequired - p.newRequired) < 1e-6, `${p.partId} 필요 공수 ${p.oldRequired} ≠ ${p.newRequired}`);
+    assert.ok(Math.abs(p.oldCapacity - p.newCapacity) < 1e-6, `${p.partId} 작업 가능량 ${p.oldCapacity} ≠ ${p.newCapacity}`);
+  }
+  for (const u of r.updates) assert.equal(u.diffCalendarDays, 0, `${u.updateId} ${u.oldCompletion} → ${u.newCompletion}`);
+});
