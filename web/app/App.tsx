@@ -7,6 +7,8 @@ import { ImportReport } from './ui/ImportReport.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
 import { CalibrationPage } from './ui/CalibrationPage.tsx';
 import { AdvisorPage } from './ui/AdvisorPage.tsx';
+import { SetupPage } from './ui/SetupPage.tsx';
+import { setModeNames } from './lib/modes.ts';
 import type { ScenarioAction } from '../../core/scenarios.ts';
 import type { Notice, Seen } from '../../core/notice.ts';
 import { idb, rememberRecent, ensurePermission } from './lib/idb.ts';
@@ -27,10 +29,10 @@ import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
-type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'advisor' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
 interface FileState { name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean }
 
 const LOCK_FRESH_MS = 30 * 60 * 1000;
@@ -569,6 +571,8 @@ export function App() {
     );
   }
 
+  // 물량 템플릿 이름(프로젝트마다): 화면들이 그리기 전에 채운다
+  if (view) setModeNames(view.meta);
   if (!file || !view) {
     return (
       <div class="welcome">
@@ -652,6 +656,7 @@ export function App() {
           <button class={`nav-item${page === 'simulation' ? ' active' : ''}`} onClick={() => setPage('simulation')}><IconSliders />시뮬레이션</button>
           <button class={`nav-item${page === 'advisor' ? ' active' : ''}`} onClick={() => setPage('advisor')}><IconTarget />마감 맞추기</button>
           <div class="nav-label" style="margin-top: 12px">기준 정보</div>
+          <button class={`nav-item${page === 'setup' ? ' active' : ''}`} onClick={() => setPage('setup')}><IconSettings />프로젝트·파트·리소스</button>
           <button class={`nav-item${page === 'templates' ? ' active' : ''}`} onClick={() => setPage('templates')}><IconLayers />유형 템플릿</button>
           <button class={`nav-item${page === 'capacity' ? ' active' : ''}`} onClick={() => setPage('capacity')}><IconUsers />인력</button>
           <button class={`nav-item${page === 'calibration' ? ' active' : ''}`} onClick={() => setPage('calibration')}><IconTune />공수 보정</button>
@@ -714,12 +719,13 @@ export function App() {
               <div class="inline" style="margin-top: 8px"><button class="btn sm primary" onClick={() => void saveAsNew()}><IconSave />다른 이름으로 저장</button></div></div></div>
           </div>
         )}
-        {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} />}
+        {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} />}
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
         {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} focus={simFocus} />}
         {page === 'advisor' && <AdvisorPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onMakeScenario={onAdviceScenario} />}
+        {page === 'setup' && <SetupPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'templates' && <TemplatesPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'capacity' && <CapacityPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'history' && <HistoryPage version={version} readOnly={file.readOnly} onUndo={onUndo} />}

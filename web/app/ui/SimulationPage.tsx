@@ -146,7 +146,7 @@ function ActionForm(props: { meta: SimMeta; onAdd: (a: ScenarioAction) => Promis
         {kind === 'headcount' && <>{partSel}{months}{num('delta', '1', '더할 인원', '명 (빼려면 −)')}</>}
         {kind === 'outsource' && <>{partSel}{months}{num('days', '20', '더할 외주', '인·일/월')}</>}
         {kind === 'aiShare' && <>{partSel}{num('share', '50', 'AI 비율', '%')}{!meta.hasAI && <span class="small err-text">"AI 사용 시" 공수 프로필이 없어요</span>}</>}
-        {kind === 'volumeScale' && <>{updSel}{num('scale', '80', '물량 배율', '% (최저·목표·확장 모두)')}</>}
+        {kind === 'volumeScale' && <>{updSel}{num('scale', '80', '물량 배율', `% (${MODE_LABEL.MIN}·${MODE_LABEL.TARGET}·${MODE_LABEL.STRETCH} 모두)`)}</>}
         {kind === 'updateDates' && <>{updSel}{date('start', u?.startDate ?? '', '시작')}{date('freeze', u?.freezeDate ?? '', '제작 완료 목표')}{date('release', u?.releaseDate ?? '', '출시')}</>}
         {kind === 'priority' && <>{updSel}{num('priority', '0', '우선순위', '(작을수록 먼저, 0 = 맨 앞)')}</>}
         {kind === 'exclude' && <>{updSel}<span class="small muted">이 업데이트를 계산에서 뺍니다</span></>}

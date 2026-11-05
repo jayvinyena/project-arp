@@ -334,3 +334,60 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
     latestAsOf: latest == null ? null : String(latest),
   };
 }
+
+// ───────── 프로젝트 · 파트 · 리소스(만든 뒤 고치기) ─────────
+
+export interface SetupView {
+  project: { name: string; bufferRate: number; workWeekdays: string; holidays: { date: string; name: string; kind: string }[] };
+  horizon: { start: string; end: string };
+  parts: { partId: string; name: string; active: boolean; usedBy: number; hasProgress: boolean; headcount: number | null; utilization: number | null; aiShare: number }[];
+  groups: { groupId: string; name: string }[];
+  resources: {
+    resourceTypeId: string; name: string; groupId: string | null; groupName: string; active: boolean; used: boolean;
+    efforts: Record<string, { base: number | null; ai: number | null; rework: number }>;
+  }[];
+  hasAI: boolean;
+}
+
+/** 새 프로젝트 마법사에서 넣은 것(기본 정보·파트·리소스·공수)을 만든 뒤에 고치는 화면용 */
+export function setupView(db: SqlDb): SetupView {
+  const meta = Object.fromEntries(db.all('SELECT key, value FROM meta').map(r => [String(r.key), r.value]));
+  const s = db.get('SELECT * FROM settings WHERE id = 1')!;
+  const start = String(s.horizon_start_month); const end = String(s.horizon_end_month);
+  // 파트의 "기본" 인원·가동률 = 계획 기간 안에서 가장 많이 쓰인 값(달마다 다르면 그중 가장 흔한 값)
+  const common = (partId: string, col: string): number | null => {
+    const r = db.get(`SELECT ${col} AS v, count(*) AS n FROM capacity WHERE part_id = ? AND month BETWEEN ? AND ? GROUP BY ${col} ORDER BY n DESC, ${col} DESC LIMIT 1`, [partId, start, end]);
+    return r ? Number(r.v) : null;
+  };
+  const parts = db.all('SELECT * FROM parts ORDER BY sort_order, part_id').map(p => ({
+    partId: String(p.part_id), name: String(p.name), active: Number(p.active) === 1,
+    usedBy: Number(db.get('SELECT count(*) AS n FROM resource_parts WHERE part_id = ?', [p.part_id])?.n ?? 0),
+    hasProgress: !!db.get('SELECT 1 AS ok FROM progress WHERE part_id = ? LIMIT 1', [p.part_id]),
+    headcount: common(String(p.part_id), 'headcount'), utilization: common(String(p.part_id), 'utilization'),
+    aiShare: Number(db.get("SELECT share FROM effort_mix WHERE part_id = ? AND profile_id = 'AI'", [p.part_id])?.share ?? 0),
+  }));
+  const groups = db.all('SELECT group_id, name FROM resource_groups ORDER BY sort_order, group_id').map(g => ({ groupId: String(g.group_id), name: String(g.name) }));
+  const groupName = new Map(groups.map(g => [g.groupId, g.name]));
+  const rps = db.all('SELECT * FROM resource_parts');
+  const effs = db.all('SELECT * FROM efforts');
+  const resources = db.all(`SELECT r.* FROM resource_types r LEFT JOIN resource_groups g ON g.group_id = r.group_id
+      ORDER BY coalesce(g.sort_order, 1e9), r.sort_order, r.resource_type_id`).map(r => {
+    const id = String(r.resource_type_id);
+    const efforts: SetupView['resources'][number]['efforts'] = {};
+    for (const rp of rps.filter(x => x.resource_type_id === id)) {
+      const of = (prof: string) => { const e = effs.find(x => x.resource_type_id === id && x.part_id === rp.part_id && x.profile_id === prof); return e ? Number(e.days) : null; };
+      efforts[String(rp.part_id)] = { base: of('BASE'), ai: of('AI'), rework: Number(rp.rework_rate) };
+    }
+    const used = ['volumes', 'type_templates', 'progress'].some(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [id]));
+    return { resourceTypeId: id, name: String(r.name), groupId: r.group_id == null ? null : String(r.group_id), groupName: r.group_id == null ? '' : groupName.get(String(r.group_id)) ?? '', active: Number(r.active) === 1, used, efforts };
+  });
+  return {
+    project: {
+      name: String(meta.project_name ?? ''), bufferRate: Number(s.buffer_rate), workWeekdays: String(s.work_weekdays),
+      holidays: db.all('SELECT * FROM holidays ORDER BY date').map(h => ({ date: String(h.date), name: String(h.name), kind: String(h.kind) })),
+    },
+    horizon: { start, end },
+    parts, groups, resources,
+    hasAI: !!db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'"),
+  };
+}

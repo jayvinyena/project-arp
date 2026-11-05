@@ -5,6 +5,7 @@ import type { PlanMode, PlanResult, ProjectData, UpdateStatus } from '../engine/
 import { runPlan } from '../engine/index.ts';
 import type { ProjectSession, Finding, EngineTable } from './pipeline.ts';
 import { validate, keyWhere, tableColumns, isAdd, upsertRow } from './pipeline.ts';
+import { readModeNames } from './modes.ts';
 
 export type ScenarioAction =
   | { kind: 'headcount'; partId: string; fromMonth: string; toMonth: string; delta: number }
@@ -125,8 +126,8 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
           changes.push({ op: 'SET', target: 'volumes', target_key: `${a.updateId}|${v.resource_type_id}`, field: f, value: Number(v.min_qty) });
         }
       }
-      if (!changes.length) fail(a.onlyOptional ? '최저 물량이 있는 선택 리소스가 없어요.' : '최저 물량이 있는 리소스가 없어요.');
-      return { label: `${name} ${a.onlyOptional ? '선택 리소스' : '모든 리소스'}를 최저 물량으로`, changes };
+      if (!changes.length) fail(a.onlyOptional ? '최소안 물량이 있는 선택 리소스가 없어요.' : '최소안 물량이 있는 리소스가 없어요.');
+      return { label: `${name} ${a.onlyOptional ? '선택 리소스' : '모든 리소스'}를 ${readModeNames(db).MIN} 물량으로`, changes };
     }
     case 'updateDates': {
       const name = updateName(a.updateId);

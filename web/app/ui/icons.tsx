@@ -10,6 +10,7 @@ export const IconLaunch = () => base(<><path d="M5 19c1.5-4 4.5-7.5 9-10l3-3 2 2
 export const IconCalendar = () => base(<><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></>);
 export const IconSliders = () => base(<><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></>);
 export const IconTarget = () => base(<><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4.5" /><path d="M12 12l6.5-6.5M15.5 5.5h3v3" /></>);
+export const IconSettings = () => base(<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></>);
 export const IconCheck = () => base(<><circle cx="12" cy="12" r="8" /><path d="M8.5 12.5l2.5 2.5 4.5-5" /></>);
 export const IconAlert = () => base(<><path d="M12 4l9 16H3z" /><path d="M12 10v4M12 17.5v.01" /></>);
 export const IconFolder = () => base(<><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /></>);

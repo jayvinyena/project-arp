@@ -44,18 +44,18 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelectorAll('.answer').length === 2", 20000);
   await shot(cdp, '05-reverse-1440', { width: 1440 });
 
-  // 확장안 선택
+  // 최대안 선택
   await cdp.eval("document.querySelectorAll('.mode-card')[2].click()");
   await sleep(300);
   await shot(cdp, '06-stretch-1440', { width: 1440 });
 
-  // 잘못된 값: 프랍 최저를 목표보다 크게
+  // 잘못된 값: 최대안의 프랍 수량을 비운다(계산이 막힌다)
   await cdp.eval(`(() => {
-    const input = document.querySelector('input[aria-label="프랍 최저"]');
-    input.value = '90'; input.dispatchEvent(new Event('input', { bubbles: true }));
+    const input = document.querySelector('input[aria-label="프랍 최대안"]');
+    input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
   await sleep(150); // 입력 상태가 그려진 뒤 칸을 벗어난다
-  await cdp.eval(`document.querySelector('input[aria-label="프랍 최저"]').dispatchEvent(new FocusEvent('blur'))`);
+  await cdp.eval(`document.querySelector('input[aria-label="프랍 최대안"]').dispatchEvent(new FocusEvent('blur'))`);
   await cdp.waitUntil("document.querySelector('.banner.bad')");
   await shot(cdp, '07-error-1440', { width: 1440 });
 

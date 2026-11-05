@@ -31,19 +31,19 @@ await withBrowser(async (cdp, base) => {
   // 1. 되돌리기
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&nosw` });
   await cdp.waitUntil("document.querySelectorAll('table.grid tbody tr.row').length > 0");
-  await setQty(cdp, '프랍 목표', '70');
+  await setQty(cdp, '프랍 기본안', '70');
   await nav(cdp, '변경 이력');
   await cdp.waitUntil("document.querySelectorAll('.hist-item').length > 0");
   const summary = await cdp.eval("document.querySelector('.hist-summary')?.textContent");
-  check('변경 이력에 방금 고친 것', summary === '물량 목표', summary);
+  check('변경 이력에 방금 고친 것', summary === '물량 기본안', summary);
   await cdp.eval("[...document.querySelectorAll('.hist-item button')].find(b => b.textContent.includes('되돌리기')).click()");
   await sleep(150);
   await cdp.eval("[...document.querySelectorAll('.hist-item button')].find(b => b.textContent.trim() === '되돌리기').click()");
   await cdp.waitUntil("document.querySelector('.hist-item.undone')", 8000);
   await shot(cdp, 'history-1440');
   await nav(cdp, '런칭 물량 설계');
-  await cdp.waitUntil("document.querySelector('input[aria-label=\"프랍 목표\"]')");
-  check('되돌리면 값이 돌아온다(70 → 60)', (await value(cdp, '프랍 목표')) === '60');
+  await cdp.waitUntil("document.querySelector('input[aria-label=\"프랍 기본안\"]')");
+  check('되돌리면 값이 돌아온다(70 → 60)', (await value(cdp, '프랍 기본안')) === '60');
 
   // 2. 엑셀 내보내기
   // 화면 없는 크롬은 내려받기를 폴더에 남기지 않을 수 있어, 내려받기 링크를 가로채 파일 내용을 확인한다
@@ -61,7 +61,7 @@ await withBrowser(async (cdp, base) => {
   check('엑셀로 내보내기: .xlsx(압축 서명 PK)', dl.name.endsWith('.xlsx') && dl.magic === 'PK' && dl.size > 5000, `${dl.name} · ${dl.size}바이트`);
 
   // 3. 작업 복구: 고친 뒤 저장하지 않고 창을 다시 열면 되살리기
-  await setQty(cdp, '배경 맵 목표', '7');
+  await setQty(cdp, '배경 맵 기본안', '7');
   await sleep(2200); // 사본은 1.5초 뒤
   await cdp.send('Page.navigate', { url: `${app}?nosw` });
   await cdp.waitUntil("document.querySelector('.welcome-card')");
@@ -70,8 +70,8 @@ await withBrowser(async (cdp, base) => {
   check('다시 열면 "저장하지 않은 작업" 되살리기 제안', banner.includes('저장하지 않은 작업'), banner.slice(0, 30));
   await shot(cdp, 'recovery-1440');
   await cdp.eval("[...document.querySelectorAll('.welcome-card button')].find(b => b.textContent === '되살리기').click()");
-  await cdp.waitUntil("document.querySelector('input[aria-label=\"배경 맵 목표\"]')", 10000);
-  check('되살리면 고친 값(7)과 "저장 안 된 변경"', (await value(cdp, '배경 맵 목표')) === '7' && (await cdp.eval("document.querySelector('.save-state').textContent")).includes('저장 안 된'));
+  await cdp.waitUntil("document.querySelector('input[aria-label=\"배경 맵 기본안\"]')", 10000);
+  check('되살리면 고친 값(7)과 "저장 안 된 변경"', (await value(cdp, '배경 맵 기본안')) === '7' && (await cdp.eval("document.querySelector('.save-state').textContent")).includes('저장 안 된'));
 
   // 4. 최근 파일: 핸들로 연 파일은 시작 화면에 남고, 누르면 다시 열린다
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&nosw` });

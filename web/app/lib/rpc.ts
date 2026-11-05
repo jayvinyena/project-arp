@@ -8,7 +8,7 @@ import type { CalibrationView, CalibrationPreview } from '../../../core/calibrat
 import type { ProgressImportReport } from '../../../core/progress-io.ts';
 import type { Seen, Notice } from '../../../core/notice.ts';
 import type { Edit, EditResult } from '../../../core/edits.ts';
-import type { PlanView, UpdateDetail, TypeView, CapacityView, ProgressView } from '../../../core/plan.ts';
+import type { PlanView, UpdateDetail, TypeView, CapacityView, ProgressView, SetupView } from '../../../core/plan.ts';
 import type { Finding } from '../../../core/pipeline.ts';
 import type { ScenarioOp, ScenarioAction, ScenarioSummary, SimMeta, CompareView, Sensitivity, ApplyResult } from '../../../core/scenarios.ts';
 import type { AdvisorOptions, AdvisorResult } from '../../../core/advisor.ts';
@@ -73,6 +73,7 @@ export const rpc = {
   sensitivity: (scenarioId: string | null, updateId: string, planMode: PlanMode) => call<Sensitivity & { ms: number }>('analyze', { scenarioId, updateId, planMode, what: 'sensitivity' }),
   maxScaleOf: (scenarioId: string | null, updateId: string, planMode: PlanMode) => call<MaxScaleResult & { ms: number }>('analyze', { scenarioId, updateId, planMode, what: 'maxScale' }),
   headcountOf: (scenarioId: string | null, updateId: string, planMode: PlanMode) => call<HeadcountResult & { ms: number }>('analyze', { scenarioId, updateId, planMode, what: 'headcount' }),
+  setup: () => call<SetupView>('setup'),
   advise: (options: AdvisorOptions) => call<AdvisorResult>('advise', { options }),
   adviceScenario: (name: string, actions: ScenarioAction[]) => call<{ scenarioId: string }>('adviceScenario', { name, actions }),
   applyScenario: (scenarioId: string, editor: string, force: boolean) => call<ApplyResult>('applyScenario', { scenarioId, editor, force }),

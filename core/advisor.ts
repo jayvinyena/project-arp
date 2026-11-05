@@ -23,6 +23,8 @@ export interface AdvisorOptions {
   maxRuns?: number;
   /** 계산 시간 상한(ms) */
   maxMs?: number;
+  /** 템플릿1(최소) 이름: 걸음 설명에 쓴다 */
+  minName?: string;
 }
 
 export interface Outcome { updateId: string; name: string; deadline: string | null; completion: string | null; status: string; late: number; unfinished: boolean }
@@ -130,6 +132,7 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
   const deadline = options.deadline ?? 'freeze';
   const levers = { headcount: true, outsource: false, volume: true, priority: true, ...options.levers };
   const maxHeads = options.maxHeadsPerPart ?? 5;
+  const minName = options.minName ?? '최소안';
   const maxOut = options.maxOutsourceDays ?? 40;
   const maxRuns = options.maxRuns ?? 400;
   const maxMs = options.maxMs ?? 4000;
@@ -220,11 +223,11 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
       // 선택 리소스만 · 모든 리소스 두 후보를 함께 본다(선택 리소스가 늦음의 원인이 아니면 "모든"만 효과가 있다)
       if (!mode && hasMinRoom(target.updateId, true)) {
         const st = clone(state); st.mins.set(target.updateId, 'optional');
-        cands.push({ st, step: { kind: 'volumeToMin', label: `${name} 선택 리소스를 최저 물량으로`, amount: 1, forUpdate: name, cost: cutCost(st) } });
+        cands.push({ st, step: { kind: 'volumeToMin', label: `${name} 선택 리소스를 ${minName} 물량으로`, amount: 1, forUpdate: name, cost: cutCost(st) } });
       }
       if (mode !== 'all' && hasMinRoom(target.updateId, false)) {
         const st = clone(state); st.mins.set(target.updateId, 'all');
-        cands.push({ st, step: { kind: 'volumeToMin', label: `${name} 모든 리소스를 최저 물량으로`, amount: 1, forUpdate: name, cost: cutCost(st) } });
+        cands.push({ st, step: { kind: 'volumeToMin', label: `${name} 모든 리소스를 ${minName} 물량으로`, amount: 1, forUpdate: name, cost: cutCost(st) } });
       }
     }
     if (levers.priority && mult === 1) {

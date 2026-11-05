@@ -36,7 +36,7 @@ test('이력: 묶음마다 요약·편집자·항목, 최신이 위', () => {
   assert.equal(h.batches[0].batchId, 'B2');
   assert.equal(h.batches[0].summary, '업데이트 추가 · 물량 추가');
   assert.equal(h.batches[0].count, 7);
-  assert.equal(h.batches[1].summary, '물량 목표');
+  assert.equal(h.batches[1].summary, '물량 기본안');
   assert.deepEqual([h.batches[1].entries[0].old, h.batches[1].entries[0].next], [60, 70]);
 });
 

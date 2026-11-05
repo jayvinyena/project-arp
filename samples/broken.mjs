@@ -3,8 +3,8 @@
 import { build as buildNormal } from './normal.mjs';
 
 export const expect = {
-  errors: ['C01', 'E03', 'P03', 'U01', 'V01', 'V02'],
-  warnings: ['A04', 'T01', 'U02', 'X01'],
+  errors: ['C01', 'E03', 'P03', 'U01', 'V01'],
+  warnings: ['A04', 'T01', 'U02', 'V02', 'X01'],
 };
 
 export function build() {
@@ -17,7 +17,7 @@ export function build() {
   update('S2').release_date = null;                 // U02 출시일 없음
   update('MINI1').start_date = null;                // U01 시작일 없음
   volume('LAUNCH', 'COSTUME').min_qty = null;       // V01 빈칸
-  volume('LAUNCH', 'ICON').min_qty = 90;            // V02 최저 90 > 목표 80
+  volume('LAUNCH', 'ICON').min_qty = 90;            // V02(주의) 최소안 90 > 기본안 80
 
   // E03 배경 맵 모델링 기본 공수 빠짐(AI 공수만 있음)
   data.efforts = data.efforts.filter(e => !(e.resource_type_id === 'BG_MAP' && e.part_id === 'MODELING' && e.profile_id === 'BASE'));

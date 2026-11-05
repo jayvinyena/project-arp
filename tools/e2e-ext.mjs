@@ -100,9 +100,9 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelector('.welcome-card')");
   await asUser('가');
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1&nosw` });
-  await cdp.waitUntil("document.querySelector('input[aria-label=\"이펙트 목표\"]')", 10000);
+  await cdp.waitUntil("document.querySelector('input[aria-label=\"이펙트 기본안\"]')", 10000);
   await sleep(500);
-  await typeIn(cdp, '이펙트 목표', '40');
+  await typeIn(cdp, '이펙트 기본안', '40');
   await cdp.waitUntil("document.querySelector('.save-state')?.textContent.includes('저장됨')", 10000);
   await clickText(cdp, '닫기', "document.querySelector('.sidebar')");
   await cdp.waitUntil("document.querySelector('.welcome-card')");

@@ -1,6 +1,7 @@
 // 유형 템플릿: 업데이트 유형과 유형별 기본 물량(새 업데이트를 만들 때 복사)
 import { useState, useEffect } from 'preact/hooks';
 import { afterCommit } from './commit.ts';
+import { MODE_LABEL } from '../lib/modes.ts';
 import { rpc } from '../lib/rpc.ts';
 import type { TypeView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -81,14 +82,14 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
               <div class="table-wrap">
                 <table class="grid vol">
                   <colgroup><col /><col class="qty-col" /><col class="qty-col" /><col class="qty-col" /><col class="act-col" /></colgroup>
-                  <thead><tr><th>리소스</th><th class="n">최저</th><th class="n">목표</th><th class="n">확장</th><th aria-label="행 작업" /></tr></thead>
+                  <thead><tr><th>리소스</th><th class="n">{MODE_LABEL.MIN}</th><th class="n">{MODE_LABEL.TARGET}</th><th class="n">{MODE_LABEL.STRETCH}</th><th aria-label="행 작업" /></tr></thead>
                   <tbody>
                     {cur.rows.map(r => (
                       <tr class="row">
                         <td><div class="res-name"><span class="title">{r.name}</span><span class="small faint">{r.groupName}</span></div></td>
                         {(['min_qty', 'target_qty', 'stretch_qty'] as const).map((f, i) => (
-                          <td class="n" data-label={['최저', '목표', '확장'][i]}>
-                            <Qty value={[r.min, r.target, r.stretch][i]} label={`${r.name} ${['최저', '목표', '확장'][i]}`} disabled={props.readOnly}
+                          <td class="n" data-label={[MODE_LABEL.MIN, MODE_LABEL.TARGET, MODE_LABEL.STRETCH][i]}>
+                            <Qty value={[r.min, r.target, r.stretch][i]} label={`${r.name} ${[MODE_LABEL.MIN, MODE_LABEL.TARGET, MODE_LABEL.STRETCH][i]}`} disabled={props.readOnly}
                               onCommit={v => apply({ kind: 'template', typeId: cur.typeId, resourceTypeId: r.resourceTypeId, field: f, value: v })} />
                           </td>
                         ))}

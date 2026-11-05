@@ -53,15 +53,19 @@ test('고치기: 물량을 바꾸면 계산이 바뀌고 변경 이력이 남는
   assert.equal(log[0].editor, '검사');
 });
 
-test('고치기: 잘못된 값은 거절하고, 최저 > 목표처럼 규칙을 어기면 계산이 막히고 이유가 나온다', () => {
+test('고치기: 잘못된 값은 거절하고, 템플릿 순서가 뒤집히면 주의(계산은 됨), 빈칸이면 계산이 막힌다', () => {
   const { raw, db, session } = open('normal');
   assert.throws(() => applyLaunchEdit(db, session, { kind: 'volume', resourceTypeId: 'PROP', field: 'target_qty', value: -1 }, ctx));
   assert.throws(() => applyLaunchEdit(db, session, { kind: 'volume', resourceTypeId: 'PROP', field: 'target_qty', value: 1.5 }, ctx));
   applyLaunchEdit(db, session, { kind: 'volume', resourceTypeId: 'PROP', field: 'min_qty', value: 70 }, ctx);
   const cmp = compareLaunchModes(db, session);
+  assert.equal(cmp.blocked, false, '템플릿 순서는 주의일 뿐 계산을 막지 않는다');
+  assert.ok(cmp.findings.some(f => f.code === 'V02' && f.level === 'WARN' && f.key === 'LAUNCH|PROP'));
+  applyLaunchEdit(db, session, { kind: 'volume', resourceTypeId: 'PROP', field: 'target_qty', value: null }, ctx);
+  const cmp2 = compareLaunchModes(db, session);
   raw.close();
-  assert.equal(cmp.blocked, true);
-  assert.ok(cmp.findings.some(f => f.code === 'V02' && f.key === 'LAUNCH|PROP'));
+  assert.equal(cmp2.blocked, true);
+  assert.ok(cmp2.findings.some(f => f.code === 'V01' && f.key === 'LAUNCH|PROP'));
 });
 
 test('고치기: 리소스 더하기·빼기, 날짜 바꾸기', () => {

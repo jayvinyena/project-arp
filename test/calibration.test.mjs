@@ -122,8 +122,8 @@ test('열 때 변화 알림: 지난번 본 뒤 완료 예정 변화 · 새 업�
   applyEdit(db, session, { kind: 'volume', updateId: 'LAUNCH', resourceTypeId: 'VFX', field: 'target_qty', value: 40 }, { editor: '김아트', batchId: 'K1' });
   applyEdit(db, session, { kind: 'createUpdate', name: '시즌 3', typeId: 'SEASON', startDate: '2027-09-01', freezeDate: null, releaseDate: '2027-12-10' }, { editor: '김아트', batchId: 'K2' });
   const n = noticeSince(db, seen, outlookNow(db, session), '나');
-  // 계산이 막힌 상태(최저 > 목표)면 비교하지 않는다
-  applyEdit(db, session, { kind: 'volume', updateId: 'LAUNCH', resourceTypeId: 'PROP', field: 'min_qty', value: 99 }, { editor: '김아트', batchId: 'K3' });
+  // 계산이 막힌 상태(템플릿 수량 빈칸)면 비교하지 않는다
+  applyEdit(db, session, { kind: 'volume', updateId: 'LAUNCH', resourceTypeId: 'PROP', field: 'target_qty', value: null }, { editor: '김아트', batchId: 'K3' });
   assert.equal(outlookNow(db, session), null);
   raw.close();
   assert.ok(n);

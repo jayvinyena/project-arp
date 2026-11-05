@@ -2,6 +2,8 @@
 // 값의 업무 규칙(최저 ≤ 목표 등)은 검증 규칙이 맡고, 여기서는 형식(정수, 날짜 모양, 범위가 정해진 값)만 막는다.
 import type { SqlDb } from './db.ts';
 import type { ProjectSession, EngineTable } from './pipeline.ts';
+import type { PlanMode } from '../engine/types.ts';
+import { PLAN_MODES, DEFAULT_MODE_NAMES, modeMetaKey, readModeNames } from './modes.ts';
 
 export type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 export type UpdateField = 'name' | 'update_type_id' | 'start_date' | 'freeze_date' | 'release_date' | 'status';
@@ -33,7 +35,32 @@ export type Edit =
   // 인력 · 계획 기간
   | { kind: 'capacity'; partId: string; month: string; field: CapacityField; value: number }
   | { kind: 'fillCapacity'; partId: string; fromMonth: string; toMonth: string; field: CapacityField; value: number }
-  | { kind: 'horizon'; startMonth: string; endMonth: string };
+  | { kind: 'horizon'; startMonth: string; endMonth: string }
+  // 물량 템플릿(최소안·기본안·최대안): 이름 · 다른 템플릿에서 수량 복사
+  | { kind: 'modeName'; mode: PlanMode; name: string }
+  | { kind: 'copyQty'; updateId: string; from: 'min_qty' | 'target_qty' | 'stretch_qty'; to: 'min_qty' | 'target_qty' | 'stretch_qty' }
+  // 프로젝트 기본 정보
+  | { kind: 'projectName'; name: string }
+  | { kind: 'setting'; field: 'buffer_rate' | 'work_weekdays'; value: number | string }
+  | { kind: 'addHoliday'; date: string; name: string; holidayKind: 'PUBLIC' | 'COMPANY' }
+  | { kind: 'removeHoliday'; date: string }
+  // 파트
+  | { kind: 'createPart'; name: string }
+  | { kind: 'renamePart'; partId: string; name: string }
+  | { kind: 'movePart'; partId: string; direction: -1 | 1 }
+  | { kind: 'partActive'; partId: string; active: boolean }
+  | { kind: 'deletePart'; partId: string }
+  // 리소스 · 공수
+  | { kind: 'createResource'; name: string; groupName: string }
+  | { kind: 'renameResource'; resourceTypeId: string; name: string }
+  | { kind: 'resourceGroup'; resourceTypeId: string; groupName: string }
+  | { kind: 'renameGroup'; groupId: string; name: string }
+  | { kind: 'resourceActive'; resourceTypeId: string; active: boolean }
+  | { kind: 'deleteResource'; resourceTypeId: string }
+  | { kind: 'effort'; resourceTypeId: string; partId: string; profileId: 'BASE' | 'AI'; days: number | null }
+  | { kind: 'rework'; resourceTypeId: string; partId: string; rate: number }
+  // AI 활용 비율(파트별): 공수 = 기본 × (1 − 비율) + AI 사용 시 × 비율
+  | { kind: 'aiShare'; partId: string; share: number };
 
 export interface EditContext { editor: string; batchId: string; reason?: string }
 export interface EditResult { changed: boolean; createdId?: string }
@@ -359,5 +386,316 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       dirty('settings', 'capacity');
       return { changed: true };
     }
+
+    // ───────── 물량 템플릿 ─────────
+    case 'modeName': {
+      if (!PLAN_MODES.includes(edit.mode)) fail('없는 템플릿이에요.');
+      const name = edit.name.trim();
+      if (!name || name.length > 20) fail('템플릿 이름은 1~20자로 넣어 주세요.');
+      const names = readModeNames(db);
+      if (PLAN_MODES.some(m => m !== edit.mode && names[m] === name)) fail('다른 템플릿과 같은 이름이에요.');
+      if (names[edit.mode] === name) return { changed: false };
+      const key = modeMetaKey(edit.mode);
+      const before = db.get('SELECT value FROM meta WHERE key = ?', [key]);
+      db.run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [key, name]);
+      log(db, ctx, before ? 'UPDATE' : 'INSERT', 'meta', key, before ? 'value' : null, before ? (before.value ?? DEFAULT_MODE_NAMES[edit.mode]) : undefined, before ? name : { key, value: name });
+      return { changed: true };
+    }
+    case 'copyQty': {
+      if (edit.from === edit.to) return { changed: false };
+      const rows = db.all(`SELECT resource_type_id AS rt, ${edit.from} AS a, ${edit.to} AS b FROM volumes WHERE update_id = ?`, [edit.updateId]);
+      let changed = false;
+      for (const r of rows) {
+        if (r.a === r.b) continue;
+        db.run(`UPDATE volumes SET ${edit.to} = ? WHERE update_id = ? AND resource_type_id = ?`, [r.a, edit.updateId, r.rt]);
+        log(db, ctx, 'UPDATE', 'volumes', `${edit.updateId}|${r.rt}`, edit.to, r.b, r.a);
+        changed = true;
+      }
+      if (changed) dirty('volumes');
+      return { changed };
+    }
+
+    // ───────── 프로젝트 기본 정보 ─────────
+    case 'projectName': {
+      const name = edit.name.trim();
+      if (!name) fail('프로젝트 이름을 넣어 주세요.');
+      const before = db.get("SELECT value FROM meta WHERE key = 'project_name'");
+      if (before?.value === name) return { changed: false };
+      db.run("INSERT INTO meta (key, value) VALUES ('project_name', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [name]);
+      log(db, ctx, 'UPDATE', 'meta', 'project_name', 'value', before?.value ?? null, name);
+      return { changed: true };
+    }
+    case 'setting': {
+      if (edit.field === 'buffer_rate' && !(typeof edit.value === 'number' && edit.value >= 0 && edit.value < 1)) fail('여유율은 0~99%예요.');
+      if (edit.field === 'work_weekdays' && !(typeof edit.value === 'string' && /^[01]{7}$/.test(edit.value) && edit.value.includes('1'))) fail('근무 요일을 하루 이상 골라 주세요.');
+      const before = db.get(`SELECT ${edit.field} AS v FROM settings WHERE id = 1`)!;
+      if (before.v === edit.value) return { changed: false };
+      db.run(`UPDATE settings SET ${edit.field} = ? WHERE id = 1`, [edit.value]);
+      log(db, ctx, 'UPDATE', 'settings', 'settings', edit.field, before.v, edit.value);
+      dirty('settings');
+      return { changed: true };
+    }
+    case 'addHoliday': {
+      if (!DATE.test(edit.date)) fail('날짜를 확인해 주세요.');
+      if (!edit.name.trim()) fail('휴일 이름을 넣어 주세요.');
+      if (db.get('SELECT 1 AS ok FROM holidays WHERE date = ?', [edit.date])) fail('그 날짜는 이미 휴일이에요.');
+      const row = { date: edit.date, name: edit.name.trim(), kind: edit.holidayKind };
+      db.run('INSERT INTO holidays (date, name, kind) VALUES (?, ?, ?)', [row.date, row.name, row.kind]);
+      log(db, ctx, 'INSERT', 'holidays', edit.date, null, undefined, row);
+      dirty('holidays');
+      return { changed: true };
+    }
+    case 'removeHoliday': {
+      const old = db.get('SELECT * FROM holidays WHERE date = ?', [edit.date]);
+      if (!old) return { changed: false };
+      db.run('DELETE FROM holidays WHERE date = ?', [edit.date]);
+      log(db, ctx, 'DELETE', 'holidays', edit.date, null, old, undefined);
+      dirty('holidays');
+      return { changed: true };
+    }
+
+    // ───────── 파트 ─────────
+    case 'createPart': {
+      const name = edit.name.trim();
+      if (!name) fail('파트 이름을 넣어 주세요.');
+      if (db.get('SELECT 1 AS ok FROM parts WHERE name = ?', [name])) fail('같은 이름의 파트가 있어요.');
+      const id = nextId(db, 'parts', 'part_id', 'P', 2);
+      const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM parts')?.s ?? 0) + 1;
+      const row = { part_id: id, name, sort_order: sortOrder, active: 1 };
+      db.run('INSERT INTO parts (part_id, name, sort_order, active) VALUES (?, ?, ?, ?)', [id, name, sortOrder, 1]);
+      log(db, ctx, 'INSERT', 'parts', id, null, undefined, row);
+      // 계획 기간의 모든 달에 인력 행(인원 0, 가동률 80%)
+      const s = db.get('SELECT horizon_start_month AS a, horizon_end_month AS b FROM settings WHERE id = 1')!;
+      for (const month of monthsBetween(String(s.a), String(s.b))) {
+        const cap = { headcount: 0, utilization: 0.8, productivity: 1, outsource_days: 0, support_days: 0 };
+        db.run('INSERT INTO capacity (part_id, month, headcount, utilization, productivity, outsource_days, support_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [id, month, cap.headcount, cap.utilization, cap.productivity, cap.outsource_days, cap.support_days]);
+        log(db, ctx, 'INSERT', 'capacity', `${id}|${month}`, null, undefined, cap);
+      }
+      dirty('parts', 'capacity');
+      return { changed: true, createdId: id };
+    }
+    case 'renamePart': {
+      const name = edit.name.trim();
+      if (!name) fail('파트 이름을 넣어 주세요.');
+      const old = db.get('SELECT name FROM parts WHERE part_id = ?', [edit.partId]);
+      if (!old) fail('없는 파트예요.');
+      if (old!.name === name) return { changed: false };
+      if (db.get('SELECT 1 AS ok FROM parts WHERE name = ? AND part_id <> ?', [name, edit.partId])) fail('같은 이름의 파트가 있어요.');
+      db.run('UPDATE parts SET name = ? WHERE part_id = ?', [name, edit.partId]);
+      log(db, ctx, 'UPDATE', 'parts', edit.partId, 'name', old!.name, name);
+      dirty('parts');
+      return { changed: true };
+    }
+    case 'movePart': {
+      // 순서 = 공정 순서(앞 파트 → 뒤 파트). 이웃과 sort_order를 맞바꾼다
+      const list = db.all('SELECT part_id, sort_order FROM parts ORDER BY sort_order, part_id');
+      const i = list.findIndex(p => p.part_id === edit.partId);
+      const j = i + edit.direction;
+      if (i < 0 || j < 0 || j >= list.length) return { changed: false };
+      const a = list[i]; const b = list[j];
+      const [sa, sb] = a.sort_order === b.sort_order ? [Number(b.sort_order) + (edit.direction > 0 ? 1 : -1), Number(a.sort_order)] : [b.sort_order, a.sort_order];
+      db.run('UPDATE parts SET sort_order = ? WHERE part_id = ?', [sa, a.part_id]);
+      db.run('UPDATE parts SET sort_order = ? WHERE part_id = ?', [sb, b.part_id]);
+      log(db, ctx, 'UPDATE', 'parts', String(a.part_id), 'sort_order', a.sort_order, sa);
+      log(db, ctx, 'UPDATE', 'parts', String(b.part_id), 'sort_order', b.sort_order, sb);
+      dirty('parts');
+      return { changed: true };
+    }
+    case 'partActive': {
+      const old = db.get('SELECT active FROM parts WHERE part_id = ?', [edit.partId]);
+      if (!old) fail('없는 파트예요.');
+      const v = edit.active ? 1 : 0;
+      if (Number(old!.active) === v) return { changed: false };
+      // 사용 중인 리소스가 거치는 파트를 끄면 공정이 끊겨 계산이 막힌다 → 먼저 공수에서 빼게 한다
+      const used = Number(db.get('SELECT count(*) AS n FROM resource_parts rp JOIN resource_types r ON r.resource_type_id = rp.resource_type_id WHERE rp.part_id = ? AND r.active = 1', [edit.partId])?.n ?? 0);
+      if (!v && used) fail(`이 파트를 거치는 리소스가 ${used}종 있어요. 리소스 공수에서 이 파트를 뺀 뒤 사용 안 함으로 두세요.`);
+      db.run('UPDATE parts SET active = ? WHERE part_id = ?', [v, edit.partId]);
+      log(db, ctx, 'UPDATE', 'parts', edit.partId, 'active', old!.active, v);
+      dirty('parts');
+      return { changed: true };
+    }
+    case 'deletePart': {
+      const old = db.get('SELECT * FROM parts WHERE part_id = ?', [edit.partId]);
+      if (!old) return { changed: false };
+      const used = Number(db.get('SELECT count(*) AS n FROM resource_parts WHERE part_id = ?', [edit.partId])?.n ?? 0);
+      if (used) fail(`이 파트를 거치는 리소스가 ${used}종 있어요. 리소스의 공수에서 이 파트를 뺀 뒤 지우거나, "사용 안 함"으로 두세요.`);
+      if (db.get('SELECT 1 AS ok FROM progress WHERE part_id = ?', [edit.partId])) fail('이 파트에 진행 실적이 있어요. "사용 안 함"으로 두세요.');
+      // 함께 지워지는 인력·겹침률·AI 비율을 남겨 되돌릴 수 있게
+      const capacity = db.all('SELECT * FROM capacity WHERE part_id = ?', [edit.partId]);
+      const overlaps = db.all('SELECT * FROM part_overlaps WHERE from_part_id = ? OR to_part_id = ?', [edit.partId, edit.partId]);
+      const mix = db.all('SELECT * FROM effort_mix WHERE part_id = ?', [edit.partId]);
+      db.run('DELETE FROM parts WHERE part_id = ?', [edit.partId]);
+      log(db, ctx, 'DELETE', 'parts', edit.partId, null, { ...old, capacity, part_overlaps: overlaps, effort_mix: mix }, undefined);
+      dirty('parts', 'capacity', 'part_overlaps', 'effort_mix');
+      return { changed: true };
+    }
+
+    // ───────── 리소스 · 공수 ─────────
+    case 'createResource': {
+      const name = edit.name.trim();
+      if (!name) fail('리소스 이름을 넣어 주세요.');
+      if (db.get('SELECT 1 AS ok FROM resource_types WHERE name = ?', [name])) fail('같은 이름의 리소스가 있어요.');
+      const groupId = groupFor(db, ctx, edit.groupName);
+      const id = nextId(db, 'resource_types', 'resource_type_id', 'R', 3);
+      const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM resource_types')?.s ?? 0) + 1;
+      const row = { resource_type_id: id, group_id: groupId, name, sort_order: sortOrder, active: 1 };
+      db.run('INSERT INTO resource_types (resource_type_id, group_id, name, sort_order, active) VALUES (?, ?, ?, ?, ?)', [id, groupId, name, sortOrder, 1]);
+      log(db, ctx, 'INSERT', 'resource_types', id, null, undefined, row);
+      dirty('resource_types');
+      return { changed: true, createdId: id };
+    }
+    case 'renameResource': {
+      const name = edit.name.trim();
+      if (!name) fail('리소스 이름을 넣어 주세요.');
+      const old = db.get('SELECT name FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      if (!old) fail('없는 리소스예요.');
+      if (old!.name === name) return { changed: false };
+      if (db.get('SELECT 1 AS ok FROM resource_types WHERE name = ? AND resource_type_id <> ?', [name, edit.resourceTypeId])) fail('같은 이름의 리소스가 있어요.');
+      db.run('UPDATE resource_types SET name = ? WHERE resource_type_id = ?', [name, edit.resourceTypeId]);
+      log(db, ctx, 'UPDATE', 'resource_types', edit.resourceTypeId, 'name', old!.name, name);
+      dirty('resource_types');
+      return { changed: true };
+    }
+    case 'resourceGroup': {
+      const old = db.get('SELECT group_id FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      if (!old) fail('없는 리소스예요.');
+      const groupId = groupFor(db, ctx, edit.groupName);
+      if (old!.group_id === groupId) return { changed: false };
+      db.run('UPDATE resource_types SET group_id = ? WHERE resource_type_id = ?', [groupId, edit.resourceTypeId]);
+      log(db, ctx, 'UPDATE', 'resource_types', edit.resourceTypeId, 'group_id', old!.group_id, groupId);
+      dirty('resource_types');
+      return { changed: true };
+    }
+    case 'renameGroup': {
+      const name = edit.name.trim();
+      if (!name) fail('분류 이름을 넣어 주세요.');
+      const old = db.get('SELECT name FROM resource_groups WHERE group_id = ?', [edit.groupId]);
+      if (!old) fail('없는 분류예요.');
+      if (old!.name === name) return { changed: false };
+      if (db.get('SELECT 1 AS ok FROM resource_groups WHERE name = ? AND group_id <> ?', [name, edit.groupId])) fail('같은 이름의 분류가 있어요.');
+      db.run('UPDATE resource_groups SET name = ? WHERE group_id = ?', [name, edit.groupId]);
+      log(db, ctx, 'UPDATE', 'resource_groups', edit.groupId, 'name', old!.name, name);
+      return { changed: true };
+    }
+    case 'resourceActive': {
+      const old = db.get('SELECT active FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      if (!old) fail('없는 리소스예요.');
+      const v = edit.active ? 1 : 0;
+      if (Number(old!.active) === v) return { changed: false };
+      db.run('UPDATE resource_types SET active = ? WHERE resource_type_id = ?', [v, edit.resourceTypeId]);
+      log(db, ctx, 'UPDATE', 'resource_types', edit.resourceTypeId, 'active', old!.active, v);
+      dirty('resource_types');
+      return { changed: true };
+    }
+    case 'deleteResource': {
+      const old = db.get('SELECT * FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      if (!old) return { changed: false };
+      const used = ['volumes', 'type_templates', 'progress'].filter(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [edit.resourceTypeId]));
+      if (used.length) fail('물량·유형 템플릿·실적에 쓰이는 리소스예요. 그곳에서 뺀 뒤 지우거나 "사용 안 함"으로 두세요.');
+      const resourceParts = db.all('SELECT * FROM resource_parts WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      db.run('DELETE FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
+      log(db, ctx, 'DELETE', 'resource_types', edit.resourceTypeId, null, { ...old, resource_parts: resourceParts, efforts }, undefined);
+      dirty('resource_types', 'resource_parts', 'efforts');
+      return { changed: true };
+    }
+    case 'effort': {
+      // 기본 공수를 비우면 그 파트를 거치지 않는다(거치는 파트·공수를 지운다). 0은 "거치지만 할 일 없음"
+      if (edit.days != null && !(Number.isFinite(edit.days) && edit.days >= 0 && edit.days < 10000)) fail('공수는 0 이상의 숫자예요.');
+      if (!db.get('SELECT 1 AS ok FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId])) fail('없는 리소스예요.');
+      if (!db.get('SELECT 1 AS ok FROM parts WHERE part_id = ?', [edit.partId])) fail('없는 파트예요.');
+      const key = `${edit.resourceTypeId}|${edit.partId}`;
+      const rp = db.get('SELECT * FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
+      const cur = db.get('SELECT days FROM efforts WHERE resource_type_id = ? AND part_id = ? AND profile_id = ?', [edit.resourceTypeId, edit.partId, edit.profileId]);
+      if (edit.profileId === 'BASE' && edit.days == null) {
+        if (!rp) return { changed: false };
+        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 진행 실적이 있어 뺄 수 없어요. 공수를 0으로 두세요.');
+        const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
+        db.run('DELETE FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
+        log(db, ctx, 'DELETE', 'resource_parts', key, null, { ...rp, efforts }, undefined);
+        dirty('resource_parts', 'efforts');
+        return { changed: true };
+      }
+      if (edit.profileId === 'AI' && edit.days == null) {
+        if (!cur) return { changed: false };
+        db.run("DELETE FROM efforts WHERE resource_type_id = ? AND part_id = ? AND profile_id = 'AI'", [edit.resourceTypeId, edit.partId]);
+        log(db, ctx, 'DELETE', 'efforts', `${key}|AI`, null, { resource_type_id: edit.resourceTypeId, part_id: edit.partId, profile_id: 'AI', days: cur.days }, undefined);
+        dirty('efforts');
+        return { changed: true };
+      }
+      if (!rp) {
+        if (edit.profileId === 'AI') fail('기본 공수를 먼저 넣어 주세요.');
+        const row = { resource_type_id: edit.resourceTypeId, part_id: edit.partId, rework_rate: 0 };
+        db.run('INSERT INTO resource_parts (resource_type_id, part_id, rework_rate) VALUES (?, ?, 0)', [edit.resourceTypeId, edit.partId]);
+        log(db, ctx, 'INSERT', 'resource_parts', key, null, undefined, row);
+      }
+      if (edit.profileId === 'AI' && !db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'")) {
+        const prof = { profile_id: 'AI', name: 'AI 사용 시', sort_order: 2 };
+        db.run("INSERT INTO effort_profiles (profile_id, name, sort_order) VALUES ('AI', 'AI 사용 시', 2)");
+        log(db, ctx, 'INSERT', 'effort_profiles', 'AI', null, undefined, prof);
+      }
+      if (cur && Number(cur.days) === edit.days) return { changed: !rp };
+      if (cur) {
+        db.run('UPDATE efforts SET days = ? WHERE resource_type_id = ? AND part_id = ? AND profile_id = ?', [edit.days, edit.resourceTypeId, edit.partId, edit.profileId]);
+        log(db, ctx, 'UPDATE', 'efforts', `${key}|${edit.profileId}`, 'days', Number(cur.days), edit.days);
+      } else {
+        const row = { resource_type_id: edit.resourceTypeId, part_id: edit.partId, profile_id: edit.profileId, days: edit.days };
+        db.run('INSERT INTO efforts (resource_type_id, part_id, profile_id, days) VALUES (?, ?, ?, ?)', [edit.resourceTypeId, edit.partId, edit.profileId, edit.days]);
+        log(db, ctx, 'INSERT', 'efforts', `${key}|${edit.profileId}`, null, undefined, row);
+      }
+      dirty('resource_parts', 'efforts');
+      return { changed: true };
+    }
+    case 'aiShare': {
+      if (!(Number.isFinite(edit.share) && edit.share >= 0 && edit.share <= 1)) fail('AI 활용 비율은 0~100%예요.');
+      if (!db.get('SELECT 1 AS ok FROM parts WHERE part_id = ?', [edit.partId])) fail('없는 파트예요.');
+      const share = Math.round(edit.share * 1000) / 1000;
+      const rows = db.all('SELECT * FROM effort_mix WHERE part_id = ?', [edit.partId]);
+      const cur = Number(rows.find(r => r.profile_id === 'AI')?.share ?? 0);
+      if (rows.every(r => r.profile_id === 'BASE' || r.profile_id === 'AI') && Math.abs(cur - share) < 1e-9 && (share === 0 || rows.length === 2)) return { changed: false };
+      if (share > 0 && !db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'")) {
+        db.run("INSERT INTO effort_profiles (profile_id, name, sort_order) VALUES ('AI', 'AI 사용 시', 2)");
+        log(db, ctx, 'INSERT', 'effort_profiles', 'AI', null, undefined, { profile_id: 'AI', name: 'AI 사용 시', sort_order: 2 });
+      }
+      // 지금 섞는 비율을 지우고(0이면 비율 없음 = 기본 공수만) 새로 넣는다
+      for (const r of rows) {
+        db.run('DELETE FROM effort_mix WHERE part_id = ? AND profile_id = ?', [edit.partId, r.profile_id]);
+        log(db, ctx, 'DELETE', 'effort_mix', `${edit.partId}|${r.profile_id}`, null, r, undefined);
+      }
+      if (share > 0) {
+        for (const [profile, v] of [['BASE', Math.round((1 - share) * 1000) / 1000], ['AI', share]] as const) {
+          const row = { part_id: edit.partId, profile_id: profile, share: v };
+          db.run('INSERT INTO effort_mix (part_id, profile_id, share) VALUES (?, ?, ?)', [edit.partId, profile, v]);
+          log(db, ctx, 'INSERT', 'effort_mix', `${edit.partId}|${profile}`, null, undefined, row);
+        }
+      }
+      dirty('effort_mix');
+      return { changed: true };
+    }
+    case 'rework': {
+      if (!(Number.isFinite(edit.rate) && edit.rate >= 0 && edit.rate <= 1)) fail('재작업률은 0~100%예요.');
+      const old = db.get('SELECT rework_rate FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
+      if (!old) fail('이 리소스가 거치지 않는 파트예요.');
+      if (Number(old!.rework_rate) === edit.rate) return { changed: false };
+      db.run('UPDATE resource_parts SET rework_rate = ? WHERE resource_type_id = ? AND part_id = ?', [edit.rate, edit.resourceTypeId, edit.partId]);
+      log(db, ctx, 'UPDATE', 'resource_parts', `${edit.resourceTypeId}|${edit.partId}`, 'rework_rate', Number(old!.rework_rate), edit.rate);
+      dirty('resource_parts');
+      return { changed: true };
+    }
   }
+}
+
+/** 분류 이름 → 분류 ID(없으면 만든다). 빈 이름이면 분류 없음 */
+function groupFor(db: SqlDb, ctx: EditContext, groupName: string): string | null {
+  const name = groupName.trim();
+  if (!name) return null;
+  const found = db.get('SELECT group_id FROM resource_groups WHERE name = ?', [name]);
+  if (found) return String(found.group_id);
+  const id = nextId(db, 'resource_groups', 'group_id', 'G', 2);
+  const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM resource_groups')?.s ?? 0) + 1;
+  const row = { group_id: id, name, sort_order: sortOrder };
+  db.run('INSERT INTO resource_groups (group_id, name, sort_order) VALUES (?, ?, ?)', [id, name, sortOrder]);
+  log(db, ctx, 'INSERT', 'resource_groups', id, null, undefined, row);
+  return id;
 }

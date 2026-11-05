@@ -1,5 +1,6 @@
 // 엑셀로 내보내기: 보고용 결과 + 데이터. 시트 이름과 머리글은 한국어.
 import type { SqlDb } from './db.ts';
+import { readModeNames } from './modes.ts';
 import type { PlanMode } from '../engine/types.ts';
 import type { ProjectSession } from './pipeline.ts';
 import { planView, capacityView } from './plan.ts';
@@ -8,10 +9,11 @@ import type { Cell } from './xlsx-write.ts';
 
 const STATUS: Record<string, string> = { ON_TRACK: '목표 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '기간 안에 못 끝냄', NO_RELEASE_DATE: '출시일 없음' };
 const LIFE: Record<string, string> = { PLANNED: '계획', IN_PROGRESS: '진행 중', DONE: '완료', CANCELLED: '취소' };
-const MODE: Record<PlanMode, string> = { MIN: '최저안', TARGET: '목표안', STRETCH: '확장안' };
 const r1 = (x: number | null | undefined) => (x == null ? null : Math.round(x * 10) / 10);
 
 export function exportSheets(db: SqlDb, session: ProjectSession, planMode: PlanMode = 'TARGET'): Record<string, Cell[][]> {
+  // 물량 템플릿 이름은 프로젝트마다 다르다(최소안·기본안·최대안이 기본)
+  const MODE = readModeNames(db);
   const v = planView(db, session, planMode);
   const meta = Object.fromEntries(db.all('SELECT key, value FROM meta').map(r => [String(r.key), r.value]));
   const sheets: Record<string, Cell[][]> = {};
@@ -28,7 +30,7 @@ export function exportSheets(db: SqlDb, session: ProjectSession, planMode: PlanM
   ];
 
   sheets['업데이트 전망'] = [
-    ['순위', '업데이트', '유형', '상태', '작업 시작', '제작 완료 목표', '출시', '목표 물량', '필요 공수(인·일)', `완료 예정(${MODE[planMode]})`, '최저안 완료', '확장안 완료', '판정', '늦은 영업일', '근거 파트', '근거 리소스'],
+    ['순위', '업데이트', '유형', '상태', '작업 시작', '제작 완료 목표', '출시', `${MODE.TARGET} 물량`, '필요 공수(인·일)', `완료 예정(${MODE[planMode]})`, `${MODE.MIN} 완료`, `${MODE.STRETCH} 완료`, '판정', '늦은 영업일', '근거 파트', '근거 리소스'],
     ...v.rows.map(r => [
       r.live ? r.priority : null, r.name, r.typeName, LIFE[r.status] ?? r.status, r.startDate, r.freezeDate, r.releaseDate, r.totals.target,
       r1(r.result?.requiredDays), r.result?.completion ?? (r.result ? '기간 밖' : null), r.range?.min ?? null, r.range?.stretch ?? null,
@@ -49,7 +51,7 @@ export function exportSheets(db: SqlDb, session: ProjectSession, planMode: PlanM
   ];
 
   sheets['물량'] = [
-    ['업데이트', '분류', '리소스', '최저', '목표', '확장', '외주', '필수', '업데이트 안 순위', '난이도', '재사용률'],
+    ['업데이트', '분류', '리소스', MODE.MIN, MODE.TARGET, MODE.STRETCH, '외주', '필수', '업데이트 안 순위', '난이도', '재사용률'],
     ...db.all(`SELECT u.name AS u, coalesce(g.name, '') AS g, r.name AS r, v.* FROM volumes v
         JOIN updates u ON u.update_id = v.update_id JOIN resource_types r ON r.resource_type_id = v.resource_type_id
         LEFT JOIN resource_groups g ON g.group_id = r.group_id ORDER BY u.priority, u.sort_order, g.sort_order, r.sort_order`)

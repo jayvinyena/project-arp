@@ -148,7 +148,7 @@ test('최저 물량 동작: 목표·최대를 최저로 맞추는 변경 줄, �
   const rows = db.all("SELECT field, value_json, label FROM scenario_changes WHERE scenario_id = ?", [id]);
   const mins = db.all("SELECT * FROM volumes WHERE update_id = 'LAUNCH' AND min_qty IS NOT NULL");
   assert.equal(rows.length, mins.length * 2);
-  assert.match(rows[0].label, /런칭 모든 리소스를 최저 물량으로/);
+  assert.match(rows[0].label, /런칭 모든 리소스를 최소안 물량으로/);
   const v = compareScenarios(db, session, [id]);
   raw.close();
   assert.ok(v.rows.find(x => x.updateId === 'LAUNCH').cells[1].delta < 0, '물량을 줄이면 당겨진다');

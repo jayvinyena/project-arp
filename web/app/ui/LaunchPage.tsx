@@ -6,9 +6,12 @@ import type { LaunchEdit, MaxScaleResult, HeadcountResult, ModeOutcome } from '.
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
 import { fmtDate, fmtShortDate, fmtDays, fmtPct, fmtHeads, fmtInt } from '../lib/format.ts';
 import { VolumeTable } from './VolumeTable.tsx';
+import { Field } from './SetupPage.tsx';
+import type { Edit } from '../../../core/edits.ts';
 import { IconAlert, IconSpark, IconUsers } from './icons.tsx';
 
-export const MODE_LABEL: Record<PlanMode, string> = { MIN: '최저안', TARGET: '목표안', STRETCH: '확장안' };
+import { MODE_LABEL } from '../lib/modes.ts';
+export { MODE_LABEL };
 const STATUS: Record<UpdateStatus, { text: string; tone: string }> = {
   ON_TRACK: { text: '목표 안', tone: 'ok' },
   TIGHT: { text: '빠듯해요', tone: 'warn' },
@@ -36,7 +39,7 @@ function horizonEndText(month: string): string {
 
 function ModeCards(props: { modes: ModeOutcome[]; selected: PlanMode; onSelect: (m: PlanMode) => void; deadlineLabel: string; horizonEnd: string }) {
   return (
-    <div class="grid-3" role="radiogroup" aria-label="물량 구간">
+    <div class="grid-3" role="radiogroup" aria-label="물량 템플릿">
       {props.modes.map(m => {
         const st = m.launch ? STATUS[m.launch.status] : null;
         const unfinished = m.launch?.status === 'UNFINISHED';
@@ -165,6 +168,7 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
 
 export function LaunchPage(props: {
   view: View; version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean; onEdit: (e: LaunchEdit) => unknown;
+  onApply?: (e: Edit) => Promise<boolean>;
 }) {
   const { snapshot, compare } = props.view;
   const launch = snapshot.launch;
@@ -195,7 +199,7 @@ export function LaunchPage(props: {
         <div>
           <div class="eyebrow">런칭 물량 설계</div>
           <h1>{launch.name}</h1>
-          <p class="muted" style="margin-top: 6px">물량 구간별로 아트 작업이 언제 끝나는지, 어느 파트가 막히는지 봐요.</p>
+          <p class="muted" style="margin-top: 6px">물량 템플릿 세 가지({MODE_LABEL.MIN} · {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH})를 골라 보며, 아트 작업이 언제 끝나는지와 어느 파트가 막히는지 봐요.</p>
         </div>
         <div class="dates">
           {date('start_date', '작업 시작', launch.startDate)}
@@ -215,9 +219,24 @@ export function LaunchPage(props: {
         </div>
       )}
 
+      {(compare.blocked || compare.modes.length === 0) && (
+        <div class="segmented wide" role="radiogroup" aria-label="물량 템플릿" style="margin-bottom: 4px">
+          {(['MIN', 'TARGET', 'STRETCH'] as PlanMode[]).map(m => (
+            <button type="button" role="radio" aria-checked={props.planMode === m} class={props.planMode === m ? 'on' : ''} onClick={() => props.setPlanMode(m)}>{MODE_LABEL[m]}</button>
+          ))}
+        </div>
+      )}
       {!compare.blocked && compare.modes.length > 0 && (
         <>
           <ModeCards modes={compare.modes} selected={props.planMode} onSelect={props.setPlanMode} deadlineLabel={deadlineLabel} horizonEnd={snapshot.horizon.end} />
+          {props.onApply && !props.readOnly && (
+            <div class="template-bar">
+              <span class="small faint">고른 템플릿 이름</span>
+              <Field class="field template-name" value={MODE_LABEL[props.planMode]} label="템플릿 이름"
+                onCommit={t => props.onApply!({ kind: 'modeName', mode: props.planMode, name: t })} />
+              <span class="small faint">예: 보수안 · 계획안 · 도전안. 이름은 이 프로젝트의 모든 화면과 엑셀에 쓰여요.</span>
+            </div>
+          )}
           <div class="grid-2">
             <PartLoad mode={selected} />
             <Reverse planMode={props.planMode} version={props.version} names={names} resNames={resNames} deadlineLabel={deadlineLabel} />
@@ -236,6 +255,7 @@ export function LaunchPage(props: {
         blocked={compare.blocked}
         readOnly={props.readOnly}
         onEdit={props.onEdit}
+        onCopy={props.onApply ? (from, to) => props.onApply!({ kind: 'copyQty', updateId: launch.updateId, from, to }) : undefined}
       />
       <p class="small faint">계산 {fmtDays(compare.ms)}ms · 데이터 버전 {snapshot.dataVersion}</p>
     </div>

@@ -206,16 +206,17 @@ export const RULES = [
 
   // ───────── 물량 ─────────
   {
-    code: 'V01', level: 'ERROR', title: '최저·목표·확장 중 빈칸이 있다',
-    fix: '세 값을 모두 입력한다. 구간이 없으면 세 값을 같게 둔다.',
+    code: 'V01', level: 'ERROR', title: '물량 템플릿 세 개 중 빈칸이 있다',
+    fix: '세 템플릿(기본 이름: 최소안·기본안·최대안)의 수량을 모두 입력한다. 나눌 필요가 없으면 세 값을 같게 둔다.',
     sql: q(`SELECT update_id || '|' || resource_type_id AS key,
-        printf('최저 %s · 목표 %s · 확장 %s', coalesce(min_qty, '빈칸'), coalesce(target_qty, '빈칸'), coalesce(stretch_qty, '빈칸')) AS detail
+        printf('템플릿1 %s · 템플릿2 %s · 템플릿3 %s', coalesce(min_qty, '빈칸'), coalesce(target_qty, '빈칸'), coalesce(stretch_qty, '빈칸')) AS detail
       FROM live_volumes WHERE min_qty IS NULL OR target_qty IS NULL OR stretch_qty IS NULL`),
   },
   {
-    code: 'V02', level: 'ERROR', title: '최저 ≤ 목표 ≤ 확장이 아니다',
-    fix: '0 ≤ 최저 ≤ 목표 ≤ 확장으로 고친다.',
-    sql: q(`SELECT update_id || '|' || resource_type_id AS key, printf('최저 %d · 목표 %d · 확장 %d', min_qty, target_qty, stretch_qty) AS detail
+    // 템플릿은 이름 붙은 수량 묶음이라 순서를 일부러 다르게 둘 수 있다 → 계산을 막지 않는 주의(2026-11-05)
+    code: 'V02', level: 'WARN', title: '템플릿 수량이 1 ≤ 2 ≤ 3 순서가 아니다',
+    fix: '보통은 템플릿1(최소안) ≤ 템플릿2(기본안) ≤ 템플릿3(최대안)으로 둔다. 일부러 다르게 둔 것이면 그대로 둬도 계산된다.',
+    sql: q(`SELECT update_id || '|' || resource_type_id AS key, printf('템플릿1 %d · 템플릿2 %d · 템플릿3 %d', min_qty, target_qty, stretch_qty) AS detail
       FROM live_volumes WHERE min_qty IS NOT NULL AND target_qty IS NOT NULL AND stretch_qty IS NOT NULL
         AND NOT (0 <= min_qty AND min_qty <= target_qty AND target_qty <= stretch_qty)`),
   },
@@ -227,8 +228,8 @@ export const RULES = [
   },
   {
     code: 'V04', level: 'WARN', title: '외주 수량이 물량보다 많다',
-    fix: '외주 수량을 확장 물량 이하로 고친다. 넘는 만큼은 계산에서 0으로 본다.',
-    sql: q(`SELECT update_id || '|' || resource_type_id AS key, printf('외주 %d > 확장 %d', outsource_qty, stretch_qty) AS detail
+    fix: '외주 수량을 템플릿3(최대안) 물량 이하로 고친다. 넘는 만큼은 계산에서 0으로 본다.',
+    sql: q(`SELECT update_id || '|' || resource_type_id AS key, printf('외주 %d > 템플릿3 %d', outsource_qty, stretch_qty) AS detail
       FROM live_volumes WHERE stretch_qty IS NOT NULL AND outsource_qty > stretch_qty`),
   },
   {
@@ -302,9 +303,9 @@ export const RULES = [
   // ───────── 유형 템플릿 ─────────
   {
     code: 'T01', level: 'WARN', title: '유형 템플릿 물량이 비었거나 순서가 틀렸다',
-    fix: '템플릿의 최저 ≤ 목표 ≤ 확장을 맞춘다. 이 템플릿으로 만드는 새 업데이트가 같은 문제를 갖게 된다.',
+    fix: '세 수량(최소안·기본안·최대안)을 채우고 보통은 작은 것부터 둔다. 이 템플릿으로 만드는 새 업데이트가 같은 값을 받는다.',
     sql: q(`SELECT update_type_id || '|' || resource_type_id AS key,
-        printf('최저 %s · 목표 %s · 확장 %s', coalesce(min_qty, '빈칸'), coalesce(target_qty, '빈칸'), coalesce(stretch_qty, '빈칸')) AS detail
+        printf('템플릿1 %s · 템플릿2 %s · 템플릿3 %s', coalesce(min_qty, '빈칸'), coalesce(target_qty, '빈칸'), coalesce(stretch_qty, '빈칸')) AS detail
       FROM type_templates WHERE min_qty IS NULL OR target_qty IS NULL OR stretch_qty IS NULL
         OR NOT (0 <= min_qty AND min_qty <= target_qty AND target_qty <= stretch_qty)`),
   },

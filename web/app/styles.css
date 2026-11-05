@@ -598,3 +598,24 @@ table.grid.advisor-table { min-width: 560px; }
   .advice-steps li > .small { grid-column: 2 / span 2; grid-row: 2; }
   .advisor-verdict { flex-wrap: wrap; }
 }
+
+/* 물량 템플릿 · 프로젝트·파트·리소스 */
+.template-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -4px 0 4px; }
+.template-bar .template-name { width: 160px; font-weight: 600; }
+col.others-col { width: 190px; }
+td.others { white-space: nowrap; }
+td.others .other { display: inline-flex; gap: 4px; margin-left: 10px; font-size: 12px; color: var(--text-2); }
+td.others .other.blank .num { color: var(--bad); }
+.setup-project { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px 20px; align-items: start; }
+.setup-project .form-row:last-child { grid-column: 1 / -1; }
+table.grid.setup-parts { min-width: 720px; }
+table.grid.setup-res { min-width: 760px; }
+.effort-pair { display: inline-flex; gap: 4px; }
+.effort-pair .qty { width: 58px; border: 1px solid var(--line); }
+.effort-pair .qty.ai { border-style: dashed; color: var(--accent-ink); }
+.field.group-name { height: 26px; font-weight: 650; background: transparent; border-color: transparent; padding-left: 0; }
+.field.group-name:hover, .field.group-name:focus { border-color: var(--line-strong); background: var(--surface); padding-left: 8px; }
+.nowrap { flex-wrap: nowrap; }
+@media (max-width: 640px) {
+  td.others .other { margin-left: 0; margin-right: 8px; }
+}

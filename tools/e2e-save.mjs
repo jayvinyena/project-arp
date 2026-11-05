@@ -28,7 +28,7 @@ await withBrowser(async (cdp, base) => {
   check('열 때 편집 중 표시를 파일에 저장', true, await cdp.eval(saveText));
 
   // 2. 고치기 → 저장 대기 → 2초 뒤 자동 저장
-  await setQty(cdp, '배경 맵 목표', 5);
+  await setQty(cdp, '배경 맵 기본안', 5);
   let dirtyOk = true;
   try { await cdp.waitUntil(`${saveText}.includes('저장 대기')`, 3000); } catch { dirtyOk = false; }
   check('고치면 저장 대기', dirtyOk, await cdp.eval(saveText));
@@ -40,7 +40,7 @@ await withBrowser(async (cdp, base) => {
   // 3. 다시 열면(파일 그대로) 고친 값이 남아 있다
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
-  const kept = await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').value`);
+  const kept = await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').value`);
   check('다시 열면 고친 값(5)이 남아 있다', kept === '5', `값 ${kept}`);
 
   // 4. 다른 곳에서 파일이 바뀌면 덮어쓰지 않는다
@@ -52,7 +52,7 @@ await withBrowser(async (cdp, base) => {
     await new Promise(r => setTimeout(r, 50));
     const w = await h.createWritable(); await w.write(bytes); await w.close(); // 같은 내용이라도 수정 시각이 바뀐다
   })()`);
-  await setQty(cdp, '배경 맵 목표', 6);
+  await setQty(cdp, '배경 맵 기본안', 6);
   await cdp.waitUntil(`${saveText}.includes('충돌')`, 8000);
   check('다른 곳에서 바뀌면 저장 거부(충돌)', await cdp.eval("Boolean(document.querySelector('.banner.bad'))"));
   check('충돌이면 "다른 이름으로 저장"으로 빠져나갈 수 있다', await cdp.eval("[...document.querySelectorAll('.banner.bad button')].some(b => b.textContent.includes('다른 이름으로 저장'))"));
@@ -63,7 +63,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil(ready);
   await sleep(500);
   const ro = await cdp.eval("document.querySelector('.banner.warn')?.textContent ?? ''");
-  const disabled = await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').disabled`);
+  const disabled = await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').disabled`);
   check('다른 사람이 편집 중이면 읽기 전용', ro.includes('검사자') && disabled, ro.slice(0, 40));
 
   // 6. 같은 이름이라도 다른 PC(브라우저)에서 편집 중이면 읽기 전용, 원래 PC면 고칠 수 있다
@@ -72,12 +72,12 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
   await sleep(500);
-  check('같은 이름 · 다른 PC면 읽기 전용', await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').disabled`));
+  check('같은 이름 · 다른 PC면 읽기 전용', await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').disabled`));
   await cdp.eval(`localStorage.setItem('arp.device', ${JSON.stringify(device)})`);
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
   await sleep(500);
-  check('같은 이름 · 같은 PC면 고칠 수 있다', !(await cdp.eval(`document.querySelector('input[aria-label="배경 맵 목표"]').disabled`)));
+  check('같은 이름 · 같은 PC면 고칠 수 있다', !(await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').disabled`)));
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(r => !r.ok).length;

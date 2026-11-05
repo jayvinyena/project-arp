@@ -29,7 +29,7 @@ function scaleOf(months: string[]) {
 
 export function ModeSwitch(props: { value: PlanMode; onChange: (m: PlanMode) => void }) {
   return (
-    <div class="segmented wide" role="radiogroup" aria-label="물량 구간">
+    <div class="segmented wide" role="radiogroup" aria-label="물량 템플릿">
       {(['MIN', 'TARGET', 'STRETCH'] as PlanMode[]).map(m => (
         <button type="button" role="radio" aria-checked={props.value === m} class={props.value === m ? 'on' : ''} onClick={() => props.onChange(m)}>{MODE_LABEL[m]}</button>
       ))}
@@ -48,7 +48,7 @@ function Timeline(props: { view: PlanView; onOpen: (id: string) => void }) {
   return (
     <section class="card">
       <div class="card-head">
-        <div><h2>타임라인</h2><p class="small muted" style="margin-top: 2px">막대 = 작업 시작 ~ 완료 예정, 가는 선 = 최저안 ~ 확장안 전망 범위</p></div>
+        <div><h2>타임라인</h2><p class="small muted" style="margin-top: 2px">막대 = 작업 시작 ~ 완료 예정, 가는 선 = {MODE_LABEL.MIN} ~ {MODE_LABEL.STRETCH} 전망 범위</p></div>
         <div class="legend">
           <span><i class="lg-freeze" />제작 완료 목표</span><span><i class="lg-release" />출시</span>
         </div>
@@ -174,7 +174,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
           <table class="grid list">
             <thead><tr>
               <th class="n" style="width: 96px">순위</th><th>업데이트</th><th class="n">시작</th><th class="n">제작 완료 목표</th><th class="n">출시</th>
-              <th class="n">목표 물량</th><th class="n">완료 예정 · 범위</th><th>판정 · 근거</th>
+              <th class="n">{MODE_LABEL.TARGET} 물량</th><th class="n">완료 예정 · 범위</th><th>판정 · 근거</th>
             </tr></thead>
             <tbody>
               {live.map(row)}
@@ -289,6 +289,7 @@ function UpdateDrawer(props: {
                 blocked={!!data?.days?.blocked}
                 readOnly={props.readOnly}
                 onEdit={e => apply({ ...e, updateId: d.updateId } as Edit)}
+                onCopy={props.readOnly ? undefined : (from, to) => apply({ kind: 'copyQty', updateId: d.updateId, from, to })}
               />
               {!d.isLaunch && !props.readOnly && (
                 <div class="danger-zone">

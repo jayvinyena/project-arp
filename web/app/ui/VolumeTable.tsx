@@ -1,4 +1,5 @@
-// 런칭 물량 표: 분류별 묶음, 칸 안에서 바로 고치기(Enter·칸 벗어나면 반영, Esc 되돌리기)
+// 물량 표: 분류별 묶음, 칸 안에서 바로 고치기(Enter·칸 벗어나면 반영, Esc 되돌리기).
+// 물량 템플릿(최소안·기본안·최대안 등, 이름은 프로젝트마다) 중 고른 하나의 수량만 크게 보고 입력하고, 나머지 둘은 흐리게 함께 보여 준다.
 import { useState, useEffect } from 'preact/hooks';
 import type { LaunchEdit, LaunchRow } from '../../../core/launch.ts';
 
@@ -8,6 +9,8 @@ import type { PlanMode } from '../../../engine/types.ts';
 import { fmtDays, fmtInt } from '../lib/format.ts';
 import { IconPlus, IconX } from './icons.tsx';
 import { afterCommit } from './commit.ts';
+import { MODE_LABEL } from '../lib/modes.ts';
+import { PLAN_MODES, MODE_FIELD } from '../../../core/modes.ts';
 
 type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 
@@ -59,6 +62,8 @@ export function VolumeTable(props: {
   blocked: boolean;
   readOnly: boolean;
   onEdit: (e: VolumeEdit) => unknown;
+  /** 다른 템플릿의 수량을 지금 템플릿으로 가져오기(없으면 버튼을 숨긴다) */
+  onCopy?: (from: 'min_qty' | 'target_qty' | 'stretch_qty', to: 'min_qty' | 'target_qty' | 'stretch_qty') => unknown;
 }) {
   const { byResource, totalDays, readOnly, onEdit } = props;
   const launchId = props.updateId;
@@ -75,16 +80,28 @@ export function VolumeTable(props: {
     const last = groups[groups.length - 1];
     if (last && last.name === r.groupName) last.rows.push(r); else groups.push({ name: r.groupName, rows: [r] });
   }
-  const modeLabel = { MIN: '최저안', TARGET: '목표안', STRETCH: '확장안' }[props.planMode];
-  const edit = (r: LaunchRow, field: QtyField) => (value: number | null) => onEdit({ kind: 'volume', resourceTypeId: r.resourceTypeId, field, value });
+  const modeLabel = MODE_LABEL[props.planMode];
+  const field = MODE_FIELD[props.planMode];
+  const others = PLAN_MODES.filter(m => m !== props.planMode);
+  const qtyOf = (r: LaunchRow, m: typeof props.planMode) => (m === 'MIN' ? r.min : m === 'TARGET' ? r.target : r.stretch);
+  const edit = (r: LaunchRow, f: QtyField) => (value: number | null) => onEdit({ kind: 'volume', resourceTypeId: r.resourceTypeId, field: f, value });
 
   return (
     <section class={props.bare ? 'bare' : 'card'} aria-label="물량">
       <div class="card-head">
         <div>
           <h2>물량</h2>
-          <p class="small muted" style="margin-top: 2px">리소스 {props.rows.length}종 · 숫자를 고치면 바로 다시 계산해요</p>
+          <p class="small muted" style="margin-top: 2px">리소스 {props.rows.length}종 · <b>{modeLabel}</b> 수량을 보고 고쳐요. 숫자를 고치면 바로 다시 계산해요</p>
         </div>
+        <div class="inline">
+        {!readOnly && props.onCopy && (
+          <button type="button" class="btn sm" title={`${modeLabel} 수량을 ${others.map(m => MODE_LABEL[m]).join('·')}에도 그대로 넣어요(되돌리기 가능)`}
+            onClick={async () => { for (const m of others) await props.onCopy!(field, MODE_FIELD[m]); }}>다른 템플릿에도 똑같이</button>
+        )}
+        {!readOnly && props.onCopy && others.map(m => (
+          <button type="button" class="btn sm ghost" title={`${MODE_LABEL[m]}의 수량을 모두 ${modeLabel}으로 가져와요(되돌리기 가능)`}
+            onClick={() => props.onCopy!(MODE_FIELD[m], field)}>{MODE_LABEL[m]} 수량 가져오기</button>
+        ))}
         {!readOnly && props.addable.length > 0 && (
           <label class="btn sm" style="position: relative">
             <IconPlus /> 리소스 더하기
@@ -102,17 +119,17 @@ export function VolumeTable(props: {
             </select>
           </label>
         )}
+        </div>
       </div>
       <div class="card-body" style="padding-top: 8px">
         <div class="table-wrap">
           <table class="grid vol">
-            <colgroup><col /><col class="qty-col" /><col class="qty-col" /><col class="qty-col" /><col class="qty-col" /><col class="days-col" /><col class="act-col" /></colgroup>
+            <colgroup><col /><col class="qty-col" /><col class="others-col" /><col class="qty-col" /><col class="days-col" /><col class="act-col" /></colgroup>
             <thead>
               <tr>
                 <th>리소스 · 거치는 파트(완료)</th>
-                <th class="n">최저</th>
-                <th class="n">목표</th>
-                <th class="n">확장</th>
+                <th class="n">{modeLabel}</th>
+                <th class="n others-head">다른 템플릿</th>
                 <th class="n">외주</th>
                 <th class="n">필요 공수 · {modeLabel}</th>
                 <th aria-label="행 작업" />
@@ -121,10 +138,10 @@ export function VolumeTable(props: {
             <tbody>
               {groups.map(g => (
                 <>
-                  <tr class="group"><td colSpan={7}>{g.name}</td></tr>
+                  <tr class="group"><td colSpan={6}>{g.name}</td></tr>
                   {g.rows.map(r => {
                     const errs = rowErrors.get(r.resourceTypeId) ?? [];
-                    const orderBad = errs.some(f => f.code === 'V02' || f.code === 'V01');
+                    const blank = errs.some(f => f.code === 'V01');
                     const days = byResource[r.resourceTypeId] ?? 0;
                     return (
                       <tr class={`row${errs.some(f => f.level === 'ERROR') ? ' has-error' : ''}`} key={r.resourceTypeId}>
@@ -137,9 +154,10 @@ export function VolumeTable(props: {
                             {errs.map(f => <span class="err-text">{f.title} — {f.detail}</span>)}
                           </div>
                         </td>
-                        <td class="n" data-label="최저"><QtyInput value={r.min} field="min_qty" label={`${r.name} 최저`} nullable invalid={orderBad} disabled={readOnly} onCommit={edit(r, 'min_qty')} /></td>
-                        <td class="n" data-label="목표"><QtyInput value={r.target} field="target_qty" label={`${r.name} 목표`} nullable invalid={orderBad} disabled={readOnly} onCommit={edit(r, 'target_qty')} /></td>
-                        <td class="n" data-label="확장"><QtyInput value={r.stretch} field="stretch_qty" label={`${r.name} 확장`} nullable invalid={orderBad} disabled={readOnly} onCommit={edit(r, 'stretch_qty')} /></td>
+                        <td class="n" data-label={modeLabel}><QtyInput value={qtyOf(r, props.planMode)} field="target_qty" label={`${r.name} ${modeLabel}`} nullable invalid={blank && qtyOf(r, props.planMode) == null} disabled={readOnly} onCommit={edit(r, field)} /></td>
+                        <td class="n others" data-label="다른 템플릿">
+                          {others.map(m => <span class={`other${qtyOf(r, m) == null ? ' blank' : ''}`} title={MODE_LABEL[m]}><span class="faint">{MODE_LABEL[m]}</span> <span class="num">{qtyOf(r, m) == null ? '빈칸' : fmtInt(qtyOf(r, m)!)}</span></span>)}
+                        </td>
                         <td class="n" data-label="외주"><QtyInput value={r.outsource} field="outsource_qty" label={`${r.name} 외주`} nullable={false} disabled={readOnly} onCommit={edit(r, 'outsource_qty')} /></td>
                         <td class="n days" data-label={`필요 공수 · ${modeLabel}`}>
                           {props.blocked

@@ -4,6 +4,7 @@ import { rpc } from '../lib/rpc.ts';
 import type { CalibrationView, CalibrationPreview } from '../../../core/calibration.ts';
 import { fmtDays, fmtInt, fmtShortDate } from '../lib/format.ts';
 import { IconSpark, IconAlert } from './icons.tsx';
+import { MODE_LABEL } from '../lib/modes.ts';
 
 const pct = (r: number) => `${r >= 1 ? '+' : '−'}${Math.abs(Math.round((r - 1) * 100))}%`;
 
@@ -83,7 +84,7 @@ export function CalibrationPage(props: { version: number; readOnly: boolean; onC
               </div>
               {preview && (
                 <div class="answer" style="margin-top: 14px">
-                  <b>적용하면 · 목표안 완료 예정</b>
+                  <b>적용하면 · {MODE_LABEL.TARGET} 완료 예정</b>
                   <div class="chips" style="margin-top: 6px">
                     {preview.updates.map(u => (
                       <span class="tag">{u.name} {u.before ? fmtShortDate(u.before) : '기간 밖'} → {u.after ? fmtShortDate(u.after) : '기간 밖'}</span>

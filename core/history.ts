@@ -3,6 +3,7 @@
 import type { SqlDb } from './db.ts';
 import type { ProjectSession, EngineTable } from './pipeline.ts';
 import { validate, tableColumns } from './pipeline.ts';
+import { readModeNames } from './modes.ts';
 
 const KEYS: Record<string, string[]> = {
   part_overlaps: ['from_part_id', 'to_part_id'],
@@ -15,17 +16,31 @@ const KEYS: Record<string, string[]> = {
   progress: ['update_id', 'resource_type_id', 'part_id'],
   update_types: ['update_type_id'],
   type_templates: ['update_type_id', 'resource_type_id'],
+  parts: ['part_id'],
+  resource_groups: ['group_id'],
+  resource_types: ['resource_type_id'],
+  effort_profiles: ['profile_id'],
+  holidays: ['date'],
+  meta: ['key'],
 };
-const ENGINE = new Set(['settings', 'part_overlaps', 'resource_parts', 'efforts', 'effort_mix', 'update_types', 'updates', 'volumes', 'progress', 'capacity']);
+const ENGINE = new Set(['settings', 'part_overlaps', 'resource_parts', 'efforts', 'effort_mix', 'update_types', 'updates', 'volumes', 'progress', 'capacity', 'parts', 'resource_types', 'holidays']);
+/** 지울 때 함께 남긴 딸린 행(키 → 표). 되돌리면 이 순서로 다시 넣는다 */
+const CHILD_TABLES: [string, string][] = [
+  ['capacity', 'capacity'], ['part_overlaps', 'part_overlaps'], ['effort_mix', 'effort_mix'],
+  ['resource_parts', 'resource_parts'], ['efforts', 'efforts'],
+  ['volumes', 'volumes'], ['progress', 'progress'], ['template', 'type_templates'],
+];
 
 const TARGET_NAME: Record<string, string> = {
   volumes: '물량', updates: '업데이트', capacity: '인력', progress: '실적', update_types: '유형', type_templates: '템플릿',
   settings: '설정', part_overlaps: '겹침률', effort_mix: 'AI 비율', efforts: '공수', resource_parts: '거치는 파트',
+  parts: '파트', resource_types: '리소스', resource_groups: '분류', holidays: '휴일', meta: '프로젝트', effort_profiles: '공수 프로필',
 };
 const FIELD_NAME: Record<string, string> = {
   min_qty: '최저', target_qty: '목표', stretch_qty: '확장', outsource_qty: '외주', name: '이름', start_date: '시작', freeze_date: '제작 완료 목표',
   release_date: '출시', priority: '우선순위', days: '1개당 인·일', spent_days: '실투입', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
   productivity: '생산성', outsource_days: '외주', support_days: '지원', completed_qty: '완료', horizon: '계획 기간', share: '비율', overlap_rate: '겹침률',
+  sort_order: '순서', active: '사용', group_id: '분류', rework_rate: '재작업률', buffer_rate: '여유율', work_weekdays: '근무 요일', value: '값',
 };
 
 export interface HistoryEntry { logId: number; action: string; target: string; key: string; field: string | null; old: unknown; next: unknown }
@@ -47,6 +62,8 @@ export interface HistoryBatch {
 const parse = (v: unknown) => (v == null ? undefined : JSON.parse(String(v)));
 
 export function historyView(db: SqlDb, limit = 200): { batches: HistoryBatch[]; total: number } {
+  const MODE = readModeNames(db);
+  const QTY_NAME: Record<string, string> = { min_qty: MODE.MIN, target_qty: MODE.TARGET, stretch_qty: MODE.STRETCH };
   const total = Number(db.get('SELECT count(DISTINCT batch_id) AS n FROM change_log')?.n ?? 0);
   const ids = db.all('SELECT batch_id, min(log_id) AS first FROM change_log GROUP BY batch_id ORDER BY first DESC LIMIT ?', [limit]).map(r => String(r.batch_id));
   const undoneSet = new Set(db.all("SELECT DISTINCT reason FROM change_log WHERE reason LIKE '되돌리기: %'").map(r => String(r.reason).slice('되돌리기: '.length)));
@@ -57,7 +74,7 @@ export function historyView(db: SqlDb, limit = 200): { batches: HistoryBatch[]; 
       field: r.field == null ? null : String(r.field), old: parse(r.old_json), next: parse(r.new_json),
     }));
     const kinds = [...new Set(entries.map(e => (e.action === 'UPDATE'
-      ? `${TARGET_NAME[e.target] ?? e.target} ${FIELD_NAME[e.field ?? ''] ?? e.field ?? ''}`.trim()
+      ? `${TARGET_NAME[e.target] ?? e.target} ${QTY_NAME[e.field ?? ''] ?? FIELD_NAME[e.field ?? ''] ?? e.field ?? ''}`.trim()
       : `${TARGET_NAME[e.target] ?? e.target} ${e.action === 'INSERT' ? '추가' : '삭제'}`)))];
     const reason = rows[0]?.reason == null ? null : String(rows[0].reason);
     return {
@@ -154,21 +171,19 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
       } else {
         // 지운 행을 다시 넣는다. 업데이트는 함께 지워진 물량, 유형은 템플릿도
         const row = { ...(oldV as Record<string, unknown>) };
-        const volumes = Array.isArray(row.volumes) ? row.volumes as Record<string, unknown>[] : [];
-        const progress = Array.isArray(row.progress) ? row.progress as Record<string, unknown>[] : [];
-        const template = Array.isArray(row.template) ? row.template as Record<string, unknown>[] : [];
-        delete row.volumes;
-        delete row.progress;
-        delete row.template;
+        const children: [string, Record<string, unknown>[]][] = [];
+        for (const [k, table] of CHILD_TABLES) {
+          if (Array.isArray(row[k])) children.push([table, row[k] as Record<string, unknown>[]]);
+          delete row[k];
+        }
         if (db.get(`SELECT 1 AS ok FROM ${target} WHERE ${where(target, key).sql}`, where(target, key).params)) {
           throw new Error(`같은 ID(${key})가 이미 있어 되돌릴 수 없어요.`);
         }
         insertRow(target, row);
-        for (const v of volumes) insertRow('volumes', v);
-        for (const p of progress) insertRow('progress', p);
-        for (const t of template) insertRow('type_templates', t);
-        if (volumes.length) touched.add('volumes');
-        if (progress.length) touched.add('progress');
+        for (const [table, rows2] of children) {
+          for (const c of rows2) insertRow(table, c);
+          if (rows2.length) touched.add(table);
+        }
         log('INSERT', target, key, null, undefined, oldV);
       }
     }

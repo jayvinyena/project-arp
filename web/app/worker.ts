@@ -27,6 +27,8 @@ import { planView, typesView, capacityView, updateDetail, updateDays, progressVi
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
 import type { ScenarioOp, ScenarioAction } from '../../core/scenarios.ts';
 import { adviseDeadlines, adviceToScenario } from '../../core/advisor.ts';
+import { readModeNames } from '../../core/modes.ts';
+import { setupView } from '../../core/plan.ts';
 import type { AdvisorOptions } from '../../core/advisor.ts';
 
 export const APP_VERSION = 'arp-next 0.2.0';
@@ -247,11 +249,16 @@ const handlers: Record<string, (payload: any) => unknown> = {
     return { ...result, ms: performance.now() - t };
   },
 
+  /** 프로젝트·파트·리소스(만든 뒤 고치기) 화면 */
+  setup() {
+    return setupView(need().sql);
+  },
+
   /** 마감 맞춤 제안(원본 기준) */
   advise(p: { options: AdvisorOptions }) {
     const prepared = need().session.prepare();
     if (prepared.blocked || !prepared.data) throw new Error('계산할 수 없는 상태예요. 데이터 점검을 먼저 봐 주세요.');
-    return adviseDeadlines(prepared.data, p.options);
+    return adviseDeadlines(prepared.data, { minName: readModeNames(need().sql).MIN, ...p.options });
   },
 
   adviceScenario(p: { name: string; actions: ScenarioAction[] }) {

@@ -11,7 +11,7 @@ type Lever = 'headcount' | 'outsource' | 'volume' | 'priority';
 const LEVERS: { key: Lever; label: string; help: string }[] = [
   { key: 'headcount', label: '인원 늘리기', help: '늦는 업데이트의 시작 ~ 마감 달에 파트 인원을 0.5명씩' },
   { key: 'outsource', label: '외주 맡기기', help: '같은 기간에 파트 외주를 달마다 10인·일씩' },
-  { key: 'volume', label: '물량 줄이기', help: '선택 리소스부터, 다음은 모든 리소스를 최저 물량으로' },
+  { key: 'volume', label: '물량 줄이기', help: '선택 리소스부터, 다음은 모든 리소스를 최소안 물량으로' },
   { key: 'priority', label: '우선순위 바꾸기', help: '앞 업데이트에 여유가 있을 때만 순서를 바꿔요' },
 ];
 const KIND_TEXT: Record<string, string> = { headcount: '인원', outsource: '외주', volumeToMin: '물량', priority: '순서' };

@@ -64,10 +64,9 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelector('.drawer table.grid tbody tr.row')", 10000);
   const resCount = await cdp.eval("document.querySelectorAll('.drawer table.grid tbody tr.row').length");
   check('상세: 시즌 템플릿 물량 6종이 복사됨', resCount === 6, `${resCount}종`);
-  await setInput(cdp, '.drawer input[aria-label="신규 캐릭터 목표"]', '4');
-  await setInput(cdp, '.drawer input[aria-label="신규 캐릭터 확장"]', '6');
+  await setInput(cdp, '.drawer input[aria-label="신규 캐릭터 기본안"]', '4');
   await sleep(500);
-  const target = await cdp.eval(`document.querySelector('.drawer input[aria-label="신규 캐릭터 목표"]').value`);
+  const target = await cdp.eval(`document.querySelector('.drawer input[aria-label="신규 캐릭터 기본안"]').value`);
   check('상세: 물량 고치기 반영', target === '4', target);
   await setInput(cdp, '#ud-release_date', '2027-12-17', 'change');
   await sleep(500);
@@ -89,7 +88,7 @@ await withBrowser(async (cdp, base) => {
   check('유형 더하기', types.includes('이벤트'), types.join(', '));
   await cdp.eval("[...document.querySelectorAll('.type-list .nav-item')][0].click()");
   await sleep(300);
-  await setInput(cdp, 'input[aria-label="코스튬 목표"]', '7');
+  await setInput(cdp, 'input[aria-label="코스튬 기본안"]', '7');
   const sumTarget = await cdp.eval("document.querySelector('tr.total td:nth-child(3)').textContent");
   check('템플릿 물량 고치기 → 합계 반영', sumTarget === '54', sumTarget);
   await shot(cdp, 'templates-1440');
