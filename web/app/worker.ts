@@ -25,7 +25,9 @@ import { applyEdit } from '../../core/edits.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
-import type { ScenarioOp } from '../../core/scenarios.ts';
+import type { ScenarioOp, ScenarioAction } from '../../core/scenarios.ts';
+import { adviseDeadlines, adviceToScenario } from '../../core/advisor.ts';
+import type { AdvisorOptions } from '../../core/advisor.ts';
 
 export const APP_VERSION = 'arp-next 0.2.0';
 
@@ -233,6 +235,17 @@ const handlers: Record<string, (payload: any) => unknown> = {
       : p.what === 'maxScale' ? maxLaunchScale(prepared.data, p.updateId, p.planMode)
         : headcountForLaunch(prepared.data, p.updateId, p.planMode);
     return { ...result, ms: performance.now() - t };
+  },
+
+  /** 마감 맞춤 제안(원본 기준) */
+  advise(p: { options: AdvisorOptions }) {
+    const prepared = need().session.prepare();
+    if (prepared.blocked || !prepared.data) throw new Error('계산할 수 없는 상태예요. 데이터 점검을 먼저 봐 주세요.');
+    return adviseDeadlines(prepared.data, p.options);
+  },
+
+  adviceScenario(p: { name: string; actions: ScenarioAction[] }) {
+    return { scenarioId: adviceToScenario(need().sql, p.name, p.actions) };
   },
 
   applyScenario(p: { scenarioId: string; editor: string; force: boolean }) {

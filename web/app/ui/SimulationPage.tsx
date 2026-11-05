@@ -238,6 +238,8 @@ export function SimulationPage(props: {
   version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean;
   onScenario: (op: ScenarioOp) => Promise<{ ok: boolean; createdId?: string }>;
   onApplyScenario: (scenarioId: string, force: boolean) => Promise<boolean>;
+  /** 다른 화면에서 만든 시나리오: 고르고 원본과 비교 */
+  focus?: string | null;
 }) {
   const [data, setData] = useState<{ scenarios: ScenarioSummary[]; meta: SimMeta } | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
@@ -251,13 +253,18 @@ export function SimulationPage(props: {
     void rpc.scenarios().then(d => {
       setData(d);
       const ids = new Set(d.scenarios.map(s => s.scenarioId));
+      if (props.focus && ids.has(props.focus)) {
+        setPicked([props.focus]);
+        setSelected(props.focus);
+        return;
+      }
       setPicked(p => {
         const kept = p.filter(id => ids.has(id));
         return kept.length || p.length ? kept : d.scenarios.filter(s => !s.appliedAt).slice(0, 2).map(s => s.scenarioId);
       });
       setSelected(s => (s && ids.has(s) ? s : d.scenarios.find(x => !x.appliedAt)?.scenarioId ?? null));
     });
-  }, [props.version]);
+  }, [props.version, props.focus]);
   useEffect(() => { if (data) void rpc.compare(picked, props.planMode).then(setCompare); }, [data, picked.join(','), props.planMode]);
   useEffect(() => { setConfirmApply(false); setConfirmDelete(false); }, [selected]);
 

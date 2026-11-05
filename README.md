@@ -25,7 +25,7 @@
 | 4.5 기존 시트 데이터 가져오기 | 기능 완료 (2026-11-05): .xlsx 읽기, 옛 → 새 변환·보고서, 옛 엔진과 대조(같음). 실제 시트로 확인 대기 |
 | 5. 안정화 | 완료 (2026-11-05): 변경 이력·되돌리기, 작업 복구, 최근 파일, 엑셀 내보내기, 오프라인·설치형 앱, 오류 처리, 사용 가이드·배포 문서 |
 | 6. 확장 | 완료 (2026-11-05): 실투입 공수·공수 보정 제안, 실적 엑셀 양식·넣기, 열 때 변화 알림, 시나리오 비교 빠르게(파일 구조 v3) |
-| 7. 마감 일정 맞춤 제안 | **맨 마지막에 검토** (2026-11-05 결정): 모든 업데이트가 마감을 지키도록 물량·인원·외주·우선순위 조합을 제안. 거꾸로 계산·시뮬레이션이 기반 |
+| 7. 마감 일정 맞춤 제안 | 완료 (2026-11-05): 모든 업데이트가 마감을 지키도록 인원·외주·물량·우선순위 조합을 제안(아무도 늦추지 않는 걸음만), 시나리오로 만들어 비교·반영 |
 
 ## 0단계 산출물
 
@@ -67,8 +67,8 @@
 
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
-npm test                                  # 검사 72개 (0단계 8 + 엔진 15 + 런칭 9 + 새 프로젝트 4 + 계획 7 + 실적 5 + 시나리오 9 + 가져오기 5 + 안정화 5 + 확장 5)
-npm run e2e                               # 크롬 시험 67개: 저장 6 · 새 프로젝트 8 · 업데이트 계획 14 · 진행 실적 5 · 시뮬레이션 8 · 가져오기 7 · 안정화 9 · 확장 10
+npm test                                  # 검사 80개 (0단계 8 + 엔진 15 + 런칭 9 + 새 프로젝트 4 + 계획 7 + 실적 5 + 시나리오 9 + 가져오기 5 + 안정화 5 + 확장 5 + 마감 맞추기 8)
+npm run e2e                               # 크롬 시험 81개: 저장 6 · 새 프로젝트 8 · 업데이트 계획 14 · 진행 실적 5 · 시뮬레이션 8 · 가져오기 7 · 안정화 9 · 확장 10 · 마감 맞추기 14
 npm run build                             # 배포용 → dist-web/ (docs/12-deploy.md)
 npm run compare-legacy                    # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요)
 npm run capture                           # 화면 캡처 (크롬)
@@ -139,6 +139,15 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 | [core/calibration.ts](core/calibration.ts) · [core/progress-io.ts](core/progress-io.ts) · [core/notice.ts](core/notice.ts) | 공수 보정 · 실적 엑셀 · 변화 알림 |
 | [web/app/ui/CalibrationPage.tsx](web/app/ui/CalibrationPage.tsx) | 공수 보정 화면 |
 | [test/calibration.test.mjs](test/calibration.test.mjs) · [tools/e2e-ext.mjs](tools/e2e-ext.mjs) | 검사 5개 · 크롬 시험 10개 |
+
+## 7단계 산출물
+
+| 파일 | 내용 |
+|---|---|
+| [docs/14-deadline-fit.md](docs/14-deadline-fit.md) | 마감 맞추기: 수단·상한, 고르는 방법, 시나리오 연결, 한계 |
+| [core/advisor.ts](core/advisor.ts) | 제안 로직 `adviseDeadlines` · 시나리오로 만들기 `adviceToScenario` |
+| [web/app/ui/AdvisorPage.tsx](web/app/ui/AdvisorPage.tsx) | 화면 |
+| [test/advisor.test.mjs](test/advisor.test.mjs) · [tools/e2e-advisor.mjs](tools/e2e-advisor.mjs) | 검사 8개 · 크롬 시험 14개 |
 
 ## 0단계 결정 (2026-11-05, 추천안대로 확정)
 

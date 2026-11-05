@@ -6,6 +6,8 @@ import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveI
 import { ImportReport } from './ui/ImportReport.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
 import { CalibrationPage } from './ui/CalibrationPage.tsx';
+import { AdvisorPage } from './ui/AdvisorPage.tsx';
+import type { ScenarioAction } from '../../core/scenarios.ts';
 import type { Notice, Seen } from '../../core/notice.ts';
 import { idb, rememberRecent, ensurePermission } from './lib/idb.ts';
 import type { Recovery, RecentFile } from './lib/idb.ts';
@@ -25,10 +27,10 @@ import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
-type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'advisor' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
 interface FileState { name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean }
 
 const LOCK_FRESH_MS = 30 * 60 * 1000;
@@ -429,6 +431,23 @@ export function App() {
     }
   };
 
+  const [simFocus, setSimFocus] = useState<string | null>(null);
+  useEffect(() => { if (page !== 'simulation') setSimFocus(null); }, [page]);
+  const onAdviceScenario = async (name: string, actions: ScenarioAction[]): Promise<boolean> => {
+    if (fileRef.current?.readOnly) return false;
+    try {
+      const r = await rpc.adviceScenario(name, actions);
+      markChanged(false);
+      setSimFocus(r.scenarioId);
+      setPage('simulation');
+      showToast(`시나리오 "${name}"를 만들었어요. 원본과 비교한 뒤 반영할 수 있어요.`);
+      return true;
+    } catch (error) {
+      showToast((error as Error).message);
+      return false;
+    }
+  };
+
   const onApplyScenario = async (scenarioId: string, force: boolean): Promise<boolean> => {
     if (fileRef.current?.readOnly) return false;
     try {
@@ -549,6 +568,7 @@ export function App() {
           <button class={`nav-item${page === 'plan' ? ' active' : ''}`} onClick={() => setPage('plan')}><IconCalendar />업데이트 계획</button>
           <button class={`nav-item${page === 'progress' ? ' active' : ''}`} onClick={() => setPage('progress')}><IconProgress />진행 실적</button>
           <button class={`nav-item${page === 'simulation' ? ' active' : ''}`} onClick={() => setPage('simulation')}><IconSliders />시뮬레이션</button>
+          <button class={`nav-item${page === 'advisor' ? ' active' : ''}`} onClick={() => setPage('advisor')}><IconTarget />마감 맞추기</button>
           <div class="nav-label" style="margin-top: 12px">기준 정보</div>
           <button class={`nav-item${page === 'templates' ? ' active' : ''}`} onClick={() => setPage('templates')}><IconLayers />유형 템플릿</button>
           <button class={`nav-item${page === 'capacity' ? ' active' : ''}`} onClick={() => setPage('capacity')}><IconUsers />인력</button>
@@ -614,7 +634,8 @@ export function App() {
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
-        {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} />}
+        {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} focus={simFocus} />}
+        {page === 'advisor' && <AdvisorPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onMakeScenario={onAdviceScenario} />}
         {page === 'templates' && <TemplatesPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'capacity' && <CapacityPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'history' && <HistoryPage version={version} readOnly={file.readOnly} onUndo={onUndo} />}

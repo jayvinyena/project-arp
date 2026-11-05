@@ -11,6 +11,7 @@ export type ScenarioAction =
   | { kind: 'outsource'; partId: string; fromMonth: string; toMonth: string; days: number }
   | { kind: 'aiShare'; partId: string; share: number }
   | { kind: 'volumeScale'; updateId: string; scale: number }
+  | { kind: 'volumeToMin'; updateId: string; onlyOptional: boolean }
   | { kind: 'updateDates'; updateId: string; startDate?: string | null; freezeDate?: string | null; releaseDate?: string | null }
   | { kind: 'priority'; updateId: string; priority: number }
   | { kind: 'exclude'; updateId: string }
@@ -109,6 +110,19 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
       }
       if (!changes.length) fail('그 업데이트에 물량이 없어요.');
       return { label: `${name} 물량 ×${Math.round(a.scale * 100)}%`, changes };
+    }
+    case 'volumeToMin': {
+      // 목표·최대 물량을 최저 물량으로 맞춘다(최저가 없는 리소스는 그대로). onlyOptional이면 필수 리소스는 건드리지 않는다
+      const name = updateName(a.updateId);
+      const rows = db.all('SELECT * FROM volumes WHERE update_id = ? AND min_qty IS NOT NULL' + (a.onlyOptional ? ' AND required = 0' : ''), [a.updateId]);
+      const changes: Change[] = [];
+      for (const v of rows) {
+        for (const f of ['target_qty', 'stretch_qty']) {
+          changes.push({ op: 'SET', target: 'volumes', target_key: `${a.updateId}|${v.resource_type_id}`, field: f, value: Number(v.min_qty) });
+        }
+      }
+      if (!changes.length) fail(a.onlyOptional ? '최저 물량이 있는 선택 리소스가 없어요.' : '최저 물량이 있는 리소스가 없어요.');
+      return { label: `${name} ${a.onlyOptional ? '선택 리소스' : '모든 리소스'}를 최저 물량으로`, changes };
     }
     case 'updateDates': {
       const name = updateName(a.updateId);

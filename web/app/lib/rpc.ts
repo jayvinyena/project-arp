@@ -10,7 +10,8 @@ import type { Seen, Notice } from '../../../core/notice.ts';
 import type { Edit, EditResult } from '../../../core/edits.ts';
 import type { PlanView, UpdateDetail, TypeView, CapacityView, ProgressView } from '../../../core/plan.ts';
 import type { Finding } from '../../../core/pipeline.ts';
-import type { ScenarioOp, ScenarioSummary, SimMeta, CompareView, Sensitivity, ApplyResult } from '../../../core/scenarios.ts';
+import type { ScenarioOp, ScenarioAction, ScenarioSummary, SimMeta, CompareView, Sensitivity, ApplyResult } from '../../../core/scenarios.ts';
+import type { AdvisorOptions, AdvisorResult } from '../../../core/advisor.ts';
 
 export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null> }
 
@@ -54,6 +55,8 @@ export const rpc = {
   sensitivity: (scenarioId: string | null, updateId: string, planMode: PlanMode) => call<Sensitivity & { ms: number }>('analyze', { scenarioId, updateId, planMode, what: 'sensitivity' }),
   maxScaleOf: (scenarioId: string | null, updateId: string, planMode: PlanMode) => call<MaxScaleResult & { ms: number }>('analyze', { scenarioId, updateId, planMode, what: 'maxScale' }),
   headcountOf: (scenarioId: string | null, updateId: string, planMode: PlanMode) => call<HeadcountResult & { ms: number }>('analyze', { scenarioId, updateId, planMode, what: 'headcount' }),
+  advise: (options: AdvisorOptions) => call<AdvisorResult>('advise', { options }),
+  adviceScenario: (name: string, actions: ScenarioAction[]) => call<{ scenarioId: string }>('adviceScenario', { name, actions }),
   applyScenario: (scenarioId: string, editor: string, force: boolean) => call<ApplyResult>('applyScenario', { scenarioId, editor, force }),
   history: () => call<{ batches: HistoryBatch[]; total: number }>('history'),
   undo: (batchId: string, editor: string, force: boolean) => call<{ reverted: number }>('undo', { batchId, editor, force }),
