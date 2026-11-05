@@ -22,8 +22,27 @@ function DoneInput(props: { value: number | null; label: string; flag: string | 
     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setText(props.value == null ? '' : String(props.value)); (e.target as HTMLInputElement).blur(); } }} />;
 }
 
-export function ProgressPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean> }) {
+function SpentInput(props: { value: number | null; label: string; disabled: boolean; onCommit: (v: number | null) => void }) {
+  const show = (v: number | null) => (v == null ? '' : String(Math.round(v * 100) / 100));
+  const [text, setText] = useState(show(props.value));
+  useEffect(() => setText(show(props.value)), [props.value]);
+  const commit = () => {
+    const t = text.trim().replace(/,/g, '');
+    const n = t === '' ? null : Number(t);
+    if (n !== null && (!Number.isFinite(n) || n < 0)) { setText(show(props.value)); return; }
+    if ((n || null) !== (props.value || null)) props.onCommit(n);
+  };
+  return <input class="qty spent" inputMode="decimal" aria-label={props.label} value={text} placeholder="—" disabled={props.disabled}
+    onInput={e => setText((e.target as HTMLInputElement).value)} onBlur={commit}
+    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />;
+}
+
+export function ProgressPage(props: {
+  version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean>;
+  onTemplate: () => Promise<void>; onImport: () => Promise<void>;
+}) {
   const [wanted, setWanted] = useState<string | null>(null);
+  const [field, setField] = useState<'done' | 'spent'>('done');
   const [view, setView] = useState<ProgressView | null>(null);
   const [asOf, setAsOf] = useState(today());
   useEffect(() => { void rpc.progress(wanted).then(setView); }, [props.version, wanted]);
@@ -85,7 +104,20 @@ export function ProgressPage(props: { version: number; readOnly: boolean; onAppl
       {flagged > 0 && <div class="banner warn"><IconCheck /><div><b>확인할 칸 {flagged}개</b><p class="small muted">주황 테두리 칸에 올리면 이유가 보여요. 계산은 그대로 해요.</p></div></div>}
 
       <section class="card">
-        <div class="card-head"><div><h2>완료 수량</h2><p class="small muted" style="margin-top: 2px">칸 = 그 파트가 끝낸 리소스 개수. 0이나 빈칸은 아직 없음. 회색 칸은 거치지 않는 파트예요.</p></div></div>
+        <div class="card-head">
+          <div><h2>{field === 'done' ? '완료 수량' : '실투입 인·일'}</h2>
+            <p class="small muted" style="margin-top: 2px">{field === 'done'
+              ? '칸 = 그 파트가 끝낸 리소스 개수. 0이나 빈칸은 아직 없음. 빗금 칸은 거치지 않는 파트예요.'
+              : '칸 = 그 완료 수량을 만드는 데 실제로 든 인·일. 공수 보정 제안에 쓰여요.'}</p></div>
+          <div class="inline">
+            <div class="segmented wide" role="radiogroup" aria-label="입력 항목">
+              <button type="button" role="radio" aria-checked={field === 'done'} class={field === 'done' ? 'on' : ''} onClick={() => setField('done')}>완료 수량</button>
+              <button type="button" role="radio" aria-checked={field === 'spent'} class={field === 'spent' ? 'on' : ''} onClick={() => setField('spent')}>실투입 인·일</button>
+            </div>
+            <button type="button" class="btn sm ghost" onClick={() => void props.onTemplate()}>양식 받기</button>
+            {!props.readOnly && <button type="button" class="btn sm" onClick={() => void props.onImport()}>엑셀로 넣기</button>}
+          </div>
+        </div>
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap">
             <table class="grid progress-grid">
@@ -104,10 +136,12 @@ export function ProgressPage(props: { version: number; readOnly: boolean; onAppl
                         <td class="n num">{fmtInt(r.target)}</td>
                         {r.cells.map((c, i) => (
                           <td class="n">
-                            {c.passes
-                              ? <DoneInput value={c.completed} label={`${r.name} ${view.parts[i].name} 완료`} flag={c.flag} disabled={props.readOnly}
-                                onCommit={v => apply({ kind: 'progress', updateId, resourceTypeId: r.resourceTypeId, partId: c.partId, value: v, asOf })} />
-                              : <span class="off-cell" aria-hidden="true" />}
+                            {!c.passes ? <span class="off-cell" aria-hidden="true" />
+                              : field === 'done'
+                                ? <DoneInput value={c.completed} label={`${r.name} ${view.parts[i].name} 완료`} flag={c.flag} disabled={props.readOnly}
+                                  onCommit={v => apply({ kind: 'progress', updateId, resourceTypeId: r.resourceTypeId, partId: c.partId, value: v, asOf })} />
+                                : <SpentInput value={c.spent} label={`${r.name} ${view.parts[i].name} 실투입`} disabled={props.readOnly}
+                                  onCommit={v => apply({ kind: 'progressSpent', updateId, resourceTypeId: r.resourceTypeId, partId: c.partId, value: v, asOf })} />}
                           </td>
                         ))}
                         <td class="n">

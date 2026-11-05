@@ -497,6 +497,17 @@ h3.sub { font-size: 13px; font-weight: 650; margin-bottom: 6px; }
 .recent-item:hover { border-color: var(--accent); }
 .recent-item span:nth-child(2) { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* 6단계: 공수 보정 · 변화 알림 */
+.calib-parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.calib-part { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.calib-part b { font-size: 24px; letter-spacing: -0.02em; }
+.bad-ink { color: var(--bad); } .ok-ink { color: var(--ok); }
+table.grid.calib { min-width: 760px; }
+table.grid.calib input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.banner.notice { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.banner.notice .icon { color: var(--accent-ink); }
+.qty.spent { width: 72px; }
+
 /* ───────── 점검 목록 ───────── */
 .finding { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; padding: 12px 0; }
 .finding + .finding { border-top: 1px solid var(--line); }

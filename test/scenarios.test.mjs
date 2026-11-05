@@ -28,7 +28,7 @@ function open(name = 'normal') {
 const add = (db, scenarioId, action) => applyScenarioOp(db, { kind: 'addAction', scenarioId, action });
 const launchOf = (v, i) => v.rows.find(r => r.updateId === 'LAUNCH').cells[i];
 
-test('구조 전환: v1 파일을 v2로(동작 묶음은 줄마다 하나), 다시 해도 그대로, 더 새 버전은 거절', () => {
+test('구조 전환: v1 파일을 최신으로(동작 묶음은 줄마다 하나), 다시 해도 그대로, 더 새 버전은 거절', () => {
   const raw = new DatabaseSync(':memory:');
   raw.exec(SCHEMA_SQL);
   raw.exec("INSERT INTO meta VALUES ('data_version', '1')");
@@ -38,7 +38,7 @@ test('구조 전환: v1 파일을 v2로(동작 묶음은 줄마다 하나), 다�
   const r = migrate(db);
   assert.deepEqual([r.from, r.to], [1, LATEST_SCHEMA]);
   assert.deepEqual(raw.prepare('SELECT group_no FROM scenario_changes ORDER BY seq').all().map(x => x.group_no), [1, 2]);
-  assert.equal(raw.prepare('PRAGMA user_version').get().user_version, 2);
+  assert.equal(raw.prepare('PRAGMA user_version').get().user_version, LATEST_SCHEMA);
   assert.deepEqual(migrate(db).notes, []);
   raw.exec('PRAGMA user_version = 9');
   assert.throws(() => migrate(db), /더 새 구조/);
@@ -163,4 +163,27 @@ test('속도: 현실 규모에서 원본 + 시나리오 3개 비교가 0.3초 �
   const best = Math.min(...times);
   console.log(`  원본 + 시나리오 3개 비교: ${best.toFixed(1)}ms`);
   assert.ok(best < 300, `${best}ms`);
+});
+
+test('검증 줄이기: 모든 규칙에 읽는 표가 적혀 있고, 시나리오의 일부 검증 결과 = 전체 검증 결과', async () => {
+  const { RULES, RULE_TABLES } = await import('../rules/validation-rules.mjs');
+  for (const r of RULES) assert.ok(RULE_TABLES[r.code]?.length, `${r.code}에 읽는 표가 없다`);
+  const { raw, db, session } = open('normal');
+  const sort = fs => fs.map(f => `${f.code}|${f.key}|${f.detail}`).sort();
+  const actions = [
+    { kind: 'headcount', partId: 'FX', fromMonth: '2027-01', toMonth: '2027-03', delta: -1 },
+    { kind: 'volumeScale', updateId: 'S1', scale: 0 },
+    { kind: 'updateDates', updateId: 'S1', releaseDate: '2027-03-01' },      // 날짜 순서 오류(U03)
+    { kind: 'exclude', updateId: 'MINI1' },
+    { kind: 'overlap', rate: 1.5 > 1 ? 0.9 : 0 },
+  ];
+  const base = session.prepare().findings;
+  for (const action of actions) {
+    const id = applyScenarioOp(db, { kind: 'create', name: action.kind }).createdId;
+    add(db, id, action);
+    const full = session.prepare(id).findings;
+    const partial = session.prepare(id, { baseFindings: base }).findings;
+    assert.deepEqual(sort(partial), sort(full), action.kind);
+  }
+  raw.close();
 });

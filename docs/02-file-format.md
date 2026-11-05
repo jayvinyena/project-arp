@@ -48,7 +48,7 @@
 
 ## 5. 구조 전환 (마이그레이션)
 
-> 구현: [core/migrate.ts](../core/migrate.ts). 지금 구조는 **v2**(v1 → v2: 시나리오 동작 묶음·반영 기록). 자세한 내용은 [08-simulation.md](08-simulation.md).
+> 구현: [core/migrate.ts](../core/migrate.ts). 지금 구조는 **v3**(v1 → v2: 시나리오 동작 묶음·반영 기록, v2 → v3: 실적의 실투입 공수). 자세한 내용은 [08-simulation.md](08-simulation.md).
 
 
 - 앱에는 `v1 → v2`, `v2 → v3` 같은 단계별 전환 스크립트가 있다. 열 때 필요한 단계만 차례로 돈다.

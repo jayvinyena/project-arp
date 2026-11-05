@@ -5,9 +5,12 @@ import type { View } from './lib/rpc.ts';
 import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveInPlace, pickXlsx, fetchBytes } from './lib/files.ts';
 import { ImportReport } from './ui/ImportReport.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
+import { CalibrationPage } from './ui/CalibrationPage.tsx';
+import type { Notice, Seen } from '../../core/notice.ts';
 import { idb, rememberRecent, ensurePermission } from './lib/idb.ts';
 import type { Recovery, RecentFile } from './lib/idb.ts';
 import { LATEST_SCHEMA } from '../../core/migrate.ts';
+import { fmtShortDate } from './lib/format.ts';
 import type { ImportReport as ImportReportData } from '../../core/import-legacy.ts';
 import type { OpenedFile } from './lib/files.ts';
 import type { LaunchEdit } from '../../core/launch.ts';
@@ -22,10 +25,10 @@ import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
-type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'templates' | 'capacity' | 'history' | 'check';
+type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
 interface FileState { name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean }
 
 const LOCK_FRESH_MS = 30 * 60 * 1000;
@@ -53,6 +56,7 @@ export function App() {
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [backup, setBackup] = useState<{ name: string; bytes: ArrayBuffer; from: number } | null>(null);
   const snapshotTimer = useRef<number | undefined>(undefined);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const fileRef = useRef<FileState | null>(null);
   fileRef.current = file;
   const saveTimer = useRef<number | undefined>(undefined);
@@ -100,6 +104,7 @@ export function App() {
       }
       ok = true;
       void idb.del('recovery');
+      void refreshSeen(false);
       const savedFile = fileRef.current;
       if (savedFile?.handle) void rememberRecent(savedFile.handle, savedFile.name);
       if (editSeq.current !== seq) { setSave({ state: 'dirty' }); scheduleAutosave(); } else setSave({ state: 'saved', at: Date.now() });
@@ -182,6 +187,7 @@ export function App() {
         await rpc.lock(me);
         await writeNow();
       }
+      if (!isSample) void refreshSeen(true);
     } catch (error) {
       showToast(`열지 못했어요: ${(error as Error).message}`);
     } finally {
@@ -303,6 +309,48 @@ export function App() {
       download(bytes, `${base} ${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } catch (error) {
       showToast(`내보내지 못했어요: ${(error as Error).message}`);
+    }
+  };
+
+  // ───────── 변화 알림: 내가 지난번에 본 뒤 바뀐 것 ─────────
+  // 편집자별로 따로 둔다(한 컴퓨터를 여럿이 쓸 때도 각자 지난번 본 것과 비교)
+  const seenKey = (v: View | null) => (v ? `seen:${me}:${v.meta.project_name ?? ''}|${v.meta.created_at ?? ''}` : '');
+  const refreshSeen = async (show: boolean) => {
+    const v = await rpc.view().catch(() => null);
+    const key = seenKey(v);
+    if (!key) return;
+    const prev = (await idb.get<Seen>(key)) ?? null;
+    const r = await rpc.notice(prev, me).catch(() => null);
+    if (!r?.now) return; // 계산이 막힌 상태면 비교하지 않는다
+    if (show) setNotice(r.notice);
+    await idb.set(key, { at: new Date().toISOString(), updates: r.now } satisfies Seen);
+  };
+
+  // 실적 엑셀
+  const onTemplate = async () => {
+    const { bytes } = await rpc.progressTemplate();
+    download(bytes, `${(view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_')} 실적 양식.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  };
+  const onImportProgress = async () => {
+    const picked = await pickXlsx();
+    if (!picked) return;
+    try {
+      const r = await rpc.importProgress(picked.bytes, me);
+      if (r.changedCells) markChanged(true);
+      showToast(`실적을 넣었어요 · ${r.changedCells}칸 바뀜${r.unchanged ? `, ${r.unchanged}칸 그대로` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
+    } catch (error) {
+      showToast(`넣지 못했어요: ${(error as Error).message}`);
+    }
+  };
+  const onCalibrate = async (picks: { resourceTypeId: string; partId: string; ratio: number }[]) => {
+    try {
+      const r = await rpc.calibrate(picks, me);
+      if (r.changed) markChanged(true);
+      showToast(`공수 ${r.changed}곳을 보정했어요. 변경 이력에서 되돌릴 수 있어요.`);
+      return true;
+    } catch (error) {
+      showToast((error as Error).message);
+      return false;
     }
   };
 
@@ -504,6 +552,7 @@ export function App() {
           <div class="nav-label" style="margin-top: 12px">기준 정보</div>
           <button class={`nav-item${page === 'templates' ? ' active' : ''}`} onClick={() => setPage('templates')}><IconLayers />유형 템플릿</button>
           <button class={`nav-item${page === 'capacity' ? ' active' : ''}`} onClick={() => setPage('capacity')}><IconUsers />인력</button>
+          <button class={`nav-item${page === 'calibration' ? ' active' : ''}`} onClick={() => setPage('calibration')}><IconTune />공수 보정</button>
           <button class={`nav-item${page === 'history' ? ' active' : ''}`} onClick={() => setPage('history')}><IconHistory />변경 이력</button>
           <button class={`nav-item${page === 'check' ? ' active' : ''}`} onClick={() => setPage('check')}>
             <IconCheck />데이터 점검
@@ -527,6 +576,25 @@ export function App() {
             <div class="banner warn"><IconLock /><div><b>{file.lockedBy}님이 편집 중이라 읽기 전용으로 열었어요</b><p class="small muted">편집을 마치거나 30분 동안 저장이 없으면 고칠 수 있어요.</p></div></div>
           </div>
         )}
+        {notice && (
+          <div class="page" style="margin-bottom: 16px">
+            <div class="banner notice" role="status">
+              <IconAlert />
+              <div style="flex: 1">
+                <b>지난번({new Date(notice.since).toLocaleDateString('ko-KR')})에 본 뒤 바뀐 것</b>
+                <ul class="small">
+                  {notice.changed.slice(0, 5).map(c => (
+                    <li>{c.name}: 완료 예정 {c.before ? fmtShortDate(c.before) : '기간 밖'} → {c.after ? fmtShortDate(c.after) : '기간 밖'}{c.deltaDays ? ` (${c.deltaDays > 0 ? '+' : '−'}${Math.abs(c.deltaDays)}일)` : ''}</li>
+                  ))}
+                  {notice.added.length > 0 && <li>새 업데이트: {notice.added.join(', ')}</li>}
+                  {notice.removed.length > 0 && <li>계산에서 빠진 업데이트: {notice.removed.join(', ')}</li>}
+                  {notice.editsByOthers > 0 && <li>{notice.editors.join(', ')}님이 {notice.editsByOthers}번 고쳤어요 · 변경 이력에서 볼 수 있어요</li>}
+                </ul>
+              </div>
+              <button type="button" class="btn ghost icon-btn" aria-label="알림 닫기" onClick={() => setNotice(null)}><IconX /></button>
+            </div>
+          </div>
+        )}
         {backup && (
           <div class="page" style="margin-bottom: 16px">
             <div class="banner warn"><IconAlert /><div style="flex: 1"><b>옛 구조(v{backup.from}) 파일을 새 구조로 바꿔 열었어요</b>
@@ -544,7 +612,8 @@ export function App() {
         )}
         {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} />}
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
-        {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} />}
+        {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} />}
+        {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
         {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} />}
         {page === 'templates' && <TemplatesPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'capacity' && <CapacityPage version={version} readOnly={file.readOnly} onApply={onApply} />}

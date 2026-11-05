@@ -2,14 +2,16 @@
 import type { SqlDb } from './db.ts';
 import type { ProjectData, PlanMode, PlanResult } from '../engine/types.ts';
 import { runPlan } from '../engine/index.ts';
-import { PRELUDE, RULES } from '../rules/validation-rules.mjs';
+import { PRELUDE, RULES, RULE_TABLES } from '../rules/validation-rules.mjs';
 
 export interface Finding { code: string; level: 'ERROR' | 'WARN'; title: string; key: string; detail: string }
 
-export function validate(db: SqlDb): Finding[] {
+/** 모든 규칙(only를 주면 그 표들을 읽는 규칙만)을 돌려 문제 목록을 돌려준다 */
+export function validate(db: SqlDb, only?: Set<string>): Finding[] {
   db.exec(PRELUDE);
   const findings: Finding[] = [];
   for (const rule of RULES) {
+    if (only && !(RULE_TABLES as Record<string, string[]>)[rule.code]?.some(t => only.has(t))) continue;
     let rows: Record<string, unknown>[];
     try {
       rows = db.all(rule.sql);
@@ -156,9 +158,13 @@ export class ProjectSession {
     this.db = db;
   }
 
+  /** 원본 계산 데이터가 바뀐 횟수. 같은 값이면 원본 계산 결과를 다시 써도 된다 */
+  revision = 0;
+
   /** 엔진이 쓰는 표를 직접 고친 뒤 알린다 */
   markDirty(...tables: EngineTable[]): void {
     for (const t of tables) this.dirty.add(t);
+    if (tables.length) this.revision += 1;
   }
 
   /** 고치기 + 알리기 */
@@ -180,7 +186,10 @@ export class ProjectSession {
   }
 
   /** 검증 한 번 + 데이터 준비. 시나리오가 있으면 그 표만 덮어 쓴 데이터 */
-  prepare(scenarioId?: string): { findings: Finding[]; blocked: boolean; data: ProjectData | null; skipped: SkippedChange[]; validateMs: number; readMs: number } {
+  /**
+   * baseFindings(원본 검증 결과)를 주면, 시나리오가 건드린 표를 읽는 규칙만 다시 돌리고 나머지는 원본 결과를 쓴다(비교를 빠르게).
+   */
+  prepare(scenarioId?: string, options: { baseFindings?: Finding[] } = {}): { findings: Finding[]; blocked: boolean; data: ProjectData | null; skipped: SkippedChange[]; validateMs: number; readMs: number } {
     const t0 = performance.now();
     const base = this.baseData(); // 시나리오를 얹기 전에 원본 캐시를 맞춘다
     const scenarioTables = scenarioId
@@ -189,7 +198,14 @@ export class ProjectSession {
       : [];
     const { value, skipped } = withScenario(this.db, scenarioId, () => {
       const tv = performance.now();
-      const findings = validate(this.db);
+      let findings: Finding[];
+      if (scenarioId && options.baseFindings) {
+        const touched = new Set<string>(this.db.all('SELECT DISTINCT target FROM scenario_changes WHERE scenario_id = ?', [scenarioId]).map(r => String(r.target)));
+        const rerun = new Set(RULES.filter(r => (RULE_TABLES as Record<string, string[]>)[r.code]?.some(t => touched.has(t))).map(r => r.code));
+        findings = [...options.baseFindings.filter(f => !rerun.has(f.code)), ...validate(this.db, touched)];
+      } else {
+        findings = validate(this.db);
+      }
       const t1 = performance.now();
       const blocked = findings.some(f => f.level === 'ERROR');
       let data: ProjectData | null = null;

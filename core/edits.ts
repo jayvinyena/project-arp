@@ -26,7 +26,10 @@ export type Edit =
   | { kind: 'removeTemplateResource'; typeId: string; resourceTypeId: string }
   // 실적
   | { kind: 'progress'; updateId: string; resourceTypeId: string; partId: string; value: number | null; asOf: string | null }
+  | { kind: 'progressSpent'; updateId: string; resourceTypeId: string; partId: string; value: number | null; asOf: string | null }
   | { kind: 'completeRow'; updateId: string; resourceTypeId: string; asOf: string | null }
+  // 공수 보정: 그 리소스·파트의 모든 공수 판에 배율을 곱한다
+  | { kind: 'effortScale'; resourceTypeId: string; partId: string; ratio: number }
   // 인력 · 계획 기간
   | { kind: 'capacity'; partId: string; month: string; field: CapacityField; value: number }
   | { kind: 'fillCapacity'; partId: string; fromMonth: string; toMonth: string; field: CapacityField; value: number }
@@ -227,41 +230,70 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
 
     // ───────── 실적 ─────────
     case 'progress':
+    case 'progressSpent':
     case 'completeRow': {
       if (edit.asOf != null && !DATE.test(edit.asOf)) fail('기준일 형식은 YYYY-MM-DD예요.');
       if (!db.get('SELECT 1 AS ok FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])) fail('그 업데이트 물량에 없는 리소스예요.');
       const steps = db.all('SELECT rp.part_id FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id AND p.active = 1 WHERE rp.resource_type_id = ? ORDER BY p.sort_order', [edit.resourceTypeId]).map(r => String(r.part_id));
-      let targets: { partId: string; value: number | null }[];
+      // 칸 하나 = (완료 수량, 실투입 인·일). 둘 다 없으면(완료 0·실투입 빈칸) 행을 지운다
+      const targets: { partId: string; field: 'completed_qty' | 'spent_days'; value: number | null }[] = [];
       if (edit.kind === 'progress') {
         if (!(edit.value == null || (Number.isInteger(edit.value) && edit.value >= 0))) fail('완료 수량은 0 이상의 정수예요.');
         if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트예요.');
-        targets = [{ partId: edit.partId, value: edit.value }];
+        targets.push({ partId: edit.partId, field: 'completed_qty', value: edit.value });
+      } else if (edit.kind === 'progressSpent') {
+        if (!(edit.value == null || (Number.isFinite(edit.value) && edit.value >= 0))) fail('실투입 공수는 0 이상의 숫자(인·일)예요.');
+        if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트예요.');
+        targets.push({ partId: edit.partId, field: 'spent_days', value: edit.value === 0 ? null : edit.value });
       } else {
         // 다 끝남: 거치는 모든 파트를 (목표 − 외주)만큼 완료로
         const v = db.get('SELECT target_qty, outsource_qty FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])!;
         const n = Math.max(0, Number(v.target_qty ?? 0) - Number(v.outsource_qty ?? 0));
-        targets = steps.map(partId => ({ partId, value: n }));
+        for (const partId of steps) targets.push({ partId, field: 'completed_qty', value: n });
       }
       let changed = false;
       for (const t of targets) {
         const key = `${edit.updateId}|${edit.resourceTypeId}|${t.partId}`;
-        const before = db.get('SELECT completed_qty AS v, as_of FROM progress WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', [edit.updateId, edit.resourceTypeId, t.partId]);
-        const old = before ? Number(before.v) : null;
-        const next = t.value === 0 ? null : t.value; // 0과 빈칸은 같은 뜻: 행을 지운다
-        if (old === next) continue;
-        if (next == null) {
-          db.run('DELETE FROM progress WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', [edit.updateId, edit.resourceTypeId, t.partId]);
-          log(db, ctx, 'DELETE', 'progress', key, 'completed_qty', old, undefined);
-        } else if (before) {
-          db.run('UPDATE progress SET completed_qty = ?, as_of = ? WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', [next, edit.asOf, edit.updateId, edit.resourceTypeId, t.partId]);
-          log(db, ctx, 'UPDATE', 'progress', key, 'completed_qty', old, next);
+        const keyParams = [edit.updateId, edit.resourceTypeId, t.partId];
+        const before = db.get('SELECT * FROM progress WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', keyParams);
+        const completed = t.field === 'completed_qty' ? (t.value ?? 0) : Number(before?.completed_qty ?? 0);
+        const spent = t.field === 'spent_days' ? t.value : (before?.spent_days == null ? null : Number(before.spent_days));
+        const empty = completed === 0 && spent == null;
+        if (!before) {
+          if (empty) continue;
+          const row = { update_id: edit.updateId, resource_type_id: edit.resourceTypeId, part_id: t.partId, completed_qty: completed, as_of: edit.asOf, spent_days: spent };
+          db.run('INSERT INTO progress (update_id, resource_type_id, part_id, completed_qty, as_of, spent_days) VALUES (?, ?, ?, ?, ?, ?)', [...keyParams, completed, edit.asOf, spent]);
+          log(db, ctx, 'INSERT', 'progress', key, null, undefined, row);
+        } else if (empty) {
+          db.run('DELETE FROM progress WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', keyParams);
+          log(db, ctx, 'DELETE', 'progress', key, null, before, undefined);
         } else {
-          db.run('INSERT INTO progress (update_id, resource_type_id, part_id, completed_qty, as_of) VALUES (?, ?, ?, ?, ?)', [edit.updateId, edit.resourceTypeId, t.partId, next, edit.asOf]);
-          log(db, ctx, 'INSERT', 'progress', key, 'completed_qty', undefined, next);
+          const old = before[t.field] == null ? null : Number(before[t.field]);
+          const next = t.field === 'completed_qty' ? completed : spent;
+          if (old === next) continue;
+          db.run(`UPDATE progress SET ${t.field} = ?, as_of = coalesce(?, as_of) WHERE update_id = ? AND resource_type_id = ? AND part_id = ?`, [next, edit.asOf, ...keyParams]);
+          log(db, ctx, 'UPDATE', 'progress', key, t.field, old, next);
         }
         changed = true;
       }
       if (changed) dirty('progress');
+      return { changed };
+    }
+
+    // ───────── 공수 보정 ─────────
+    case 'effortScale': {
+      if (!(edit.ratio > 0 && edit.ratio < 20)) fail('보정 배율이 올바르지 않아요.');
+      const rows = db.all('SELECT profile_id, days FROM efforts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
+      if (!rows.length) fail('그 리소스·파트의 공수가 없어요.');
+      let changed = false;
+      for (const r of rows) {
+        const next = Math.round(Number(r.days) * edit.ratio * 100) / 100;
+        if (next === Number(r.days)) continue;
+        db.run('UPDATE efforts SET days = ? WHERE resource_type_id = ? AND part_id = ? AND profile_id = ?', [next, edit.resourceTypeId, edit.partId, r.profile_id]);
+        log(db, ctx, 'UPDATE', 'efforts', `${edit.resourceTypeId}|${edit.partId}|${r.profile_id}`, 'days', Number(r.days), next);
+        changed = true;
+      }
+      if (changed) dirty('efforts');
       return { changed };
     }
 

@@ -17,6 +17,10 @@ import { legacyToRows, writeImported } from '../../core/import-legacy.ts';
 import { historyView, undoBatch } from '../../core/history.ts';
 import { exportSheets } from '../../core/export.ts';
 import { writeXlsx } from '../../core/xlsx-write.ts';
+import { calibrationView, calibrationPreview } from '../../core/calibration.ts';
+import { progressTemplate, importProgress } from '../../core/progress-io.ts';
+import { outlookNow, noticeSince } from '../../core/notice.ts';
+import type { Seen } from '../../core/notice.ts';
 import { applyEdit } from '../../core/edits.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
@@ -167,6 +171,41 @@ const handlers: Record<string, (payload: any) => unknown> = {
   snapshot() {
     const { db: d } = need();
     return { bytes: exportBytes(sqlite3!, d).buffer };
+  },
+
+  // ───────── 6단계: 실적 엑셀 · 공수 보정 · 변화 알림 ─────────
+  progressTemplate() {
+    return { bytes: writeXlsx(progressTemplate(need().sql)).buffer };
+  },
+
+  async importProgress(p: { bytes: ArrayBuffer; editor: string }) {
+    const { sql: s, session: ss } = need();
+    const sheets = await readXlsx(new Uint8Array(p.bytes));
+    return importProgress(s, ss, sheets, { editor: p.editor || '이름 없음', batchId: newBatchId() }, new Date().toISOString().slice(0, 10));
+  },
+
+  calibration() {
+    return calibrationView(need().sql);
+  },
+
+  calibrationPreview(p: { picks: { resourceTypeId: string; partId: string; ratio: number }[] }) {
+    return calibrationPreview(need().session.currentData(), p.picks);
+  },
+
+  /** 고른 보정을 한 묶음으로 적용 */
+  calibrate(p: { picks: { resourceTypeId: string; partId: string; ratio: number }[]; editor: string }) {
+    const { sql: s, session: ss } = need();
+    const ctx = { editor: p.editor || '이름 없음', batchId: newBatchId() };
+    let changed = 0;
+    for (const pick of p.picks) if (applyEdit(s, ss, { kind: 'effortScale', ...pick }, ctx).changed) changed += 1;
+    return { changed };
+  },
+
+  /** 지난번 본 전망과 지금을 비교(prev가 없으면 지금 전망만) */
+  notice(p: { prev: Seen | null; me: string }) {
+    const { sql: s, session: ss } = need();
+    const now = outlookNow(s, ss);
+    return { now, notice: now && p.prev ? noticeSince(s, p.prev, now, p.me) : null };
   },
 
   // ───────── 시뮬레이션 ─────────

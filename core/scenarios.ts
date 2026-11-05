@@ -263,15 +263,30 @@ export interface CompareView {
   ms: number;
 }
 
+const baseCache = new WeakMap<ProjectSession, { revision: number; planMode: PlanMode; result: PlanResult }>();
+
 /** 원본(id = 'BASE')과 시나리오들을 같은 구간으로 계산해 나란히. 차이는 원본 대비 영업일(+ 늦어짐) */
 export function compareScenarios(db: SqlDb, session: ProjectSession, scenarioIds: string[], planMode: PlanMode = 'TARGET'): CompareView {
   const t0 = performance.now();
   const ids = ['BASE', ...scenarioIds.filter(id => id !== 'BASE')];
   const names = new Map(db.all('SELECT scenario_id, name FROM scenarios').map(r => [String(r.scenario_id), String(r.name)]));
+  let baseFindings: Finding[] | undefined;
   const runs = ids.map(id => {
     const t = performance.now();
-    const p = session.prepare(id === 'BASE' ? undefined : id);
-    const result = p.blocked || !p.data ? null : runPlan(p.data, { planMode });
+    // 원본은 전부 검증하고, 시나리오는 건드린 표의 규칙만 다시 검증한다
+    const p = session.prepare(id === 'BASE' ? undefined : id, { baseFindings });
+    if (id === 'BASE') baseFindings = p.findings;
+    let result: PlanResult | null = null;
+    if (!p.blocked && p.data) {
+      if (id === 'BASE') {
+        // 원본이 그대로면(시나리오만 고친 경우) 지난 원본 계산을 다시 쓴다
+        const hit = baseCache.get(session);
+        result = hit && hit.revision === session.revision && hit.planMode === planMode ? hit.result : runPlan(p.data, { planMode });
+        baseCache.set(session, { revision: session.revision, planMode, result });
+      } else {
+        result = runPlan(p.data, { planMode });
+      }
+    }
     return {
       id, name: id === 'BASE' ? '원본' : names.get(id) ?? id, blocked: p.blocked,
       errors: p.findings.filter(f => f.level === 'ERROR'), result, data: p.data, ms: performance.now() - t,

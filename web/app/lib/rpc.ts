@@ -4,6 +4,9 @@ import type { PlanMode } from '../../../engine/types.ts';
 import type { NewProjectInput } from '../../../core/new-project.ts';
 import type { ImportReport } from '../../../core/import-legacy.ts';
 import type { HistoryBatch } from '../../../core/history.ts';
+import type { CalibrationView, CalibrationPreview } from '../../../core/calibration.ts';
+import type { ProgressImportReport } from '../../../core/progress-io.ts';
+import type { Seen, Notice } from '../../../core/notice.ts';
 import type { Edit, EditResult } from '../../../core/edits.ts';
 import type { PlanView, UpdateDetail, TypeView, CapacityView, ProgressView } from '../../../core/plan.ts';
 import type { Finding } from '../../../core/pipeline.ts';
@@ -56,6 +59,12 @@ export const rpc = {
   undo: (batchId: string, editor: string, force: boolean) => call<{ reverted: number }>('undo', { batchId, editor, force }),
   exportXlsx: (planMode: PlanMode) => call<{ bytes: ArrayBuffer }>('exportXlsx', { planMode }),
   snapshot: () => call<{ bytes: ArrayBuffer }>('snapshot'),
+  progressTemplate: () => call<{ bytes: ArrayBuffer }>('progressTemplate'),
+  importProgress: (bytes: ArrayBuffer, editor: string) => call<ProgressImportReport>('importProgress', { bytes, editor }, [bytes]),
+  calibration: () => call<CalibrationView>('calibration'),
+  calibrationPreview: (picks: { resourceTypeId: string; partId: string; ratio: number }[]) => call<CalibrationPreview>('calibrationPreview', { picks }),
+  calibrate: (picks: { resourceTypeId: string; partId: string; ratio: number }[], editor: string) => call<{ changed: number }>('calibrate', { picks, editor }),
+  notice: (prev: Seen | null, me: string) => call<{ now: Seen['updates'] | null; notice: Notice | null }>('notice', { prev, me }),
   lock: (holder: string | null) => call<Record<string, string | null>>('lock', { holder }),
   export: () => call<{ bytes: ArrayBuffer; dataVersion: number }>('export'),
 };

@@ -34,7 +34,7 @@ test('정상 샘플은 모든 파트 부하율이 1 미만, 과부하 샘플은 
 test('파일 표시: application_id와 구조 버전', () => {
   const db = new DatabaseSync(samples[0].path);
   assert.equal(db.prepare('PRAGMA application_id').get().application_id, APP_ID);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 3);
   db.close();
 });
 

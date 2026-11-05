@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 2;
+export const LATEST_SCHEMA = 3;
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -14,6 +14,11 @@ const STEPS: { to: number; note: string; sql: string }[] = [
       ALTER TABLE scenarios ADD COLUMN applied_at TEXT;
       UPDATE scenario_changes SET group_no = seq WHERE group_no IS NULL;
     `,
+  },
+  {
+    to: 3,
+    note: '실적에 실투입 공수(spent_days, 인·일) — 공수 보정 제안에 쓴다',
+    sql: `ALTER TABLE progress ADD COLUMN spent_days REAL;`,
   },
 ];
 

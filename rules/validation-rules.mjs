@@ -24,6 +24,29 @@ CREATE TEMP VIEW IF NOT EXISTS horizon_months AS
 
 const q = s => s.replace(/\s+/g, ' ').trim();
 
+// 규칙마다 읽는 표. 시나리오처럼 일부 표만 바뀐 경우, 그 표를 읽는 규칙만 다시 돌리고 나머지는 원본 결과를 쓴다.
+// horizon_months는 settings, live_* 는 updates·volumes를 읽는다. 규칙을 고치면 여기도 맞춘다(검사가 빠진 규칙을 잡는다).
+export const RULE_TABLES = {
+  S01: ['settings'], S02: ['settings'], S03: ['settings'],
+  P01: ['parts'], P02: ['parts'], P03: ['part_overlaps'], P04: ['part_overlaps', 'parts'],
+  E01: ['effort_profiles'],
+  E02: ['volumes', 'updates', 'resource_parts', 'parts'],
+  E03: ['volumes', 'updates', 'resource_parts', 'parts', 'efforts'],
+  E04: ['efforts'], E05: ['resource_parts'], E06: ['effort_mix'],
+  E07: ['effort_mix', 'resource_parts', 'efforts'],
+  U01: ['updates'], U02: ['updates'], U03: ['updates'], U04: ['updates', 'settings'],
+  U05: ['updates', 'update_types'], U06: ['updates'], U07: ['updates', 'volumes'],
+  V01: ['volumes', 'updates'], V02: ['volumes', 'updates'], V03: ['volumes', 'updates'], V04: ['volumes', 'updates'],
+  V05: ['volumes', 'updates', 'resource_types'],
+  A01: ['progress'], A02: ['progress', 'updates', 'volumes'], A03: ['progress', 'resource_parts'],
+  A04: ['progress', 'updates', 'parts', 'resource_parts'],
+  C01: ['parts', 'capacity', 'settings'], C02: ['capacity'],
+  C03: ['parts', 'resource_parts', 'volumes', 'updates', 'capacity', 'settings'],
+  T01: ['type_templates'],
+  X01: ['scenario_changes', 'part_overlaps', 'resource_parts', 'efforts', 'effort_mix', 'updates', 'volumes', 'capacity'],
+  X02: ['scenarios', 'change_log'],
+};
+
 export const AREAS = {
   S: '설정',
   P: '파트 · 공정',

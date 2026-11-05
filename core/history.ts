@@ -24,7 +24,7 @@ const TARGET_NAME: Record<string, string> = {
 };
 const FIELD_NAME: Record<string, string> = {
   min_qty: '최저', target_qty: '목표', stretch_qty: '확장', outsource_qty: '외주', name: '이름', start_date: '시작', freeze_date: '제작 완료 목표',
-  release_date: '출시', priority: '우선순위', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
+  release_date: '출시', priority: '우선순위', days: '1개당 인·일', spent_days: '실투입', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
   productivity: '생산성', outsource_days: '외주', support_days: '지원', completed_qty: '완료', horizon: '계획 기간', share: '비율', overlap_rate: '겹침률',
 };
 

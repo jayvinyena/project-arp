@@ -257,7 +257,7 @@ export function capacityView(db: SqlDb): CapacityView {
 
 // ───────── 실적 ─────────
 
-export interface ProgressCell { partId: string; passes: boolean; completed: number | null; asOf: string | null; flag: string | null }
+export interface ProgressCell { partId: string; passes: boolean; completed: number | null; spent: number | null; asOf: string | null; flag: string | null }
 export interface ProgressRow {
   resourceTypeId: string;
   name: string;
@@ -322,7 +322,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
         bp.doneDays += Math.min(c, need) * days;
       }
       if (flag) flags.set(key, flag);
-      return { partId: p.partId, passes: on, completed, asOf: row?.as_of == null ? null : String(row.as_of), flag };
+      return { partId: p.partId, passes: on, completed: completed === 0 ? null : completed, spent: row?.spent_days == null ? null : Number(row.spent_days), asOf: row?.as_of == null ? null : String(row.as_of), flag };
     });
     return { resourceTypeId: rt, name: String(v.name), groupName: String(v.group_name), target, stretch: Number(v.stretch_qty ?? 0), outsource, cells, doneRate: need > 0 ? Math.min(1, last / need) : (last > 0 ? 1 : 0) };
   });
