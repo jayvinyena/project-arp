@@ -23,10 +23,10 @@ export function progressTemplate(db: SqlDb): Record<string, Cell[][]> {
     '작업 진척': [HEAD, ...rows.map(x => [x.update_id, x.uname, x.resource_type_id, x.rname, x.part_id, x.pname, x.target_qty, x.completed_qty, x.spent_days, x.as_of] as Cell[])],
     '안내': [
       ['안내'],
-      ['"완료 수량"과 "실투입 인·일" 칸만 고쳐 주세요. 비워 둔 칸은 바꾸지 않아요.'],
-      ['0을 넣으면 그 값을 지워요(완료 0 = 아직 없음).'],
-      ['ID 칸이 있으면 ID로, 없으면 이름으로 맞춰요. 다른 도구에서 뽑은 표도 머리글이 비슷하면 넣을 수 있어요.'],
-      ['기준일이 비면 넣는 날의 날짜를 써요.'],
+      ['"완료 수량"과 "실투입 인·일" 칸만 수정하십시오. 비워 둔 칸은 변경하지 않습니다.'],
+      ['0을 입력하면 그 값을 삭제합니다(완료 0 = 아직 없음).'],
+      ['ID 칸이 있으면 ID로, 없으면 이름으로 맞춥니다. 다른 도구에서 뽑은 표도 머리글이 비슷하면 입력할 수 있습니다.'],
+      ['기준일이 비면 넣는 날의 날짜를 사용합니다.'],
     ],
   };
 }
@@ -75,12 +75,12 @@ const date = (v: ReadCell): string | null => {
 export function importProgress(db: SqlDb, session: ProjectSession, sheets: Sheets, ctx: { editor: string; batchId: string }, today: string): ProgressImportReport {
   const name = Object.keys(sheets).find(n => n.trim() === '작업 진척' || n.trim() === '실적') ?? Object.keys(sheets)[0];
   const table = name ? sheets[name] : [];
-  if (!table || table.length < 2) throw new Error('작업 진척 표가 비었어요. "양식 받기"로 받은 파일에 채워 주세요.');
+  if (!table || table.length < 2) throw new Error('작업 진척 표가 비었습니다. "양식 받기"로 받은 파일에 채우십시오.');
   const col = columns(table[0]);
   if ((col.uid == null && col.uname == null) || (col.rid == null && col.rname == null) || (col.pid == null && col.pname == null)) {
-    throw new Error('업데이트·리소스·파트 칸을 찾지 못했어요. 머리글에 "업데이트", "리소스", "파트"가 있어야 해요.');
+    throw new Error('업데이트·리소스·파트 칸을 찾지 못했습니다. 머리글에 "업데이트", "리소스", "파트"가 있어야 합니다.');
   }
-  if (col.done == null && col.spent == null) throw new Error('"완료 수량"이나 "실투입 인·일" 칸이 없어요.');
+  if (col.done == null && col.spent == null) throw new Error('"완료 수량"이나 "실투입 인·일" 칸이 없습니다.');
   const norm = (s: unknown) => String(s ?? '').trim().toLowerCase();
   const byId = (table2: string, idc: string, namec: string) => {
     const all = db.all(`SELECT ${idc} AS id, ${namec} AS name FROM ${table2}`);
@@ -91,8 +91,8 @@ export function importProgress(db: SqlDb, session: ProjectSession, sheets: Sheet
       if (idv != null && idv !== '' && ids.has(norm(idv))) return ids.get(norm(idv))!;
       const hit = names.get(norm(namev));
       if (hit?.length === 1) return hit[0];
-      if (hit && hit.length > 1) return { error: `이름 "${namev}"이 여러 개라 ID가 필요해요` };
-      return { error: `"${idv ?? namev ?? ''}"을 찾지 못했어요` };
+      if (hit && hit.length > 1) return { error: `이름 "${namev}"이 여러 개라 ID가 필요합니다` };
+      return { error: `"${idv ?? namev ?? ''}"을 찾지 못했습니다` };
     };
   };
   const findUpdate = byId('updates', 'update_id', 'name');

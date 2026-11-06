@@ -98,15 +98,15 @@ export function VolumeTable(props: {
               ? <Field class="field inline-title" value={modeLabel} label="템플릿 이름" onCommit={t => props.onRename!(t)} />
               : modeLabel}
           </h2>
-          <p class="small muted" style="margin-top: 2px">리소스 {props.rows.length}종 · 숫자를 고치면 바로 다시 계산해요{props.onRename && !readOnly ? ' · 템플릿 이름은 제목을 눌러 바꿔요(예: 보수안 · 계획안 · 도전안)' : ''}</p>
+          <p class="small muted" style="margin-top: 2px">리소스 {props.rows.length}종 · 숫자를 수정하면 바로 다시 계산합니다{props.onRename && !readOnly ? ' · 템플릿 이름은 제목을 눌러 변경합니다(예: 보수안 · 계획안 · 도전안)' : ''}</p>
         </div>
         <div class="inline">
         {!readOnly && props.onCopy && (
-          <button type="button" class="btn sm" title={`${modeLabel} 수량을 ${others.map(m => MODE_LABEL[m]).join('·')}에도 그대로 넣어요(되돌리기 가능)`}
+          <button type="button" class="btn sm" title={`${modeLabel} 수량을 ${others.map(m => MODE_LABEL[m]).join('·')}에도 그대로 입력합니다(되돌리기 가능)`}
             onClick={async () => { for (const m of others) await props.onCopy!(field, MODE_FIELD[m]); }}>다른 템플릿에도 똑같이</button>
         )}
         {!readOnly && props.onCopy && others.map(m => (
-          <button type="button" class="btn sm ghost" title={`${MODE_LABEL[m]}의 수량을 모두 ${modeLabel}으로 가져와요(되돌리기 가능)`}
+          <button type="button" class="btn sm ghost" title={`${MODE_LABEL[m]}의 수량을 모두 ${modeLabel}으로 가져옵니다(되돌리기 가능)`}
             onClick={() => props.onCopy!(MODE_FIELD[m], field)}>{MODE_LABEL[m]} 수량 가져오기</button>
         ))}
         {!readOnly && props.addable.length > 0 && (
@@ -168,7 +168,7 @@ export function VolumeTable(props: {
                         <td class="n" data-label="외주"><QtyInput value={r.outsource} field="outsource_qty" label={`${r.name} 외주`} nullable={false} disabled={readOnly} onCommit={edit(r, 'outsource_qty')} /></td>
                         <td class="n days" data-label={`필요 공수 · ${modeLabel}`}>
                           {props.blocked
-                            ? <span class="faint" title="계산할 수 없어요">—</span>
+                            ? <span class="faint" title="계산할 수 없습니다">—</span>
                             : (
                               <span class="share">
                                 <span class="num">{fmtDays(days)}<span class="faint small"> 인·일</span></span>

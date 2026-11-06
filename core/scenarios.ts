@@ -59,10 +59,10 @@ interface Change { op: 'SET' | 'INSERT' | 'DELETE'; target: EngineTable; target_
 
 /** 동작 → 변경 줄과 사람이 읽는 이름. 지금 원본 값을 기준으로 계산한다(원본이 바뀌면 X02로 알린다) */
 function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[] } {
-  const partName = (id: string) => String(db.get('SELECT name FROM parts WHERE part_id = ?', [id])?.name ?? fail('없는 파트예요.'));
-  const updateName = (id: string) => String(db.get('SELECT name FROM updates WHERE update_id = ?', [id])?.name ?? fail('없는 업데이트예요.'));
+  const partName = (id: string) => String(db.get('SELECT name FROM parts WHERE part_id = ?', [id])?.name ?? fail('없는 파트입니다.'));
+  const updateName = (id: string) => String(db.get('SELECT name FROM updates WHERE update_id = ?', [id])?.name ?? fail('없는 업데이트입니다.'));
   const months = (from: string, to: string) => {
-    if (!MONTH.test(from) || !MONTH.test(to) || to < from) fail('기간을 확인해 주세요.');
+    if (!MONTH.test(from) || !MONTH.test(to) || to < from) fail('기간을 확인하십시오.');
     return monthsBetween(from, to);
   };
   const range = (from: string, to: string) => (from === to ? from : `${from}~${to}`);
@@ -73,14 +73,14 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
       const name = partName(a.partId);
       const field = a.kind === 'headcount' ? 'headcount' : 'outsource_days';
       const add = a.kind === 'headcount' ? a.delta : a.days;
-      if (!Number.isFinite(add) || add === 0) fail('0이 아닌 숫자를 넣어 주세요.');
+      if (!Number.isFinite(add) || add === 0) fail('0이 아닌 숫자를 입력하십시오.');
       const changes: Change[] = [];
       for (const m of months(a.fromMonth, a.toMonth)) {
         if (!db.get('SELECT 1 AS ok FROM capacity WHERE part_id = ? AND month = ?', [a.partId, m])) continue;
         // 절댓값이 아니라 더하기 값: 같은 칸에 동작을 여러 번 넣어도 더해지고, 중간 동작을 빼도 나머지가 맞다
         changes.push({ op: 'SET', target: 'capacity', target_key: `${a.partId}|${m}`, field, value: { add } });
       }
-      if (!changes.length) fail('그 기간에 인력 행이 없어요.');
+      if (!changes.length) fail('그 기간에 인력 행이 없습니다.');
       const sign = add > 0 ? '+' : '';
       return {
         label: a.kind === 'headcount' ? `${name} 인원 ${sign}${fmtN(add)}명 (${range(a.fromMonth, a.toMonth)})` : `${name} 외주 ${sign}${fmtN(add)}인·일/월 (${range(a.fromMonth, a.toMonth)})`,
@@ -89,8 +89,8 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
     }
     case 'aiShare': {
       const name = partName(a.partId);
-      if (!(a.share >= 0 && a.share <= 1)) fail('AI 비율은 0–100%예요.');
-      if (!db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'")) fail('"AI 사용 시" 공수 프로필이 없어요.');
+      if (!(a.share >= 0 && a.share <= 1)) fail('AI 비율은 0–100%입니다.');
+      if (!db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'")) fail('"AI 사용 시" 공수 프로필이 없습니다.');
       const changes: Change[] = [];
       for (const [profile, share] of [['BASE', 1 - a.share], ['AI', a.share]] as const) {
         // 넣기는 겹치면 덮어쓴다(같은 시나리오에 두 번 넣어도 된다)
@@ -104,7 +104,7 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
     }
     case 'volumeScale': {
       const name = updateName(a.updateId);
-      if (!(a.scale >= 0 && a.scale <= 10)) fail('배율은 0–1000%예요.');
+      if (!(a.scale >= 0 && a.scale <= 10)) fail('배율은 0–1000%입니다.');
       const rows = db.all('SELECT * FROM volumes WHERE update_id = ?', [a.updateId]);
       const changes: Change[] = [];
       for (const v of rows) {
@@ -113,7 +113,7 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
           changes.push({ op: 'SET', target: 'volumes', target_key: `${a.updateId}|${v.resource_type_id}`, field: f, value: Math.round(Number(v[f]) * a.scale) });
         }
       }
-      if (!changes.length) fail('그 업데이트에 물량이 없어요.');
+      if (!changes.length) fail('그 업데이트에 물량이 없습니다.');
       return { label: `${name} 물량 ×${Math.round(a.scale * 100)}%`, changes };
     }
     case 'volumeToMin': {
@@ -126,7 +126,7 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
           changes.push({ op: 'SET', target: 'volumes', target_key: `${a.updateId}|${v.resource_type_id}`, field: f, value: Number(v.min_qty) });
         }
       }
-      if (!changes.length) fail(a.onlyOptional ? '최소안 물량이 있는 선택 리소스가 없어요.' : '최소안 물량이 있는 리소스가 없어요.');
+      if (!changes.length) fail(a.onlyOptional ? '최소안 물량이 있는 선택 리소스가 없습니다.' : '최소안 물량이 있는 리소스가 없습니다.');
       return { label: `${name} ${a.onlyOptional ? '선택 리소스' : '모든 리소스'}를 ${readModeNames(db).MIN} 물량으로`, changes };
     }
     case 'updateDates': {
@@ -135,16 +135,16 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
       const parts: string[] = [];
       for (const [f, v, label] of [['start_date', a.startDate, '시작'], ['freeze_date', a.freezeDate, '제작 완료 목표'], ['release_date', a.releaseDate, '출시']] as const) {
         if (v === undefined) continue;
-        if (v != null && !realDate(v)) fail('날짜를 확인해 주세요(YYYY-MM-DD, 달력에 있는 날).');
+        if (v != null && !realDate(v)) fail('날짜를 확인하십시오(YYYY-MM-DD, 달력에 있는 날).');
         changes.push({ op: 'SET', target: 'updates', target_key: a.updateId, field: f, value: v });
         parts.push(`${label} ${v ?? '없음'}`);
       }
-      if (!changes.length) fail('바꿀 날짜를 골라 주세요.');
+      if (!changes.length) fail('바꿀 날짜를 선택하십시오.');
       return { label: `${name} ${parts.join(' · ')}`, changes };
     }
     case 'priority': {
       const name = updateName(a.updateId);
-      if (!Number.isInteger(a.priority) || a.priority < 0) fail('우선순위는 0 이상의 정수예요.');
+      if (!Number.isInteger(a.priority) || a.priority < 0) fail('우선순위는 0 이상의 정수입니다.');
       return { label: `${name} 우선순위 ${a.priority}`, changes: [{ op: 'SET', target: 'updates', target_key: a.updateId, field: 'priority', value: a.priority }] };
     }
     case 'exclude': {
@@ -152,7 +152,7 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
       return { label: `${name} 빼기`, changes: [{ op: 'SET', target: 'updates', target_key: a.updateId, field: 'status', value: 'CANCELLED' }] };
     }
     case 'overlap': {
-      if (!(a.rate >= 0 && a.rate <= 1)) fail('겹침률은 0–100%예요.');
+      if (!(a.rate >= 0 && a.rate <= 1)) fail('겹침률은 0–100%입니다.');
       if (a.fromPartId && a.toPartId) {
         const key = `${a.fromPartId}|${a.toPartId}`;
         const exists = db.get('SELECT 1 AS ok FROM part_overlaps WHERE from_part_id = ? AND to_part_id = ?', [a.fromPartId, a.toPartId]);
@@ -174,9 +174,9 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
       };
     }
     case 'addUpdate': {
-      if (!a.name.trim()) fail('업데이트 이름을 넣어 주세요.');
-      for (const d of [a.startDate, a.freezeDate, a.releaseDate]) if (d != null && !realDate(d)) fail('날짜를 확인해 주세요(YYYY-MM-DD, 달력에 있는 날).');
-      if (!db.get('SELECT 1 AS ok FROM update_types WHERE update_type_id = ? AND is_launch = 0', [a.typeId])) fail('업데이트 유형을 골라 주세요.');
+      if (!a.name.trim()) fail('업데이트 이름을 입력하십시오.');
+      for (const d of [a.startDate, a.freezeDate, a.releaseDate]) if (d != null && !realDate(d)) fail('날짜를 확인하십시오(YYYY-MM-DD, 달력에 있는 날).');
+      if (!db.get('SELECT 1 AS ok FROM update_types WHERE update_type_id = ? AND is_launch = 0', [a.typeId])) fail('업데이트 유형을 선택하십시오.');
       const max = db.all("SELECT update_id AS id FROM updates WHERE update_id LIKE 'X%'").reduce((m, r) => Math.max(m, Number(String(r.id).slice(1)) || 0), 0);
       // 시나리오끼리 ID가 겹치지 않게 시나리오 변경 안의 가상 업데이트 ID도 본다
       const used = db.all("SELECT target_key FROM scenario_changes WHERE target = 'updates' AND op = 'INSERT'").reduce((m, r) => Math.max(m, Number(String(r.target_key).slice(1)) || 0), 0);
@@ -200,11 +200,11 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
 export function applyScenarioOp(db: SqlDb, op: ScenarioOp): { changed: boolean; createdId?: string; groupNo?: number } {
   const now = new Date().toISOString();
   const touch = (id: string) => db.run('UPDATE scenarios SET updated_at = ? WHERE scenario_id = ?', [now, id]);
-  const mustExist = (id: string) => { if (!db.get('SELECT 1 AS ok FROM scenarios WHERE scenario_id = ?', [id])) fail('없는 시나리오예요.'); };
+  const mustExist = (id: string) => { if (!db.get('SELECT 1 AS ok FROM scenarios WHERE scenario_id = ?', [id])) fail('없는 시나리오입니다.'); };
   switch (op.kind) {
     case 'create': {
       const name = op.name.trim();
-      if (!name) fail('시나리오 이름을 넣어 주세요.');
+      if (!name) fail('시나리오 이름을 입력하십시오.');
       const id = nextScenarioId(db);
       db.run('INSERT INTO scenarios (scenario_id, name, note, base_data_version, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?)', [id, name, dataVersion(db), now, now]);
       if (op.copyFrom) {
@@ -217,7 +217,7 @@ export function applyScenarioOp(db: SqlDb, op: ScenarioOp): { changed: boolean; 
     case 'rename': {
       mustExist(op.scenarioId);
       const name = op.name.trim();
-      if (!name) fail('이름은 비울 수 없어요.');
+      if (!name) fail('이름은 비울 수 없습니다.');
       db.run('UPDATE scenarios SET name = ?, updated_at = ? WHERE scenario_id = ?', [name, now, op.scenarioId]);
       return { changed: true };
     }
@@ -408,9 +408,9 @@ export interface ApplyResult { applied: number; skipped: number; findings: Findi
  */
 export function applyScenarioToBase(db: SqlDb, session: ProjectSession, scenarioId: string, ctx: { editor: string; batchId: string }, force = false): ApplyResult {
   const s = db.get('SELECT * FROM scenarios WHERE scenario_id = ?', [scenarioId]);
-  if (!s) fail('없는 시나리오예요.');
-  if (s!.applied_at) fail('이미 원본에 반영한 시나리오예요.');
-  if (!force && isStale(db, scenarioId)) fail('시나리오를 만든 뒤 원본이 바뀌었어요. 결과를 다시 확인하고 그래도 반영하려면 "그래도 반영"을 눌러 주세요.');
+  if (!s) fail('없는 시나리오입니다.');
+  if (s!.applied_at) fail('이미 원본에 반영한 시나리오입니다.');
+  if (!force && isStale(db, scenarioId)) fail('시나리오를 만든 뒤 원본이 변경되었습니다. 결과를 다시 확인하고 그래도 반영하려면 "그래도 반영"을 누르십시오.');
   const changes = db.all('SELECT * FROM scenario_changes WHERE scenario_id = ? ORDER BY seq', [scenarioId]);
   const reason = `시나리오 반영: ${s!.name}`;
   const log = (action: string, target: string, key: string, field: string | null, oldV: unknown, newV: unknown) =>
@@ -462,7 +462,7 @@ export function applyScenarioToBase(db: SqlDb, session: ProjectSession, scenario
     if (findings.some(f => f.level === 'ERROR')) {
       db.exec('ROLLBACK TO apply_scenario');
       db.exec('RELEASE apply_scenario');
-      const e = new Error(`반영하면 계산할 수 없는 상태가 돼서 되돌렸어요: ${findings.filter(f => f.level === 'ERROR').map(f => `${f.title}(${f.key})`).slice(0, 3).join(', ')}`);
+      const e = new Error(`반영하면 계산할 수 없는 상태가 되어 되돌렸습니다: ${findings.filter(f => f.level === 'ERROR').map(f => `${f.title}(${f.key})`).slice(0, 3).join(', ')}`);
       throw e;
     }
     db.run('UPDATE scenarios SET applied_at = ? WHERE scenario_id = ?', [new Date().toISOString(), scenarioId]);

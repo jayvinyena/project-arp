@@ -82,7 +82,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(600);
   await cdp.waitUntil("document.querySelectorAll('.mode-card').length === 3");
   const big = await cdp.eval("document.querySelectorAll('.mode-card .big')[1]?.textContent");
-  check('물량을 넣으면 완료 예정일이 나온다', /월 \d+일/.test(big ?? ''), big);
+  check('물량을 입력하면 완료 예정일이 나온다', /월 \d+일/.test(big ?? ''), big);
   await shot(cdp, 'new-5-created');
 }, { build: !process.argv.includes('--no-build') });
 

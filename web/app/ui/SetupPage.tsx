@@ -1,4 +1,4 @@
-// 프로젝트·파트·리소스: 새 프로젝트 마법사에서 넣은 것(기본 정보·파트·인원·가동률·리소스·공수)을 만든 뒤에 고친다.
+// 프로젝트·파트·리소스: 새 프로젝트 마법사에서 입력한 것(기본 정보·파트·인원·가동률·리소스·공수)을 만든 뒤에 고친다.
 // AI: 리소스 × 파트마다 "기본(AI 없이)"과 "AI 사용 시" 공수, 파트마다 AI 활용 비율 → 공수 = 기본 × (1 − 비율) + AI × 비율
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
@@ -51,7 +51,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         <div>
           <PageEyebrow page="setup" />
           <h1>프로젝트 · 파트 · 리소스</h1>
-          <p class="muted" style="margin-top: 6px">새 프로젝트를 만들 때 넣은 것을 여기서 고쳐요. 고치면 바로 다시 계산되고, 변경 이력에서 되돌릴 수 있어요.</p>
+          <p class="muted" style="margin-top: 6px">새 프로젝트를 만들 때 입력한 것을 여기서 수정합니다. 수정하면 바로 다시 계산되고, 변경 이력에서 되돌릴 수 있습니다.</p>
         </div>
       </header>
 
@@ -94,7 +94,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
 
       <section class="card" aria-label="파트">
         <div class="card-head">
-          <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">순서 = 공정 순서예요. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용돼요. 달마다 다르게 하려면 "인력"에서 고쳐요.</p></div>
+          <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">순서 = 공정 순서입니다. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용됩니다. 달마다 다르게 하려면 "인력"에서 수정합니다.</p></div>
         </div>
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap">
@@ -117,7 +117,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                     <td class="n num faint">{p.usedBy}종</td>
                     <td><label class="check"><input type="checkbox" aria-label={`${p.name} 사용`} checked={p.active} disabled={ro} onChange={() => void apply({ kind: 'partActive', partId: p.partId, active: !p.active })} /></label></td>
                     <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 파트 지우기`} disabled={p.usedBy > 0 || p.hasProgress}
-                      title={p.usedBy > 0 ? `리소스 ${p.usedBy}종이 거쳐요. 공수에서 이 파트를 빼야 지울 수 있어요` : p.hasProgress ? '작업 진척 기록이 있어요' : '지우기'}
+                      title={p.usedBy > 0 ? `리소스 ${p.usedBy}종이 거칩니다. 공수에서 이 파트를 제외해야 삭제할 수 있습니다` : p.hasProgress ? '작업 진척 기록이 있습니다' : '지우기'}
                       onClick={() => void apply({ kind: 'deletePart', partId: p.partId })}><IconX /></button>}</td>
                   </tr>
                 ))}
@@ -128,7 +128,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
             <div class="inline" style="margin-top: 10px">
               <input class="field" placeholder="새 파트 이름 (예: 리깅)" aria-label="새 파트 이름" value={newPart} onInput={e => setNewPart((e.target as HTMLInputElement).value)} />
               <button type="button" class="btn sm" disabled={!newPart.trim()} onClick={async () => { if (await apply({ kind: 'createPart', name: newPart })) setNewPart(''); }}><IconPlus />파트 더하기</button>
-              <span class="small faint">새 파트는 맨 뒤 공정, 인원 0명으로 들어가요.</span>
+              <span class="small faint">새 파트는 맨 뒤 공정, 인원 0명으로 들어갑니다.</span>
             </div>
           )}
         </div>
@@ -137,7 +137,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
       <section class="card" aria-label="리소스">
         <div class="card-head">
           <div><h2>리소스 · 1개당 공수(인·일)</h2>
-            <p class="small muted" style="margin-top: 2px">파트마다 <b>기본</b>(AI 없이)과 <b>AI</b>(AI 사용 시) 공수를 넣어요. 기본을 비우면 그 파트를 거치지 않고, AI를 비우면 기본과 같다고 봐요. 계산 공수 = 기본 × (1 − AI 활용 비율) + AI × 비율.</p></div>
+            <p class="small muted" style="margin-top: 2px">파트마다 <b>기본</b>(AI 없이)과 <b>AI</b>(AI 사용 시) 공수를 입력합니다. 기본을 비우면 그 파트를 거치지 않고, AI를 비우면 기본과 같은 값으로 간주합니다. 계산 공수 = 기본 × (1 − AI 활용 비율) + AI × 비율.</p></div>
         </div>
         <div class="card-body" style="padding-top: 8px">
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
@@ -169,7 +169,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                         })}
                         <td><label class="check"><input type="checkbox" aria-label={`${r.name} 사용`} checked={r.active} disabled={ro} onChange={() => void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: !r.active })} /></label></td>
                         <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 리소스 지우기`} disabled={r.used}
-                          title={r.used ? '물량·유형 템플릿·작업 진척에 쓰여요. 사용 안 함으로 두거나 그곳에서 먼저 빼 주세요' : '지우기'}
+                          title={r.used ? '물량·유형 템플릿·작업 진척에 사용됩니다. 사용 안 함으로 두거나 그곳에서 먼저 제외하십시오' : '지우기'}
                           onClick={() => void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId })}><IconX /></button>}</td>
                       </tr>
                     ))}
@@ -183,7 +183,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
               <input class="field" list="setup-groups" placeholder="분류 (예: 캐릭터)" aria-label="새 리소스 분류" value={newRes.group} onInput={e => setNewRes({ ...newRes, group: (e.target as HTMLInputElement).value })} />
               <input class="field" placeholder="새 리소스 이름 (예: 탈것)" aria-label="새 리소스 이름" value={newRes.name} onInput={e => setNewRes({ ...newRes, name: (e.target as HTMLInputElement).value })} />
               <button type="button" class="btn sm" disabled={!newRes.name.trim()} onClick={async () => { if (await apply({ kind: 'createResource', name: newRes.name, groupName: newRes.group })) setNewRes({ group: newRes.group, name: '' }); }}><IconPlus />리소스 더하기</button>
-              <span class="small faint">더한 뒤 파트별 기본 공수를 넣어야 계산에 들어가요.</span>
+              <span class="small faint">더한 뒤 파트별 기본 공수를 넣어야 계산에 들어갑니다.</span>
             </div>
           )}
         </div>

@@ -109,7 +109,7 @@ test('실적 엑셀: 양식(지금 값) → 채워서 넣기(한 묶음) · ID �
   assert.equal(rep2.changedCells, 1);
   assert.equal(rep2.skipped.length, 1);
   assert.equal(rep2.skipped[0].row, 3);
-  await assert.rejects(async () => importProgress(db, session, await readXlsx(writeXlsx({ A: [['x', 'y'], [1, 2]] })), { editor: '검사', batchId: 'X' }, '2026-12-01'), /칸을 찾지 못했어요/);
+  await assert.rejects(async () => importProgress(db, session, await readXlsx(writeXlsx({ A: [['x', 'y'], [1, 2]] })), { editor: '검사', batchId: 'X' }, '2026-12-01'), /칸을 찾지 못했습니다/);
   raw.close();
 });
 

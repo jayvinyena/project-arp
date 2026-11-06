@@ -13,9 +13,9 @@ import { MODE_LABEL, humanKey } from './LaunchPage.tsx';
 
 const STATUS: Record<UpdateStatus, { text: string; tone: string }> = {
   ON_TRACK: { text: '목표 안', tone: 'ok' },
-  TIGHT: { text: '빠듯해요', tone: 'warn' },
-  LATE: { text: '늦어요', tone: 'bad' },
-  UNFINISHED: { text: '기간 안에 못 끝나요', tone: 'bad' },
+  TIGHT: { text: '빠듯', tone: 'warn' },
+  LATE: { text: '늦음', tone: 'bad' },
+  UNFINISHED: { text: '기간 안에 못 끝남', tone: 'bad' },
   NO_RELEASE_DATE: { text: '출시일 없음', tone: '' },
 };
 const LIFE: Record<string, string> = { PLANNED: '계획', IN_PROGRESS: '진행 중', DONE: '완료', CANCELLED: '취소' };
@@ -110,7 +110,7 @@ function LoadMap(props: { view: PlanView }) {
   return (
     <section class="card">
       <div class="card-head">
-        <div><h2>파트 부하 · {MODE_LABEL[props.view.planMode]}</h2><p class="small muted" style="margin-top: 2px">달마다 작업 가능량을 얼마나 썼는지. 진할수록 꽉 찬 달이에요. 칸에 올리면 숫자가 보여요.</p></div>
+        <div><h2>파트 부하 · {MODE_LABEL[props.view.planMode]}</h2><p class="small muted" style="margin-top: 2px">달마다 작업 가능량을 얼마나 썼는지. 진할수록 꽉 찬 달입니다. 칸에 올리면 숫자가 표시됩니다.</p></div>
         <div class="legend scale"><span>쉼</span><i class="heat u0" /><i class="heat u1" /><i class="heat u2" /><i class="heat u3" /><i class="heat u4" /><span>꽉 참</span></div>
       </div>
       <div class="card-body">
@@ -169,7 +169,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
   };
   return (
     <section class="card">
-      <div class="card-head"><div><h2>업데이트</h2><p class="small muted" style="margin-top: 2px">우선순위가 높은 업데이트가 인력을 먼저 써요. 화살표로 순서를 바꿔요.</p></div></div>
+      <div class="card-head"><div><h2>업데이트</h2><p class="small muted" style="margin-top: 2px">우선순위가 높은 업데이트가 인력을 먼저 사용합니다. 화살표로 순서를 변경합니다.</p></div></div>
       <div class="card-body" style="padding-top: 8px">
         <div class="table-wrap">
           <table class="grid list">
@@ -196,8 +196,8 @@ function CreateUpdate(props: { view: PlanView; onClose: () => void; onCreate: (e
   const [f, setF] = useState({ name: '', typeId: types[0]?.typeId ?? '', startDate: start0, freezeDate: addDays(start0, 75) as string | null, releaseDate: addDays(start0, 90) as string | null });
   const [error, setError] = useState('');
   const submit = async () => {
-    if (!f.name.trim()) { setError('업데이트 이름을 넣어 주세요.'); return; }
-    if (!f.typeId) { setError('업데이트 유형이 없어요. 유형 템플릿에서 먼저 만들어 주세요.'); return; }
+    if (!f.name.trim()) { setError('업데이트 이름을 입력하십시오.'); return; }
+    if (!f.typeId) { setError('업데이트 유형이 없습니다. 유형 템플릿에서 먼저 만드십시오.'); return; }
     try { await props.onCreate({ kind: 'createUpdate', ...f }); } catch (e) { setError((e as Error).message); }
   };
   const t = types.find(x => x.typeId === f.typeId);
@@ -213,7 +213,7 @@ function CreateUpdate(props: { view: PlanView; onClose: () => void; onCreate: (e
             <select class="field" aria-label="업데이트 유형" value={f.typeId} onChange={e => setF({ ...f, typeId: (e.target as HTMLSelectElement).value })}>
               {types.map(x => <option value={x.typeId}>{x.name}</option>)}
             </select>
-            <span class="form-help">{t ? `${t.name} 템플릿의 물량 ${t.templateCount}종을 복사해요. 만든 뒤 고칠 수 있어요.` : ''}</span>
+            <span class="form-help">{t ? `${t.name} 템플릿의 물량 ${t.templateCount}종을 복사합니다. 만든 뒤 수정할 수 있습니다.` : ''}</span>
           </label>
           <div class="dates">
             {([['startDate', '작업 시작'], ['freezeDate', '제작 완료 목표'], ['releaseDate', '출시']] as const).map(([k, label]) => (
@@ -275,7 +275,7 @@ function UpdateDrawer(props: {
                 ))}
               </div>
               {errors.length > 0 && (
-                <div class="banner bad"><IconAlert /><div><b>계산할 수 없어요 · 고칠 곳 {errors.length}개</b>
+                <div class="banner bad"><IconAlert /><div><b>계산할 수 없습니다 · 고칠 곳 {errors.length}개</b>
                   <ul class="small">{errors.slice(0, 4).map(f => <li>{humanKey(f.key, props.names)} — {f.title} ({f.detail})</li>)}</ul></div></div>
               )}
               <VolumeTable
@@ -295,7 +295,7 @@ function UpdateDrawer(props: {
               {!d.isLaunch && !props.readOnly && (
                 <div class="danger-zone">
                   {confirmDelete
-                    ? <><span class="small">"{d.name}"과 물량·작업 진척을 지울까요? 변경 이력에는 남아요.</span>
+                    ? <><span class="small">"{d.name}"과 물량·작업 진척을 삭제하시겠습니까? 변경 이력에는 남습니다.</span>
                       <button type="button" class="btn sm danger" onClick={async () => { if (await props.onApply({ kind: 'deleteUpdate', updateId: d.updateId })) props.onClose(); }}>지우기</button>
                       <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
                     : <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(true)}>이 업데이트 지우기</button>}
@@ -329,7 +329,7 @@ export function PlanPage(props: {
         <div>
           <PageEyebrow page="plan" />
           <h1>런칭과 업데이트 {live.length}개</h1>
-          <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 써요.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개.`}</p>
+          <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 사용합니다.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개.`}</p>
         </div>
         <div class="inline">
           <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />
@@ -337,7 +337,7 @@ export function PlanPage(props: {
         </div>
       </header>
       {errors.length > 0 && (
-        <div class="banner bad" role="alert"><IconAlert /><div><b>계산할 수 없어요 · 고칠 곳 {errors.length}개</b>
+        <div class="banner bad" role="alert"><IconAlert /><div><b>계산할 수 없습니다 · 고칠 곳 {errors.length}개</b>
           <ul class="small">{errors.slice(0, 6).map(f => <li>{humanKey(f.key, names)} — {f.title} ({f.detail})</li>)}</ul></div></div>
       )}
       {!errors.length && <Timeline view={view} onOpen={setOpenId} />}

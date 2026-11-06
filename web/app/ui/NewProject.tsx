@@ -20,7 +20,7 @@ function Problems(props: { list: InputProblem[] }) {
   return (
     <div class="banner bad" role="alert">
       <IconAlert />
-      <div><b>고칠 곳이 있어요</b><ul class="small">{props.list.map(p => <li>{p.message}</li>)}</ul></div>
+      <div><b>고칠 곳이 있습니다</b><ul class="small">{props.list.map(p => <li>{p.message}</li>)}</ul></div>
     </div>
   );
 }
@@ -50,7 +50,7 @@ function Basic(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) =
           <input class="field" type="month" aria-label="계획 끝 달" value={v.horizonEnd} onInput={e => setHorizon(v.horizonStart, (e.target as HTMLInputElement).value)} />
           {months > 0 && <span class="tag">{months}개월</span>}
         </div>
-        <span class="form-help">인력은 이 기간의 모든 달에 만들어져요. 최대 60개월.</span>
+        <span class="form-help">인력은 이 기간의 모든 달에 만들어집니다. 최대 60개월.</span>
       </div>
       <div class="form-row">
         <span class="form-label">근무 요일</span>
@@ -64,7 +64,7 @@ function Basic(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) =
       <label class="form-row">
         <span class="form-label">여유율</span>
         <div class="inline"><input class="field narrow" inputMode="decimal" value={pct(v.bufferRate)} onInput={e => set({ bufferRate: num((e.target as HTMLInputElement).value) / 100 })} /><span class="faint">%</span></div>
-        <span class="form-help">예상 못 한 일을 위해 모든 필요 공수에 더해요.</span>
+        <span class="form-help">예상 못 한 일을 위해 모든 필요 공수에 추가합니다.</span>
       </label>
       <div class="form-row">
         <span class="form-label">휴일</span>
@@ -72,7 +72,7 @@ function Basic(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) =
           <input type="checkbox" checked={usePublic} onChange={e => { const on = (e.target as HTMLInputElement).checked; setUsePublic(on); set({ holidays: withPublic(on) }); }} />
           날짜가 고정된 공휴일 넣기 <span class="faint">({v.holidays.filter(h => h.kind === 'PUBLIC').length}일)</span>
         </label>
-        <span class="form-help">설·추석·대체 공휴일은 해마다 날짜가 달라 아래에 직접 넣어 주세요.</span>
+        <span class="form-help">설·추석·대체 공휴일은 해마다 날짜가 달라 아래에 직접 입력하십시오.</span>
         <div class="inline">
           <input class="field" type="date" aria-label="휴무일 날짜" value={company.date} onInput={e => setCompany({ ...company, date: (e.target as HTMLInputElement).value })} />
           <input class="field" placeholder="이름 (예: 창립기념일)" aria-label="휴무일 이름" value={company.name} onInput={e => setCompany({ ...company, name: (e.target as HTMLInputElement).value })} />
@@ -106,7 +106,7 @@ function Parts(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) =
   const add = () => set({ parts: [...v.parts, { name: '', headcount: 1, utilization: 0.8 }], resources: v.resources.map(r => ({ ...r, efforts: [...r.efforts, null] })) });
   return (
     <div class="form">
-      <p class="muted">공정 순서대로 적어 주세요. 리소스는 위에서 아래 순서로 파트를 거쳐요.</p>
+      <p class="muted">공정 순서대로 입력하십시오. 리소스는 위에서 아래 순서로 파트를 거칩니다.</p>
       <div class="table-wrap">
         <table class="grid edit">
           <thead><tr><th style="width: 40px">순서</th><th>파트 이름</th><th class="n">인원</th><th class="n">가동률</th><th style="width: 120px" /></tr></thead>
@@ -128,7 +128,7 @@ function Parts(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) =
         </table>
       </div>
       <div><button type="button" class="btn sm" onClick={add}><IconPlus />파트 더하기</button></div>
-      <p class="form-help">인원·가동률은 모든 달에 같은 값으로 들어가요. 채용·충원 같은 달별 변화는 만든 뒤 고칠 수 있어요.</p>
+      <p class="form-help">인원·가동률은 모든 달에 같은 값으로 들어갑니다. 채용·충원 같은 달별 변화는 만든 뒤 수정할 수 있습니다.</p>
     </div>
   );
 }
@@ -139,7 +139,7 @@ function Resources(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput
   const groups = [...new Set(v.resources.map(r => r.group).filter(Boolean))];
   return (
     <div class="form">
-      <p class="muted">리소스 1개를 그 파트가 만드는 데 드는 <b>인·일</b>을 넣어 주세요. 거치지 않는 파트는 비워 두세요.</p>
+      <p class="muted">리소스 1개를 그 파트가 만드는 데 드는 <b>인·일</b>을 입력하십시오. 거치지 않는 파트는 비워 두십시오.</p>
       <datalist id="np-groups">{groups.map(g => <option value={g} />)}</datalist>
       <div class="table-wrap">
         <table class="grid edit">
@@ -196,7 +196,7 @@ function Launch(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) 
                 </div>
               ))}
             </div>
-            <span class="form-help">물량은 만든 뒤 런칭 물량 설계 화면에서 넣어요. 처음엔 모두 0이에요.</span>
+            <span class="form-help">물량은 만든 뒤 런칭 물량 설계 화면에서 입력합니다. 처음엔 모두 0입니다.</span>
           </div>
         </>
       )}

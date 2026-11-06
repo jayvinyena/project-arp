@@ -13,13 +13,13 @@ const LEVERS: { key: Lever; label: string; help: string }[] = [
   { key: 'headcount', label: '인원 늘리기', help: '늦는 업데이트의 시작 ~ 마감 달에 파트 인원을 0.5명씩' },
   { key: 'outsource', label: '외주 맡기기', help: '같은 기간에 파트 외주를 달마다 10인·일씩' },
   { key: 'volume', label: '물량 줄이기', help: '선택 리소스부터, 다음은 모든 리소스를 최소안 물량으로' },
-  { key: 'priority', label: '우선순위 바꾸기', help: '앞 업데이트에 여유가 있을 때만 순서를 바꿔요' },
+  { key: 'priority', label: '우선순위 바꾸기', help: '앞 업데이트에 여유가 있을 때만 순서를 변경합니다' },
 ];
 const KIND_TEXT: Record<string, string> = { headcount: '인원', outsource: '외주', volumeToMin: '물량', priority: '순서' };
 
 function Result(props: { o: Outcome; showLate: boolean }) {
   const { o } = props;
-  if (o.unfinished) return <span class="pill bad">기간 안에 못 끝나요</span>;
+  if (o.unfinished) return <span class="pill bad">기간 안에 못 끝남</span>;
   if (o.late > 0) return <span class="pill bad">{fmtShortDate(o.completion)} · {fmtInt(o.late)}일 늦음</span>;
   if (!o.deadline) return <span class="pill plain">{fmtShortDate(o.completion)} · 마감 없음</span>;
   return <span class="pill ok">{fmtShortDate(o.completion)}{props.showLate ? ' · 맞춤' : ''}</span>;
@@ -70,13 +70,13 @@ export function AdvisorPage(props: {
         <div>
           <PageEyebrow page="advisor" />
           <h1>모든 업데이트가 마감을 지키려면</h1>
-          <p class="muted" style="margin-top: 6px">늦는 업데이트부터 허용한 수단을 조금씩 써 보고, 적게 바꾸면서 많이 당기는 쪽을 골라요. 다른 업데이트를 늦추면서 맞추지는 않아요.</p>
+          <p class="muted" style="margin-top: 6px">늦는 업데이트부터 허용한 수단을 조금씩 써 보고, 적게 바꾸면서 많이 당기는 쪽을 선택합니다. 다른 업데이트를 늦추면서 맞추지는 않습니다.</p>
         </div>
         <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />
       </header>
 
       <section class="card">
-        <div class="card-head"><div><h2>조건</h2><p class="small muted" style="margin-top: 2px">바꿔도 되는 것만 켜 두세요. 바꾸면 바로 다시 계산해요.</p></div></div>
+        <div class="card-head"><div><h2>조건</h2><p class="small muted" style="margin-top: 2px">바꿔도 되는 것만 켜 두십시오. 변경하면 바로 다시 계산합니다.</p></div></div>
         <div class="card-body advisor-cond">
           <div class="form-row">
             <span class="form-label">맞출 날</span>
@@ -106,21 +106,21 @@ export function AdvisorPage(props: {
         </div>
       </section>
 
-      {error && <div class="banner bad"><IconAlert /><div><b>계산하지 못했어요</b><p class="small muted">{error}</p></div></div>}
+      {error && <div class="banner bad"><IconAlert /><div><b>계산하지 못했습니다</b><p class="small muted">{error}</p></div></div>}
       {!r && !error && <p class="muted">계산 중…</p>}
 
       {r && (
         <div class={`stack${busy ? ' busy' : ''}`} aria-busy={busy}>
           {r.alreadyOk ? (
-            <div class="banner ok" role="status"><IconCheck /><div><b>모든 업데이트가 이미 {deadline === 'freeze' ? '제작 완료 목표일' : '출시일'}을 지켜요</b><p class="small muted">바꿀 것이 없어요.</p></div></div>
+            <div class="banner ok" role="status"><IconCheck /><div><b>모든 업데이트가 이미 {deadline === 'freeze' ? '제작 완료 목표일' : '출시일'}을 지킵니다</b><p class="small muted">바꿀 것이 없습니다.</p></div></div>
           ) : r.feasible ? (
-            <div class="banner ok advisor-verdict" role="status"><IconSpark /><div style="flex: 1"><b>{r.steps.length}걸음을 바꾸면 늦던 {lateBefore}개가 모두 마감을 지켜요</b>
-              <p class="small muted">시나리오로 만들어 시뮬레이션에서 비교한 뒤 원본에 반영할 수 있어요.</p></div>
+            <div class="banner ok advisor-verdict" role="status"><IconSpark /><div style="flex: 1"><b>{r.steps.length}걸음을 바꾸면 늦던 {lateBefore}개가 모두 마감을 지킵니다</b>
+              <p class="small muted">시나리오로 만들어 시뮬레이션에서 비교한 뒤 원본에 반영할 수 있습니다.</p></div>
               {!props.readOnly && <button class="btn primary" disabled={making || busy} onClick={() => void make()}><IconSliders />시나리오로 만들기</button>}
             </div>
           ) : (
-            <div class="banner warn advisor-verdict" role="status"><IconAlert /><div style="flex: 1"><b>{anyLever ? `다 맞추지는 못했어요 · 늦던 ${lateBefore}개 중 ${lateAfter}개가 남아요` : '켜 둔 수단이 없어요'}</b>
-              <p class="small muted">{anyLever ? '상한을 올리거나 다른 수단을 켜 보세요. 할 수 있는 만큼 당긴 제안도 시나리오로 만들 수 있어요.' : '조건에서 바꿔도 되는 수단을 하나 이상 켜 주세요.'}</p></div>
+            <div class="banner warn advisor-verdict" role="status"><IconAlert /><div style="flex: 1"><b>{anyLever ? `다 맞추지는 못했습니다 · 늦던 ${lateBefore}개 중 ${lateAfter}개가 남습니다` : '켜 둔 수단이 없습니다'}</b>
+              <p class="small muted">{anyLever ? '상한을 올리거나 다른 수단을 켜십시오. 할 수 있는 만큼 당긴 제안도 시나리오로 만들 수 있습니다.' : '조건에서 바꿔도 되는 수단을 하나 이상 켜십시오.'}</p></div>
               {!props.readOnly && r.actions.length > 0 && <button class="btn" disabled={making || busy} onClick={() => void make()}><IconSliders />시나리오로 만들기</button>}
             </div>
           )}
@@ -160,7 +160,7 @@ export function AdvisorPage(props: {
 
           {r.steps.length > 0 && (
             <section class="card">
-              <div class="card-head"><div><h2>바꾸는 순서</h2><p class="small muted" style="margin-top: 2px">앞 걸음부터 효과가 커요. 시나리오에는 파트·기간별로 합쳐서 {r.actions.length}개 동작으로 들어가요.</p></div></div>
+              <div class="card-head"><div><h2>바꾸는 순서</h2><p class="small muted" style="margin-top: 2px">앞 걸음부터 효과가 큽니다. 시나리오에는 파트·기간별로 합쳐서 {r.actions.length}개 동작으로 들어갑니다.</p></div></div>
               <div class="card-body" style="padding-top: 8px">
                 <ol class="advice-steps">
                   {r.steps.map(s => (
@@ -186,7 +186,7 @@ export function AdvisorPage(props: {
               </div>
             </section>
           )}
-          <p class="small faint">엔진 계산 {fmtInt(r.runs)}번 · {fmtInt(Math.round(r.ms))}ms{r.limited ? ' · 계산 상한에 닿아 멈췄어요' : ''}</p>
+          <p class="small faint">엔진 계산 {fmtInt(r.runs)}번 · {fmtInt(Math.round(r.ms))}ms{r.limited ? ' · 계산 상한에 닿아 멈췄습니다' : ''}</p>
         </div>
       )}
     </div>

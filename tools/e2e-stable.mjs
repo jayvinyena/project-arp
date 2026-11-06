@@ -35,7 +35,7 @@ await withBrowser(async (cdp, base) => {
   await nav(cdp, '변경 이력');
   await cdp.waitUntil("document.querySelectorAll('.hist-item').length > 0");
   const summary = await cdp.eval("document.querySelector('.hist-summary')?.textContent");
-  check('변경 이력에 방금 고친 것', summary === '물량 기본안', summary);
+  check('변경 이력에 방금 수정한 것', summary === '물량 기본안', summary);
   await cdp.eval("[...document.querySelectorAll('.hist-item button')].find(b => b.textContent.includes('되돌리기')).click()");
   await sleep(150);
   await cdp.eval("[...document.querySelectorAll('.hist-item button')].find(b => b.textContent.trim() === '되돌리기').click()");

@@ -111,7 +111,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelectorAll('.hm-cell').length === 4 * 17", 10000);
   check('계획 화면이 늘어난 기간으로 다시 계산', true);
   const saveState = await cdp.eval("document.querySelector('.save-state')?.textContent");
-  check('고친 내용은 저장 대기(예시 파일)', saveState.includes('저장 안 된 변경'), saveState);
+  check('수정한 내용은 저장 대기(예시 파일)', saveState.includes('저장 안 된 변경'), saveState);
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(x => !x).length;

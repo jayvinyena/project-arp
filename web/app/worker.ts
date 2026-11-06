@@ -241,7 +241,7 @@ const handlers: Record<string, (payload: any) => unknown> = {
   analyze(p: { scenarioId: string | null; updateId: string; planMode: PlanMode; what: 'sensitivity' | 'maxScale' | 'headcount' }) {
     const { session: ss } = need();
     const prepared = ss.prepare(p.scenarioId ?? undefined);
-    if (prepared.blocked || !prepared.data) throw new Error('계산할 수 없는 상태예요. 데이터 점검을 먼저 봐 주세요.');
+    if (prepared.blocked || !prepared.data) throw new Error('계산할 수 없는 상태입니다. 데이터 점검을 먼저 확인하십시오.');
     const t = performance.now();
     const result = p.what === 'sensitivity' ? sensitivity(prepared.data, p.updateId, p.planMode)
       : p.what === 'maxScale' ? maxLaunchScale(prepared.data, p.updateId, p.planMode)
@@ -257,7 +257,7 @@ const handlers: Record<string, (payload: any) => unknown> = {
   /** 마감 맞춤 제안(원본 기준) */
   advise(p: { options: AdvisorOptions }) {
     const prepared = need().session.prepare();
-    if (prepared.blocked || !prepared.data) throw new Error('계산할 수 없는 상태예요. 데이터 점검을 먼저 봐 주세요.');
+    if (prepared.blocked || !prepared.data) throw new Error('계산할 수 없는 상태입니다. 데이터 점검을 먼저 확인하십시오.');
     return adviseDeadlines(prepared.data, { minName: readModeNames(need().sql).MIN, ...p.options });
   },
 

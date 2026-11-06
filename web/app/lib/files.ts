@@ -56,7 +56,7 @@ export function pickXlsx(): Promise<{ name: string; bytes: ArrayBuffer } | null>
 
 export async function fetchBytes(path: string): Promise<ArrayBuffer> {
   const res = await fetch(path, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`파일을 받지 못했어요 (${res.status})`);
+  if (!res.ok) throw new Error(`파일을 받지 못했습니다 (${res.status})`);
   return res.arrayBuffer();
 }
 

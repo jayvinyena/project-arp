@@ -138,8 +138,8 @@ test('원본에 반영: 원본이 바뀐 뒤면 확인을 요구하고, 오류�
   add(db, id, { kind: 'updateDates', updateId: 'S1', releaseDate: '2027-03-01' }); // 시작일(4/1)보다 앞 → 날짜 순서 오류
   applyEdit(db, session, { kind: 'volume', updateId: 'LAUNCH', resourceTypeId: 'PROP', field: 'outsource_qty', value: 12 }, { ...ctx });
   assert.equal(listScenarios(db).find(s => s.scenarioId === id).stale, true);
-  assert.throws(() => applyScenarioToBase(db, session, id, ctx), /원본이 바뀌었어요/);
-  assert.throws(() => applyScenarioToBase(db, session, id, ctx, true), /되돌렸어요/);
+  assert.throws(() => applyScenarioToBase(db, session, id, ctx), /원본이 변경되었습니다/);
+  assert.throws(() => applyScenarioToBase(db, session, id, ctx, true), /되돌렸습니다/);
   assert.equal(db.get("SELECT release_date FROM updates WHERE update_id = 'S1'").release_date, '2027-08-31');
   assert.equal(listScenarios(db).find(s => s.scenarioId === id).appliedAt, null);
   raw.close();
@@ -188,7 +188,7 @@ test('검증 줄이기: 모든 규칙에 읽는 표가 적혀 있고, 시나리�
   raw.close();
 });
 
-// ───────── 전체 점검(2026-11-05)에서 찾아 고친 것 ─────────
+// ───────── 전체 점검(2026-11-05)에서 찾아 수정한 것 ─────────
 const capOf = (session, id, part, month) => session.prepare(id).data.capacity.find(c => c.part_id === part && c.month === month).headcount;
 
 test('인원 동작을 같은 칸에 두 번: 더해지고(+2 +1 = +3), 앞 동작을 빼도 뒤 동작은 그대로(+1)', () => {

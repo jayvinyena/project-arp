@@ -75,7 +75,7 @@ test('수단 켜고 끄기: 물량만 허용하면 선택 → 모든 리소스 �
   const none = adviseDeadlines(data, { levers: { headcount: false, volume: false, priority: false } });
   assert.equal(none.feasible, false);
   assert.equal(none.stuck[0].name, '런칭');
-  assert.match(none.stuck[0].why, /다 썼어요/);
+  assert.match(none.stuck[0].why, /다 사용했습니다/);
 });
 
 test('상한: 외주는 파트·달마다 상한 안에서, 인원 상한이 낮으면 할 수 있는 만큼만 당기고 알린다', () => {
@@ -137,7 +137,7 @@ test('시나리오로 만들기: 우선순위 바꾸기도 같은 결과, 동작
   const n = listScenarios(db).length;
   assert.throws(() => adviceToScenario(db, '틀림', [{ kind: 'headcount', partId: '없음', fromMonth: '2027-01', toMonth: '2027-01', delta: 1 }]), /없는 파트/);
   assert.equal(listScenarios(db).length, n);
-  assert.throws(() => adviceToScenario(db, '빈', []), /없어요/);
+  assert.throws(() => adviceToScenario(db, '빈', []), /없습니다/);
   raw.close();
 });
 

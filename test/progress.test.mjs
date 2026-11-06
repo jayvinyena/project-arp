@@ -78,6 +78,6 @@ test('주의 표시: 앞 공정보다 많이 끝났거나 확장 물량을 넘�
   applyEdit(db, session, P('LAUNCH', 'BG_MAP', 'CONCEPT', 9), ctx);     // 확장 5보다 많다
   const v = progressView(db, 'LAUNCH');
   raw.close();
-  assert.equal(v.rows.find(r => r.resourceTypeId === 'CHAR_NEW').cells[2].flag, '앞 공정보다 많이 끝났어요');
-  assert.equal(v.rows.find(r => r.resourceTypeId === 'BG_MAP').cells[0].flag, '확장 물량보다 많아요');
+  assert.equal(v.rows.find(r => r.resourceTypeId === 'CHAR_NEW').cells[2].flag, '앞 공정보다 많이 끝났습니다');
+  assert.equal(v.rows.find(r => r.resourceTypeId === 'BG_MAP').cells[0].flag, '세 번째 템플릿 물량보다 많습니다');
 });

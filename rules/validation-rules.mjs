@@ -25,7 +25,7 @@ CREATE TEMP VIEW IF NOT EXISTS horizon_months AS
 const q = s => s.replace(/\s+/g, ' ').trim();
 
 // 규칙마다 읽는 표. 시나리오처럼 일부 표만 바뀐 경우, 그 표를 읽는 규칙만 다시 돌리고 나머지는 원본 결과를 쓴다.
-// horizon_months는 settings, live_* 는 updates·volumes를 읽는다. 규칙을 고치면 여기도 맞춘다(검사가 빠진 규칙을 잡는다).
+// horizon_months는 settings, live_* 는 updates·volumes를 읽는다. 규칙을 수정하면 여기도 맞춘다(검사가 빠진 규칙을 잡는다).
 export const RULE_TABLES = {
   S01: ['settings'], S02: ['settings'], S03: ['settings'],
   P01: ['parts'], P02: ['parts'], P03: ['part_overlaps'], P04: ['part_overlaps', 'parts'],
@@ -313,7 +313,7 @@ export const RULES = [
   // ───────── 시나리오 ─────────
   {
     code: 'X01', level: 'WARN', title: '시나리오가 고치려는 대상이 원본에 없다',
-    fix: '그 변경을 지우거나, 대상이 새로 생길 것이면 INSERT로 바꾼다.',
+    fix: '그 변경을 삭제하거나, 대상이 새로 생길 것이면 INSERT로 바꾼다.',
     sql: q(`SELECT sc.scenario_id || '#' || sc.seq AS key, printf('%s %s 대상이 없습니다', sc.target, sc.target_key) AS detail
       FROM scenario_changes sc WHERE sc.op IN ('SET', 'DELETE') AND NOT (
            sc.target = 'settings'

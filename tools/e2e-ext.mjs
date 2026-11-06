@@ -49,7 +49,7 @@ await withBrowser(async (cdp, base) => {
   await shot(cdp, 'calibration-1440');
   await cdp.eval("[...document.querySelectorAll('.card-head button')].find(b => b.textContent.includes('적용')).click()");
   await sleep(800);
-  check('적용하면 보정 알림', (await toast(cdp)).includes('보정했어요'), await toast(cdp));
+  check('적용하면 보정 알림', (await toast(cdp)).includes('보정했습니다'), await toast(cdp));
   await nav(cdp, '변경 이력');
   await cdp.waitUntil("document.querySelector('.hist-summary')");
   check('보정은 변경 이력에 한 줄', (await cdp.eval("document.querySelector('.hist-summary').textContent")).includes('공수'));
@@ -81,13 +81,13 @@ await withBrowser(async (cdp, base) => {
     };
   })()`);
   await clickText(cdp, '엑셀로 넣기');
-  await cdp.waitUntil("document.querySelector('.toast')?.textContent.includes('작업 진척을 넣었어요')", 8000);
+  await cdp.waitUntil("document.querySelector('.toast')?.textContent.includes('작업 진척을 입력했습니다')", 8000);
   const t = await toast(cdp);
   check('엑셀로 넣기: 2칸 바뀜 · 건너뛴 행 1개', t.includes('2칸 바뀜') && t.includes('건너뛴 행 1개'), t.slice(0, 60));
   await cdp.waitUntil(`document.querySelector('input[aria-label="신규 캐릭터 원화 완료"]')?.value === '9'`, 5000).catch(() => {});
   check('넣은 완료 수량이 표에 보인다', (await cdp.eval(`document.querySelector('input[aria-label="신규 캐릭터 원화 완료"]').value`)) === '9');
 
-  // 4. 열 때 변화 알림: "나"가 본 뒤 "가"가 고치면, "나"가 다시 열 때 알린다
+  // 4. 열 때 변화 알림: "나"가 본 뒤 "가"가 수정하면, "나"가 다시 열 때 알린다
   const asUser = name => cdp.eval(`localStorage.setItem('arp.editor', ${JSON.stringify(name)})`);
   await cdp.send('Page.navigate', { url: `${app}?nosw` });
   await cdp.waitUntil("document.querySelector('.welcome-card')");
@@ -110,7 +110,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1&nosw` });
   let banner = '';
   try { await cdp.waitUntil("document.querySelector('.banner.notice')", 10000); banner = await cdp.eval("document.querySelector('.banner.notice').textContent"); } catch { /* 없음 */ }
-  check('다시 열면 "지난번에 본 뒤 바뀐 것": 런칭 완료 예정 변화 · 가님이 고침', banner.includes('런칭') && banner.includes('가님이 1번 고쳤어요'), banner.slice(0, 90));
+  check('다시 열면 "지난번에 본 뒤 바뀐 것": 런칭 완료 예정 변화 · 가님이 고침', banner.includes('런칭') && banner.includes('가님이 1번 수정했습니다'), banner.slice(0, 90));
   await shot(cdp, 'notice-1440');
 }, { build: !process.argv.includes('--no-build') });
 

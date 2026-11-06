@@ -86,7 +86,7 @@ export function App() {
 
   // ───────── 저장 ─────────
   // 경쟁 상태 막기:
-  //  - 저장(내보내기)을 시작한 뒤 고친 내용이 있으면 저장이 끝나도 "저장 대기"로 두고 다시 저장한다(editSeq)
+  //  - 저장(내보내기)을 시작한 뒤 수정한 내용이 있으면 저장이 끝나도 "저장 대기"로 두고 다시 저장한다(editSeq)
   //  - 저장 중에 들어온 저장 요청은 버리지 않고 끝난 뒤 한 번 더 한다(pendingSave)
   //  - 파일의 마지막 수정 시각은 화면을 다시 그리기 전에도 최신이어야 하므로 fileRef에 바로 쓴다
   const editSeq = useRef(0);
@@ -146,7 +146,7 @@ export function App() {
       }
       ok = true;
       savedSeq.current = seq;
-      // 고친 것을 저장했을 때만 그 프로젝트의 복구 사본을 지운다(열 때의 편집 중 표시 저장으로는 지우지 않는다)
+      // 수정한 것을 저장했을 때만 그 프로젝트의 복구 사본을 지운다(열 때의 편집 중 표시 저장으로는 지우지 않는다)
       if (seq > 0) void dropRecoveryFor(key);
       void refreshSeen(false);
       const savedFile = fileRef.current;
@@ -155,7 +155,7 @@ export function App() {
       return true;
     } catch (error) {
       if (error instanceof SaveConflictError) {
-        setSave({ state: 'conflict', message: '다른 곳에서 파일이 바뀌었어요. 다른 이름으로 저장하거나 다시 열어 주세요.' });
+        setSave({ state: 'conflict', message: '다른 곳에서 파일이 변경되었습니다. 다른 이름으로 저장하거나 다시 여십시오.' });
       } else {
         setSave({ state: 'error', message: (error as Error).message });
       }
@@ -184,16 +184,16 @@ export function App() {
       setSave({ state: 'saved', at: Date.now() });
       void dropRecoveryFor(projectKey(viewRef.current));
       if (r.handle) void rememberRecent(r.handle, r.name);
-      showToast(`"${r.name}"(으)로 저장했어요. 이제 이 파일을 고쳐요.`);
+      showToast(`"${r.name}"(으)로 저장했습니다. 이후 변경은 이 파일에 저장됩니다.`);
     } catch (error) {
-      showToast(`저장하지 못했어요: ${(error as Error).message}`);
+      showToast(`저장하지 못했습니다: ${(error as Error).message}`);
     }
   };
   writeRef.current = writeNow;
 
   // 예기치 못한 비동기 오류(main.tsx가 'arp:error'로 알린다)
   useEffect(() => {
-    const onError = (e: Event) => showToast(`문제가 생겼어요: ${(e as CustomEvent<string>).detail}`);
+    const onError = (e: Event) => showToast(`문제가 생겼습니다: ${(e as CustomEvent<string>).detail}`);
     window.addEventListener('arp:error', onError);
     return () => window.removeEventListener('arp:error', onError);
   }, []);
@@ -248,7 +248,7 @@ export function App() {
       if (original && v.migration && v.migration.from !== v.migration.to) setBackup({ name: opened.name, bytes: original, from: v.migration.from });
       if (opened.handle) void rememberRecent(opened.handle, opened.name);
       if (v.migration && v.migration.from !== v.migration.to) {
-        showToast(`옛 구조(v${v.migration.from}) 파일을 새 구조(v${v.migration.to})로 바꿨어요. 저장하면 새 구조로 남아요.`);
+        showToast(`옛 구조(v${v.migration.from}) 파일을 새 구조(v${v.migration.to})로 변경했습니다. 저장하면 새 구조로 남습니다.`);
       }
       const holder = v.meta.lock_holder;
       const beat = v.meta.lock_heartbeat_at ? Date.parse(v.meta.lock_heartbeat_at) : 0;
@@ -276,7 +276,7 @@ export function App() {
       }
       if (!isSample) void refreshSeen(true);
     } catch (error) {
-      showToast(`열지 못했어요: ${(error as Error).message}`);
+      showToast(`열지 못했습니다: ${(error as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -292,11 +292,11 @@ export function App() {
       const ok = await writeNow();
       if (!ok && unsaved()) {
         await snapshotNow(fileGen.current, f.name, viewRef.current?.snapshot.projectName ?? f.name, projectKey(viewRef.current));
-        if (!window.confirm('저장하지 못했어요. 그래도 닫을까요?\n고친 내용은 이 브라우저의 복구 사본에 남아 있어요.')) { await rpc.lock(me); return; }
+        if (!window.confirm('저장하지 못했습니다. 그래도 닫으시겠습니까?\n수정한 내용은 이 브라우저의 복구 사본에 남아 있습니다.')) { await rpc.lock(me); return; }
       }
     } else if (f && !f.readOnly && !f.isSample && unsaved()) {
       await snapshotNow(fileGen.current, f.name, viewRef.current?.snapshot.projectName ?? f.name, projectKey(viewRef.current));
-      if (!window.confirm('저장하지 않은 변경이 있어요. 그래도 닫을까요?\n고친 내용은 이 브라우저의 복구 사본에 남아 있어요.')) return;
+      if (!window.confirm('저장하지 않은 변경이 있습니다. 그래도 닫으시겠습니까?\n수정한 내용은 이 브라우저의 복구 사본에 남아 있습니다.')) return;
     }
     fileGen.current += 1;
     window.clearTimeout(snapshotTimer.current);
@@ -356,9 +356,9 @@ export function App() {
       setPage('launch');
       setSave(saved?.handle ? { state: 'saved', at: Date.now() } : { state: 'dirty' });
       setCreating(false);
-      if (!saved?.handle) showToast('저장 위치를 고르지 않았어요. 왼쪽 아래 "다른 이름으로 저장"으로 저장해 주세요.');
+      if (!saved?.handle) showToast('저장 위치를 선택하지 않았습니다. 왼쪽 아래 "다른 이름으로 저장"으로 저장하십시오.');
     } catch (error) {
-      showToast(`만들지 못했어요: ${(error as Error).message}`);
+      showToast(`만들지 못했습니다: ${(error as Error).message}`);
     }
   };
 
@@ -388,16 +388,16 @@ export function App() {
     savedSeq.current = 0;
     setSave({ state: 'dirty' });
     setRecovery(null);
-    showToast('저장하지 않았던 작업을 되살렸어요. 다른 이름으로 저장해 주세요.');
+    showToast('저장하지 않았던 작업을 복구했습니다. 다른 이름으로 저장하십시오.');
   };
 
   const openRecent = async (r: RecentFile) => {
     try {
-      if (!(await ensurePermission(r.handle))) { showToast('파일을 쓸 권한을 받지 못했어요.'); return; }
+      if (!(await ensurePermission(r.handle))) { showToast('파일을 쓸 권한을 받지 못했습니다.'); return; }
       const f = await r.handle.getFile();
       await open({ name: f.name, bytes: await f.arrayBuffer(), handle: r.handle, lastModified: f.lastModified }, false);
     } catch (error) {
-      showToast(`열지 못했어요(옮겼거나 지운 파일일 수 있어요): ${(error as Error).message}`);
+      showToast(`열지 못했습니다(옮겼거나 삭제한 파일일 수 있습니다): ${(error as Error).message}`);
     }
   };
 
@@ -414,7 +414,7 @@ export function App() {
       const base = (view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_');
       download(bytes, `${base} ${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } catch (error) {
-      showToast(`내보내지 못했어요: ${(error as Error).message}`);
+      showToast(`내보내지 못했습니다: ${(error as Error).message}`);
     }
   };
 
@@ -443,16 +443,16 @@ export function App() {
     try {
       const r = await rpc.importProgress(picked.bytes, me);
       if (r.changedCells) markChanged(true);
-      showToast(`작업 진척을 넣었어요 · ${r.changedCells}칸 바뀜${r.unchanged ? `, ${r.unchanged}칸 그대로` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
+      showToast(`작업 진척을 입력했습니다 · ${r.changedCells}칸 바뀜${r.unchanged ? `, ${r.unchanged}칸 그대로` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
     } catch (error) {
-      showToast(`넣지 못했어요: ${(error as Error).message}`);
+      showToast(`넣지 못했습니다: ${(error as Error).message}`);
     }
   };
   const onCalibrate = async (picks: { resourceTypeId: string; partId: string; ratio: number }[]) => {
     try {
       const r = await rpc.calibrate(picks, me);
       if (r.changed) markChanged(true);
-      showToast(`공수 ${r.changed}곳을 보정했어요. 변경 이력에서 되돌릴 수 있어요.`);
+      showToast(`공수 ${r.changed}곳을 보정했습니다. 변경 이력에서 되돌릴 수 있습니다.`);
       return true;
     } catch (error) {
       showToast((error as Error).message);
@@ -465,7 +465,7 @@ export function App() {
     try {
       const r = await rpc.undo(batchId, me, force);
       markChanged(true);
-      showToast(`되돌렸어요 · ${r.reverted}칸`);
+      showToast(`되돌렸습니다 · ${r.reverted}칸`);
       return { ok: true };
     } catch (error) {
       const m = (error as Error).message;
@@ -489,7 +489,7 @@ export function App() {
       setSave({ state: 'dirty' });
       setImported(v.report);
     } catch (error) {
-      showToast(`가져오지 못했어요: ${(error as Error).message}`);
+      showToast(`가져오지 못했습니다: ${(error as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -544,7 +544,7 @@ export function App() {
       markChanged(false);
       setSimFocus(r.scenarioId);
       setPage('simulation');
-      showToast(`시나리오 "${name}"를 만들었어요. 원본과 비교한 뒤 반영할 수 있어요.`);
+      showToast(`시나리오 "${name}"를 만들었습니다. 원본과 비교한 뒤 반영할 수 있습니다.`);
       return true;
     } catch (error) {
       showToast((error as Error).message);
@@ -557,7 +557,7 @@ export function App() {
     try {
       const r = await rpc.applyScenario(scenarioId, me, force);
       markChanged(true);
-      showToast(`원본에 반영했어요 · 변경 ${r.applied}줄${r.skipped ? ` (대상이 없어 건너뛴 ${r.skipped}줄)` : ''}`);
+      showToast(`원본에 반영했습니다 · 변경 ${r.applied}줄${r.skipped ? ` (대상이 없어 건너뛴 ${r.skipped}줄)` : ''}`);
       return true;
     } catch (error) {
       showToast((error as Error).message);
@@ -601,14 +601,14 @@ export function App() {
         <div class="card welcome-card">
           <div class="brand"><span class="brand-mark"><IconLogo /></span>아트 리소스 플래너</div>
           <div>
-            <h1 style="font-size: 24px">런칭과 업데이트에 필요한<br />아트 물량을 설계해요</h1>
-            <p class="muted" style="margin-top: 8px">프로젝트 파일(.arp)을 열면 바로 계산해요. 데이터는 이 컴퓨터의 파일에만 저장돼요.</p>
+            <h1 style="font-size: 24px">런칭과 업데이트에 필요한<br />아트 물량을 설계합니다</h1>
+            <p class="muted" style="margin-top: 8px">프로젝트 파일(.arp)을 열면 바로 계산합니다. 데이터는 이 컴퓨터의 파일에만 저장됩니다.</p>
           </div>
           {recovery && (
             <div class="banner warn">
               <IconAlert />
               <div style="flex: 1">
-                <b>저장하지 않은 작업이 있어요</b>
+                <b>저장하지 않은 작업이 있습니다</b>
                 <p class="small muted">{recovery.projectName} · {new Date(recovery.at).toLocaleString('ko-KR')}</p>
                 <div class="inline" style="margin-top: 8px">
                   <button class="btn sm primary" onClick={() => void restore(recovery)}>되살리기</button>
@@ -628,7 +628,7 @@ export function App() {
             </div>
           )}
           <label style="display: flex; flex-direction: column; gap: 6px">
-            <span class="small muted">내 이름 · 변경 이력과 편집 중 표시에 남아요</span>
+            <span class="small muted">내 이름 · 변경 이력과 편집 중 표시에 남습니다</span>
             <input class="field" value={editor} placeholder="예: 김아트" onInput={e => { const v = (e.target as HTMLInputElement).value; setEditor(v); storage.set('arp.editor', v); }} />
           </label>
           <div class="actions">
@@ -637,7 +637,7 @@ export function App() {
             <button class="btn lg" disabled={busy} onClick={async () => importLegacy(await pickXlsx())}>기존 시트(.xlsx) 가져오기</button>
             <button class="btn ghost lg" disabled={busy} onClick={async () => open(await fetchSample('normal'), true)}>예시 프로젝트로 둘러보기</button>
           </div>
-          <p class="small faint">{canSaveInPlace ? '크롬·엣지에서는 고친 내용이 연 파일에 바로 저장돼요.' : '이 브라우저에서는 저장할 때 파일을 내려받아요. 크롬·엣지를 쓰면 연 파일에 바로 저장돼요.'}</p>
+          <p class="small faint">{canSaveInPlace ? '크롬·엣지에서는 수정한 내용이 연 파일에 바로 저장됩니다.' : '이 브라우저에서는 저장할 때 파일을 내려받습니다. 크롬·엣지를 사용하면 연 파일에 바로 저장됩니다.'}</p>
         </div>
         {toast && <div class="toast" role="status">{toast}</div>}
       </div>
@@ -650,7 +650,7 @@ export function App() {
     saved: { dot: 'ok', text: file.handle ? '저장됨' : file.isSample ? '예시 파일' : '저장 안 함' },
     dirty: { dot: 'warn', text: file.handle ? '저장 대기 중' : '저장 안 된 변경 있음' },
     saving: { dot: 'busy', text: '저장 중…' },
-    conflict: { dot: 'bad', text: '충돌: 저장하지 않았어요' },
+    conflict: { dot: 'bad', text: '충돌: 저장하지 않았습니다' },
     error: { dot: 'bad', text: '저장 실패' },
   };
   const sl = saveLabel[save.state];
@@ -694,7 +694,7 @@ export function App() {
         </nav>
         <div class="sidebar-foot">
           <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>
-          {!file.handle && <div class="small faint editor">고친 내용을 남기려면 다른 이름으로 저장해 주세요</div>}
+          {!file.handle && <div class="small faint editor">수정한 내용을 남기려면 다른 이름으로 저장하십시오</div>}
           <div style="display: flex; gap: 6px">
             <button class="btn sm" disabled={file.readOnly || save.state === 'saving'} onClick={() => void writeNow()} title="저장 (Ctrl+S)"><IconSave />{file.handle ? '저장' : '다른 이름으로 저장'}</button>
             {file.handle && !file.readOnly && (save.state === 'conflict' || save.state === 'error') && <button class="btn sm" onClick={() => void saveAsNew()}>다른 이름으로</button>}
@@ -707,7 +707,7 @@ export function App() {
       <main class="main">
         {file.readOnly && (
           <div class="page" style="margin-bottom: 16px">
-            <div class="banner warn"><IconLock /><div><b>{file.lockedBy}님이 편집 중이라 읽기 전용으로 열었어요</b><p class="small muted">편집을 마치거나 30분 동안 저장이 없으면 고칠 수 있어요.</p></div></div>
+            <div class="banner warn"><IconLock /><div><b>{file.lockedBy}님이 편집 중이라 읽기 전용으로 열었습니다</b><p class="small muted">편집을 마치거나 30분 동안 저장이 없으면 수정할 수 있습니다.</p></div></div>
           </div>
         )}
         {notice && (
@@ -722,7 +722,7 @@ export function App() {
                   ))}
                   {notice.added.length > 0 && <li>새 업데이트: {notice.added.join(', ')}</li>}
                   {notice.removed.length > 0 && <li>계산에서 빠진 업데이트: {notice.removed.join(', ')}</li>}
-                  {notice.editsByOthers > 0 && <li>{notice.editors.join(', ')}님이 {notice.editsByOthers}번 고쳤어요 · 변경 이력에서 볼 수 있어요</li>}
+                  {notice.editsByOthers > 0 && <li>{notice.editors.join(', ')}님이 {notice.editsByOthers}번 수정했습니다 · 변경 이력에서 볼 수 있습니다</li>}
                 </ul>
               </div>
               <button type="button" class="btn ghost icon-btn" aria-label="알림 닫기" onClick={() => setNotice(null)}><IconX /></button>
@@ -731,8 +731,8 @@ export function App() {
         )}
         {backup && (
           <div class="page" style="margin-bottom: 16px">
-            <div class="banner warn"><IconAlert /><div style="flex: 1"><b>옛 구조(v{backup.from}) 파일을 새 구조로 바꿔 열었어요</b>
-              <p class="small muted">저장하면 새 구조로 남아요. 옛 앱에서도 열어야 하면 바꾸기 전 원본을 받아 두세요.</p>
+            <div class="banner warn"><IconAlert /><div style="flex: 1"><b>옛 구조(v{backup.from}) 파일을 새 구조로 바꿔 열었습니다</b>
+              <p class="small muted">저장하면 새 구조로 남습니다. 옛 앱에서도 열어야 하면 바꾸기 전 원본을 받아 두십시오.</p>
               <div class="inline" style="margin-top: 8px">
                 <button class="btn sm" onClick={() => download(backup.bytes, backup.name.replace(/\.arp$/i, '') + `.v${backup.from}.bak.arp`, 'application/x-sqlite3')}><IconDownload />원본 받기</button>
                 <button class="btn sm ghost" onClick={() => setBackup(null)}>닫기</button>
@@ -741,7 +741,7 @@ export function App() {
         )}
         {save.state === 'conflict' && (
           <div class="page" style="margin-bottom: 16px">
-            <div class="banner bad"><IconAlert /><div style="flex: 1"><b>저장하지 않았어요</b><p class="small muted">{save.message}</p>
+            <div class="banner bad"><IconAlert /><div style="flex: 1"><b>저장하지 않았습니다</b><p class="small muted">{save.message}</p>
               <div class="inline" style="margin-top: 8px"><button class="btn sm primary" onClick={() => void saveAsNew()}><IconSave />다른 이름으로 저장</button></div></div></div>
           </div>
         )}
@@ -774,9 +774,9 @@ function ChecksPage(props: { view: View }) {
   return (
     <div class="page">
       <header class="page-head"><div><PageEyebrow page="check" /><h1>고칠 곳 {findings.length}개</h1>
-        <p class="muted" style="margin-top: 6px">오류가 있으면 계산하지 않아요. 주의는 계산하되 표시만 해요.</p></div></header>
+        <p class="muted" style="margin-top: 6px">오류가 있으면 계산하지 않습니다. 주의는 계산하되 표시만 합니다.</p></div></header>
       <section class="card"><div class="card-body">
-        {findings.length === 0 && <p class="muted">문제가 없어요.</p>}
+        {findings.length === 0 && <p class="muted">문제가 없습니다.</p>}
         {findings.map(f => (
           <div class="finding">
             <span class={`pill ${f.level === 'ERROR' ? 'bad' : 'warn'}`}>{f.level === 'ERROR' ? '오류' : '주의'}</span>

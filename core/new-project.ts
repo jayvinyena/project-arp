@@ -98,52 +98,52 @@ export interface InputProblem { step: 'basic' | 'parts' | 'resources' | 'launch'
 export function checkNewProject(input: NewProjectInput): InputProblem[] {
   const p: InputProblem[] = [];
   const add = (step: InputProblem['step'], message: string) => p.push({ step, message });
-  if (!input.name.trim()) add('basic', '프로젝트 이름을 넣어 주세요.');
-  if (!MONTH.test(input.horizonStart) || !MONTH.test(input.horizonEnd)) add('basic', '계획 기간의 시작·끝 달을 골라 주세요.');
+  if (!input.name.trim()) add('basic', '프로젝트 이름을 입력하십시오.');
+  if (!MONTH.test(input.horizonStart) || !MONTH.test(input.horizonEnd)) add('basic', '계획 기간의 시작·끝 달을 선택하십시오.');
   else {
     const n = monthsBetween(input.horizonStart, input.horizonEnd).length;
-    if (input.horizonEnd < input.horizonStart) add('basic', '계획 기간 끝 달이 시작 달보다 앞이에요.');
-    else if (n > 60) add('basic', `계획 기간이 ${n}개월이에요. 60개월 이하로 줄여 주세요.`);
+    if (input.horizonEnd < input.horizonStart) add('basic', '계획 기간 끝 달이 시작 달보다 앞입니다.');
+    else if (n > 60) add('basic', `계획 기간이 ${n}개월입니다. 60개월 이하로 줄이십시오.`);
   }
-  if (!/^[01]{7}$/.test(input.workWeekdays) || input.workWeekdays === '0000000') add('basic', '근무 요일을 하루 이상 골라 주세요.');
-  if (!(input.bufferRate >= 0 && input.bufferRate <= 1)) add('basic', '여유율은 0–100% 사이로 넣어 주세요.');
-  for (const h of input.holidays) if (!validDate(h.date)) add('basic', `휴일 날짜가 올바르지 않아요: ${h.date}`);
+  if (!/^[01]{7}$/.test(input.workWeekdays) || input.workWeekdays === '0000000') add('basic', '근무 요일을 하루 이상 선택하십시오.');
+  if (!(input.bufferRate >= 0 && input.bufferRate <= 1)) add('basic', '여유율은 0–100% 사이로 입력하십시오.');
+  for (const h of input.holidays) if (!validDate(h.date)) add('basic', `휴일 날짜가 올바르지 않습니다: ${h.date}`);
 
-  if (input.parts.length === 0) add('parts', '파트를 하나 이상 넣어 주세요.');
+  if (input.parts.length === 0) add('parts', '파트를 하나 이상 입력하십시오.');
   const partNames = new Set<string>();
   input.parts.forEach((part, i) => {
     const name = part.name.trim();
-    if (!name) add('parts', `${i + 1}번째 파트 이름이 비었어요.`);
-    else if (partNames.has(name)) add('parts', `파트 이름 "${name}"이 겹쳐요.`);
+    if (!name) add('parts', `${i + 1}번째 파트 이름이 비었습니다.`);
+    else if (partNames.has(name)) add('parts', `파트 이름 "${name}"이 겹칩니다.`);
     partNames.add(name);
-    if (!(part.headcount >= 0)) add('parts', `${name || `${i + 1}번째 파트`}의 인원을 0 이상으로 넣어 주세요.`);
-    if (!(part.utilization > 0 && part.utilization <= 1)) add('parts', `${name || `${i + 1}번째 파트`}의 가동률은 1–100% 사이로 넣어 주세요.`);
+    if (!(part.headcount >= 0)) add('parts', `${name || `${i + 1}번째 파트`}의 인원을 0 이상으로 입력하십시오.`);
+    if (!(part.utilization > 0 && part.utilization <= 1)) add('parts', `${name || `${i + 1}번째 파트`}의 가동률은 1–100% 사이로 입력하십시오.`);
   });
 
-  if (input.resources.length === 0) add('resources', '리소스 종류를 하나 이상 넣어 주세요.');
+  if (input.resources.length === 0) add('resources', '리소스 종류를 하나 이상 입력하십시오.');
   const resNames = new Set<string>();
   input.resources.forEach((r, i) => {
     const name = r.name.trim();
     const label = name || `${i + 1}번째 리소스`;
-    if (!name) add('resources', `${i + 1}번째 리소스 이름이 비었어요.`);
-    else if (resNames.has(name)) add('resources', `리소스 이름 "${name}"이 겹쳐요.`);
+    if (!name) add('resources', `${i + 1}번째 리소스 이름이 비었습니다.`);
+    else if (resNames.has(name)) add('resources', `리소스 이름 "${name}"이 겹칩니다.`);
     resNames.add(name);
-    if (r.efforts.length !== input.parts.length) add('resources', `${label}의 파트별 공수 칸 수가 파트 수와 달라요.`);
+    if (r.efforts.length !== input.parts.length) add('resources', `${label}의 파트별 공수 칸 수가 파트 수와 다릅니다.`);
     const used = r.efforts.filter(e => e != null);
-    if (used.length === 0) add('resources', `${label}이 거치는 파트가 없어요. 한 파트 이상 공수를 넣어 주세요.`);
-    if (used.some(e => !(Number(e) > 0))) add('resources', `${label}의 공수는 0보다 커야 해요. 거치지 않는 파트는 비워 두세요.`);
+    if (used.length === 0) add('resources', `${label}이 거치는 파트가 없습니다. 한 파트 이상 공수를 입력하십시오.`);
+    if (used.some(e => !(Number(e) > 0))) add('resources', `${label}의 공수는 0보다 커야 합니다. 거치지 않는 파트는 비워 두십시오.`);
   });
 
   if (input.launch) {
     const l = input.launch;
-    if (!l.name.trim()) add('launch', '런칭 이름을 넣어 주세요.');
-    if (!validDate(l.startDate)) add('launch', '작업 시작일을 골라 주세요.');
-    if (!validDate(l.releaseDate)) add('launch', '출시일을 골라 주세요.');
-    if (l.freezeDate && !validDate(l.freezeDate)) add('launch', '제작 완료 목표일이 올바르지 않아요.');
-    if (validDate(l.startDate) && validDate(l.releaseDate) && l.releaseDate < l.startDate) add('launch', '출시일이 작업 시작일보다 앞이에요.');
-    if (l.freezeDate && validDate(l.freezeDate) && validDate(l.startDate) && l.freezeDate < l.startDate) add('launch', '제작 완료 목표일이 작업 시작일보다 앞이에요.');
-    if (l.freezeDate && validDate(l.freezeDate) && validDate(l.releaseDate) && l.freezeDate > l.releaseDate) add('launch', '제작 완료 목표일이 출시일보다 뒤예요.');
-    if (validDate(l.releaseDate) && MONTH.test(input.horizonEnd) && l.releaseDate.slice(0, 7) > input.horizonEnd) add('launch', '출시일이 계획 기간 뒤예요. 계획 기간을 늘려 주세요.');
+    if (!l.name.trim()) add('launch', '런칭 이름을 입력하십시오.');
+    if (!validDate(l.startDate)) add('launch', '작업 시작일을 선택하십시오.');
+    if (!validDate(l.releaseDate)) add('launch', '출시일을 선택하십시오.');
+    if (l.freezeDate && !validDate(l.freezeDate)) add('launch', '제작 완료 목표일이 올바르지 않습니다.');
+    if (validDate(l.startDate) && validDate(l.releaseDate) && l.releaseDate < l.startDate) add('launch', '출시일이 작업 시작일보다 앞입니다.');
+    if (l.freezeDate && validDate(l.freezeDate) && validDate(l.startDate) && l.freezeDate < l.startDate) add('launch', '제작 완료 목표일이 작업 시작일보다 앞입니다.');
+    if (l.freezeDate && validDate(l.freezeDate) && validDate(l.releaseDate) && l.freezeDate > l.releaseDate) add('launch', '제작 완료 목표일이 출시일보다 뒤입니다.');
+    if (validDate(l.releaseDate) && MONTH.test(input.horizonEnd) && l.releaseDate.slice(0, 7) > input.horizonEnd) add('launch', '출시일이 계획 기간 뒤입니다. 계획 기간을 늘리십시오.');
   }
   return p;
 }

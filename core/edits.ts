@@ -112,9 +112,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
   switch (edit.kind) {
     // ───────── 업데이트 ─────────
     case 'createUpdate': {
-      if (!edit.name.trim()) fail('업데이트 이름을 넣어 주세요.');
-      if (!db.get('SELECT 1 AS ok FROM update_types WHERE update_type_id = ? AND is_launch = 0', [edit.typeId])) fail('업데이트 유형을 골라 주세요.');
-      for (const d of [edit.startDate, edit.freezeDate, edit.releaseDate]) if (d != null && !DATE.test(d)) fail('날짜 형식은 YYYY-MM-DD예요.');
+      if (!edit.name.trim()) fail('업데이트 이름을 입력하십시오.');
+      if (!db.get('SELECT 1 AS ok FROM update_types WHERE update_type_id = ? AND is_launch = 0', [edit.typeId])) fail('업데이트 유형을 선택하십시오.');
+      for (const d of [edit.startDate, edit.freezeDate, edit.releaseDate]) if (d != null && !DATE.test(d)) fail('날짜 형식은 YYYY-MM-DD입니다.');
       const id = nextId(db, 'updates', 'update_id', 'U', 3);
       const priority = Number(db.get("SELECT coalesce(max(priority), 0) AS p FROM updates WHERE status IN ('PLANNED', 'IN_PROGRESS')")?.p ?? 0) + 1;
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM updates')?.s ?? 0) + 1;
@@ -133,13 +133,13 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'updateField': {
       const before = db.get(`SELECT ${edit.field} AS v FROM updates WHERE update_id = ?`, [edit.updateId]);
-      if (!before) fail('없는 업데이트예요.');
+      if (!before) fail('없는 업데이트입니다.');
       let value = edit.value;
-      if (edit.field === 'name') { value = (value ?? '').trim(); if (!value) fail('이름은 비울 수 없어요.'); }
-      if (edit.field.endsWith('_date') && value != null && !DATE.test(value)) fail('날짜 형식은 YYYY-MM-DD예요.');
-      if (edit.field === 'status' && !STATUSES.has(value ?? '')) fail('상태가 올바르지 않아요.');
-      if (edit.field === 'update_type_id' && !db.get('SELECT 1 AS ok FROM update_types WHERE update_type_id = ?', [value])) fail('없는 유형이에요.');
-      if (edit.field === 'start_date' && value == null) fail('시작일은 비울 수 없어요.');
+      if (edit.field === 'name') { value = (value ?? '').trim(); if (!value) fail('이름은 비울 수 없습니다.'); }
+      if (edit.field.endsWith('_date') && value != null && !DATE.test(value)) fail('날짜 형식은 YYYY-MM-DD입니다.');
+      if (edit.field === 'status' && !STATUSES.has(value ?? '')) fail('상태가 올바르지 않습니다.');
+      if (edit.field === 'update_type_id' && !db.get('SELECT 1 AS ok FROM update_types WHERE update_type_id = ?', [value])) fail('없는 유형입니다.');
+      if (edit.field === 'start_date' && value == null) fail('시작일은 비울 수 없습니다.');
       if (before.v === value) return { changed: false };
       db.run(`UPDATE updates SET ${edit.field} = ? WHERE update_id = ?`, [value, edit.updateId]);
       log(db, ctx, 'UPDATE', 'updates', edit.updateId, edit.field, before.v, value);
@@ -177,10 +177,10 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
 
     // ───────── 물량 ─────────
     case 'volume': {
-      if (!qtyOk(edit.value)) fail('수량은 0 이상의 정수예요.');
-      if (edit.field === 'outsource_qty' && edit.value == null) fail('외주 수량은 비울 수 없어요.');
+      if (!qtyOk(edit.value)) fail('수량은 0 이상의 정수입니다.');
+      if (edit.field === 'outsource_qty' && edit.value == null) fail('외주 수량은 비울 수 없습니다.');
       const before = db.get(`SELECT ${edit.field} AS v FROM volumes WHERE update_id = ? AND resource_type_id = ?`, [edit.updateId, edit.resourceTypeId]);
-      if (!before) fail('그 업데이트 물량에 없는 리소스예요.');
+      if (!before) fail('그 업데이트 물량에 없는 리소스입니다.');
       if (before.v === edit.value) return { changed: false };
       db.run(`UPDATE volumes SET ${edit.field} = ? WHERE update_id = ? AND resource_type_id = ?`, [edit.value, edit.updateId, edit.resourceTypeId]);
       log(db, ctx, 'UPDATE', 'volumes', `${edit.updateId}|${edit.resourceTypeId}`, edit.field, before.v, edit.value);
@@ -211,8 +211,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     // ───────── 유형 · 템플릿 ─────────
     case 'createType': {
       const name = edit.name.trim();
-      if (!name) fail('유형 이름을 넣어 주세요.');
-      if (db.get('SELECT 1 AS ok FROM update_types WHERE name = ?', [name])) fail(`"${name}" 유형이 이미 있어요.`);
+      if (!name) fail('유형 이름을 입력하십시오.');
+      if (db.get('SELECT 1 AS ok FROM update_types WHERE name = ?', [name])) fail(`"${name}" 유형이 이미 있습니다.`);
       const id = nextId(db, 'update_types', 'update_type_id', 'T', 2);
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM update_types')?.s ?? 0) + 1;
       db.run('INSERT INTO update_types (update_type_id, name, is_launch, sort_order, active) VALUES (?, ?, 0, ?, 1)', [id, name, sortOrder]);
@@ -222,11 +222,11 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'renameType': {
       const name = edit.name.trim();
-      if (!name) fail('유형 이름은 비울 수 없어요.');
+      if (!name) fail('유형 이름은 비울 수 없습니다.');
       const before = db.get('SELECT name FROM update_types WHERE update_type_id = ?', [edit.typeId]);
-      if (!before) fail('없는 유형이에요.');
+      if (!before) fail('없는 유형입니다.');
       if (before.name === name) return { changed: false };
-      if (db.get('SELECT 1 AS ok FROM update_types WHERE name = ? AND update_type_id <> ?', [name, edit.typeId])) fail(`"${name}" 유형이 이미 있어요.`);
+      if (db.get('SELECT 1 AS ok FROM update_types WHERE name = ? AND update_type_id <> ?', [name, edit.typeId])) fail(`"${name}" 유형이 이미 있습니다.`);
       db.run('UPDATE update_types SET name = ? WHERE update_type_id = ?', [name, edit.typeId]);
       log(db, ctx, 'UPDATE', 'update_types', edit.typeId, 'name', before.name, name);
       dirty('update_types');
@@ -235,9 +235,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'deleteType': {
       const t = db.get('SELECT * FROM update_types WHERE update_type_id = ?', [edit.typeId]);
       if (!t) return { changed: false };
-      if (Number(t.is_launch) === 1) fail('런칭 유형은 지울 수 없어요.');
+      if (Number(t.is_launch) === 1) fail('런칭 유형은 삭제할 수 없습니다.');
       const used = Number(db.get('SELECT count(*) AS n FROM updates WHERE update_type_id = ?', [edit.typeId])?.n ?? 0);
-      if (used > 0) fail(`이 유형을 쓰는 업데이트가 ${used}개 있어요. 업데이트의 유형을 바꾼 뒤 지워 주세요.`);
+      if (used > 0) fail(`이 유형을 사용하는 업데이트가 ${used}개 있습니다. 업데이트의 유형을 변경한 뒤 삭제하십시오.`);
       const template = db.all('SELECT * FROM type_templates WHERE update_type_id = ?', [edit.typeId]);
       db.run('DELETE FROM update_types WHERE update_type_id = ?', [edit.typeId]);
       log(db, ctx, 'DELETE', 'update_types', edit.typeId, null, { ...t, template }, undefined);
@@ -245,9 +245,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed: true };
     }
     case 'template': {
-      if (!qtyOk(edit.value)) fail('수량은 0 이상의 정수예요.');
+      if (!qtyOk(edit.value)) fail('수량은 0 이상의 정수입니다.');
       const before = db.get(`SELECT ${edit.field} AS v FROM type_templates WHERE update_type_id = ? AND resource_type_id = ?`, [edit.typeId, edit.resourceTypeId]);
-      if (!before) fail('템플릿에 없는 리소스예요.');
+      if (!before) fail('템플릿에 없는 리소스입니다.');
       if (before.v === edit.value) return { changed: false };
       db.run(`UPDATE type_templates SET ${edit.field} = ? WHERE update_type_id = ? AND resource_type_id = ?`, [edit.value, edit.typeId, edit.resourceTypeId]);
       log(db, ctx, 'UPDATE', 'type_templates', `${edit.typeId}|${edit.resourceTypeId}`, edit.field, before.v, edit.value);
@@ -271,18 +271,18 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'progress':
     case 'progressSpent':
     case 'completeRow': {
-      if (edit.asOf != null && !DATE.test(edit.asOf)) fail('기준일 형식은 YYYY-MM-DD예요.');
-      if (!db.get('SELECT 1 AS ok FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])) fail('그 업데이트 물량에 없는 리소스예요.');
+      if (edit.asOf != null && !DATE.test(edit.asOf)) fail('기준일 형식은 YYYY-MM-DD입니다.');
+      if (!db.get('SELECT 1 AS ok FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])) fail('그 업데이트 물량에 없는 리소스입니다.');
       const steps = db.all('SELECT rp.part_id FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id AND p.active = 1 WHERE rp.resource_type_id = ? ORDER BY p.sort_order', [edit.resourceTypeId]).map(r => String(r.part_id));
       // 칸 하나 = (완료 수량, 실투입 인·일). 둘 다 없으면(완료 0·실투입 빈칸) 행을 지운다
       const targets: { partId: string; field: 'completed_qty' | 'spent_days'; value: number | null }[] = [];
       if (edit.kind === 'progress') {
-        if (!(edit.value == null || (Number.isInteger(edit.value) && edit.value >= 0))) fail('완료 수량은 0 이상의 정수예요.');
-        if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트예요.');
+        if (!(edit.value == null || (Number.isInteger(edit.value) && edit.value >= 0))) fail('완료 수량은 0 이상의 정수입니다.');
+        if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트입니다.');
         targets.push({ partId: edit.partId, field: 'completed_qty', value: edit.value });
       } else if (edit.kind === 'progressSpent') {
-        if (!(edit.value == null || (Number.isFinite(edit.value) && edit.value >= 0))) fail('실투입 공수는 0 이상의 숫자(인·일)예요.');
-        if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트예요.');
+        if (!(edit.value == null || (Number.isFinite(edit.value) && edit.value >= 0))) fail('실투입 공수는 0 이상의 숫자(인·일)입니다.');
+        if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트입니다.');
         targets.push({ partId: edit.partId, field: 'spent_days', value: edit.value === 0 ? null : edit.value });
       } else {
         // 다 끝남: 거치는 모든 파트를 (목표 − 외주)만큼 완료로
@@ -323,9 +323,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
 
     // ───────── 공수 보정 ─────────
     case 'effortScale': {
-      if (!(edit.ratio > 0 && edit.ratio < 20)) fail('보정 배율이 올바르지 않아요.');
+      if (!(edit.ratio > 0 && edit.ratio < 20)) fail('보정 배율이 올바르지 않습니다.');
       const rows = db.all('SELECT profile_id, days FROM efforts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
-      if (!rows.length) fail('그 리소스·파트의 공수가 없어요.');
+      if (!rows.length) fail('그 리소스·파트의 공수가 없습니다.');
       let changed = false;
       for (const r of rows) {
         const next = Math.round(Number(r.days) * edit.ratio * 100) / 100;
@@ -342,9 +342,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'capacity':
     case 'fillCapacity': {
       const v = edit.value;
-      if (!Number.isFinite(v) || v < 0) fail('0 이상의 숫자를 넣어 주세요.');
-      if (edit.field === 'utilization' && v > 1) fail('가동률은 100% 이하예요.');
-      if (edit.field === 'productivity' && v <= 0) fail('생산성은 0보다 커야 해요.');
+      if (!Number.isFinite(v) || v < 0) fail('0 이상의 숫자를 입력하십시오.');
+      if (edit.field === 'utilization' && v > 1) fail('가동률은 100% 이하입니다.');
+      if (edit.field === 'productivity' && v <= 0) fail('생산성은 0보다 커야 합니다.');
       const months = edit.kind === 'capacity' ? [edit.month] : monthsBetween(edit.fromMonth, edit.toMonth);
       let changed = false;
       for (const month of months) {
@@ -359,10 +359,10 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed };
     }
     case 'horizon': {
-      if (!MONTH.test(edit.startMonth) || !MONTH.test(edit.endMonth)) fail('달 형식은 YYYY-MM이에요.');
-      if (edit.endMonth < edit.startMonth) fail('끝 달이 시작 달보다 앞이에요.');
+      if (!MONTH.test(edit.startMonth) || !MONTH.test(edit.endMonth)) fail('달 형식은 YYYY-MM입니다.');
+      if (edit.endMonth < edit.startMonth) fail('끝 달이 시작 달보다 앞입니다.');
       const months = monthsBetween(edit.startMonth, edit.endMonth);
-      if (months.length > 60) fail(`계획 기간이 ${months.length}개월이에요. 60개월 이하로 줄여 주세요.`);
+      if (months.length > 60) fail(`계획 기간이 ${months.length}개월입니다. 60개월 이하로 줄이십시오.`);
       const s = db.get('SELECT horizon_start_month AS a, horizon_end_month AS b FROM settings WHERE id = 1')!;
       if (s.a === edit.startMonth && s.b === edit.endMonth) return { changed: false };
       db.run('UPDATE settings SET horizon_start_month = ?, horizon_end_month = ? WHERE id = 1', [edit.startMonth, edit.endMonth]);
@@ -389,11 +389,11 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
 
     // ───────── 물량 템플릿 ─────────
     case 'modeName': {
-      if (!PLAN_MODES.includes(edit.mode)) fail('없는 템플릿이에요.');
+      if (!PLAN_MODES.includes(edit.mode)) fail('없는 템플릿입니다.');
       const name = edit.name.trim();
-      if (!name || name.length > 20) fail('템플릿 이름은 1~20자로 넣어 주세요.');
+      if (!name || name.length > 20) fail('템플릿 이름은 1~20자로 입력하십시오.');
       const names = readModeNames(db);
-      if (PLAN_MODES.some(m => m !== edit.mode && names[m] === name)) fail('다른 템플릿과 같은 이름이에요.');
+      if (PLAN_MODES.some(m => m !== edit.mode && names[m] === name)) fail('다른 템플릿과 같은 이름입니다.');
       if (names[edit.mode] === name) return { changed: false };
       const key = modeMetaKey(edit.mode);
       const before = db.get('SELECT value FROM meta WHERE key = ?', [key]);
@@ -418,7 +418,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     // ───────── 프로젝트 기본 정보 ─────────
     case 'projectName': {
       const name = edit.name.trim();
-      if (!name) fail('프로젝트 이름을 넣어 주세요.');
+      if (!name) fail('프로젝트 이름을 입력하십시오.');
       const before = db.get("SELECT value FROM meta WHERE key = 'project_name'");
       if (before?.value === name) return { changed: false };
       db.run("INSERT INTO meta (key, value) VALUES ('project_name', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [name]);
@@ -426,8 +426,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed: true };
     }
     case 'setting': {
-      if (edit.field === 'buffer_rate' && !(typeof edit.value === 'number' && edit.value >= 0 && edit.value < 1)) fail('여유율은 0~99%예요.');
-      if (edit.field === 'work_weekdays' && !(typeof edit.value === 'string' && /^[01]{7}$/.test(edit.value) && edit.value.includes('1'))) fail('근무 요일을 하루 이상 골라 주세요.');
+      if (edit.field === 'buffer_rate' && !(typeof edit.value === 'number' && edit.value >= 0 && edit.value < 1)) fail('여유율은 0~99%입니다.');
+      if (edit.field === 'work_weekdays' && !(typeof edit.value === 'string' && /^[01]{7}$/.test(edit.value) && edit.value.includes('1'))) fail('근무 요일을 하루 이상 선택하십시오.');
       const before = db.get(`SELECT ${edit.field} AS v FROM settings WHERE id = 1`)!;
       if (before.v === edit.value) return { changed: false };
       db.run(`UPDATE settings SET ${edit.field} = ? WHERE id = 1`, [edit.value]);
@@ -436,9 +436,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed: true };
     }
     case 'addHoliday': {
-      if (!DATE.test(edit.date)) fail('날짜를 확인해 주세요.');
-      if (!edit.name.trim()) fail('휴일 이름을 넣어 주세요.');
-      if (db.get('SELECT 1 AS ok FROM holidays WHERE date = ?', [edit.date])) fail('그 날짜는 이미 휴일이에요.');
+      if (!DATE.test(edit.date)) fail('날짜를 확인하십시오.');
+      if (!edit.name.trim()) fail('휴일 이름을 입력하십시오.');
+      if (db.get('SELECT 1 AS ok FROM holidays WHERE date = ?', [edit.date])) fail('그 날짜는 이미 휴일입니다.');
       const row = { date: edit.date, name: edit.name.trim(), kind: edit.holidayKind };
       db.run('INSERT INTO holidays (date, name, kind) VALUES (?, ?, ?)', [row.date, row.name, row.kind]);
       log(db, ctx, 'INSERT', 'holidays', edit.date, null, undefined, row);
@@ -457,8 +457,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     // ───────── 파트 ─────────
     case 'createPart': {
       const name = edit.name.trim();
-      if (!name) fail('파트 이름을 넣어 주세요.');
-      if (db.get('SELECT 1 AS ok FROM parts WHERE name = ?', [name])) fail('같은 이름의 파트가 있어요.');
+      if (!name) fail('파트 이름을 입력하십시오.');
+      if (db.get('SELECT 1 AS ok FROM parts WHERE name = ?', [name])) fail('같은 이름의 파트가 있습니다.');
       const id = nextId(db, 'parts', 'part_id', 'P', 2);
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM parts')?.s ?? 0) + 1;
       const row = { part_id: id, name, sort_order: sortOrder, active: 1 };
@@ -477,11 +477,11 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'renamePart': {
       const name = edit.name.trim();
-      if (!name) fail('파트 이름을 넣어 주세요.');
+      if (!name) fail('파트 이름을 입력하십시오.');
       const old = db.get('SELECT name FROM parts WHERE part_id = ?', [edit.partId]);
-      if (!old) fail('없는 파트예요.');
+      if (!old) fail('없는 파트입니다.');
       if (old!.name === name) return { changed: false };
-      if (db.get('SELECT 1 AS ok FROM parts WHERE name = ? AND part_id <> ?', [name, edit.partId])) fail('같은 이름의 파트가 있어요.');
+      if (db.get('SELECT 1 AS ok FROM parts WHERE name = ? AND part_id <> ?', [name, edit.partId])) fail('같은 이름의 파트가 있습니다.');
       db.run('UPDATE parts SET name = ? WHERE part_id = ?', [name, edit.partId]);
       log(db, ctx, 'UPDATE', 'parts', edit.partId, 'name', old!.name, name);
       dirty('parts');
@@ -504,12 +504,12 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'partActive': {
       const old = db.get('SELECT active FROM parts WHERE part_id = ?', [edit.partId]);
-      if (!old) fail('없는 파트예요.');
+      if (!old) fail('없는 파트입니다.');
       const v = edit.active ? 1 : 0;
       if (Number(old!.active) === v) return { changed: false };
       // 사용 중인 리소스가 거치는 파트를 끄면 공정이 끊겨 계산이 막힌다 → 먼저 공수에서 빼게 한다
       const used = Number(db.get('SELECT count(*) AS n FROM resource_parts rp JOIN resource_types r ON r.resource_type_id = rp.resource_type_id WHERE rp.part_id = ? AND r.active = 1', [edit.partId])?.n ?? 0);
-      if (!v && used) fail(`이 파트를 거치는 리소스가 ${used}종 있어요. 리소스 공수에서 이 파트를 뺀 뒤 사용 안 함으로 두세요.`);
+      if (!v && used) fail(`이 파트를 거치는 리소스가 ${used}종 있습니다. 리소스 공수에서 이 파트를 제외한 뒤 사용 안 함으로 두십시오.`);
       db.run('UPDATE parts SET active = ? WHERE part_id = ?', [v, edit.partId]);
       log(db, ctx, 'UPDATE', 'parts', edit.partId, 'active', old!.active, v);
       dirty('parts');
@@ -519,8 +519,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const old = db.get('SELECT * FROM parts WHERE part_id = ?', [edit.partId]);
       if (!old) return { changed: false };
       const used = Number(db.get('SELECT count(*) AS n FROM resource_parts WHERE part_id = ?', [edit.partId])?.n ?? 0);
-      if (used) fail(`이 파트를 거치는 리소스가 ${used}종 있어요. 리소스의 공수에서 이 파트를 뺀 뒤 지우거나, "사용 안 함"으로 두세요.`);
-      if (db.get('SELECT 1 AS ok FROM progress WHERE part_id = ?', [edit.partId])) fail('이 파트에 작업 진척 기록이 있어요. "사용 안 함"으로 두세요.');
+      if (used) fail(`이 파트를 거치는 리소스가 ${used}종 있습니다. 리소스의 공수에서 이 파트를 제외한 뒤 삭제하거나, "사용 안 함"으로 두십시오.`);
+      if (db.get('SELECT 1 AS ok FROM progress WHERE part_id = ?', [edit.partId])) fail('이 파트에 작업 진척 기록이 있습니다. "사용 안 함"으로 두십시오.');
       // 함께 지워지는 인력·겹침률·AI 비율을 남겨 되돌릴 수 있게
       const capacity = db.all('SELECT * FROM capacity WHERE part_id = ?', [edit.partId]);
       const overlaps = db.all('SELECT * FROM part_overlaps WHERE from_part_id = ? OR to_part_id = ?', [edit.partId, edit.partId]);
@@ -534,8 +534,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     // ───────── 리소스 · 공수 ─────────
     case 'createResource': {
       const name = edit.name.trim();
-      if (!name) fail('리소스 이름을 넣어 주세요.');
-      if (db.get('SELECT 1 AS ok FROM resource_types WHERE name = ?', [name])) fail('같은 이름의 리소스가 있어요.');
+      if (!name) fail('리소스 이름을 입력하십시오.');
+      if (db.get('SELECT 1 AS ok FROM resource_types WHERE name = ?', [name])) fail('같은 이름의 리소스가 있습니다.');
       const groupId = groupFor(db, ctx, edit.groupName);
       const id = nextId(db, 'resource_types', 'resource_type_id', 'R', 3);
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM resource_types')?.s ?? 0) + 1;
@@ -547,11 +547,11 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'renameResource': {
       const name = edit.name.trim();
-      if (!name) fail('리소스 이름을 넣어 주세요.');
+      if (!name) fail('리소스 이름을 입력하십시오.');
       const old = db.get('SELECT name FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
-      if (!old) fail('없는 리소스예요.');
+      if (!old) fail('없는 리소스입니다.');
       if (old!.name === name) return { changed: false };
-      if (db.get('SELECT 1 AS ok FROM resource_types WHERE name = ? AND resource_type_id <> ?', [name, edit.resourceTypeId])) fail('같은 이름의 리소스가 있어요.');
+      if (db.get('SELECT 1 AS ok FROM resource_types WHERE name = ? AND resource_type_id <> ?', [name, edit.resourceTypeId])) fail('같은 이름의 리소스가 있습니다.');
       db.run('UPDATE resource_types SET name = ? WHERE resource_type_id = ?', [name, edit.resourceTypeId]);
       log(db, ctx, 'UPDATE', 'resource_types', edit.resourceTypeId, 'name', old!.name, name);
       dirty('resource_types');
@@ -559,7 +559,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'resourceGroup': {
       const old = db.get('SELECT group_id FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
-      if (!old) fail('없는 리소스예요.');
+      if (!old) fail('없는 리소스입니다.');
       const groupId = groupFor(db, ctx, edit.groupName);
       if (old!.group_id === groupId) return { changed: false };
       db.run('UPDATE resource_types SET group_id = ? WHERE resource_type_id = ?', [groupId, edit.resourceTypeId]);
@@ -569,18 +569,18 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'renameGroup': {
       const name = edit.name.trim();
-      if (!name) fail('분류 이름을 넣어 주세요.');
+      if (!name) fail('분류 이름을 입력하십시오.');
       const old = db.get('SELECT name FROM resource_groups WHERE group_id = ?', [edit.groupId]);
-      if (!old) fail('없는 분류예요.');
+      if (!old) fail('없는 분류입니다.');
       if (old!.name === name) return { changed: false };
-      if (db.get('SELECT 1 AS ok FROM resource_groups WHERE name = ? AND group_id <> ?', [name, edit.groupId])) fail('같은 이름의 분류가 있어요.');
+      if (db.get('SELECT 1 AS ok FROM resource_groups WHERE name = ? AND group_id <> ?', [name, edit.groupId])) fail('같은 이름의 분류가 있습니다.');
       db.run('UPDATE resource_groups SET name = ? WHERE group_id = ?', [name, edit.groupId]);
       log(db, ctx, 'UPDATE', 'resource_groups', edit.groupId, 'name', old!.name, name);
       return { changed: true };
     }
     case 'resourceActive': {
       const old = db.get('SELECT active FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
-      if (!old) fail('없는 리소스예요.');
+      if (!old) fail('없는 리소스입니다.');
       const v = edit.active ? 1 : 0;
       if (Number(old!.active) === v) return { changed: false };
       db.run('UPDATE resource_types SET active = ? WHERE resource_type_id = ?', [v, edit.resourceTypeId]);
@@ -592,7 +592,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const old = db.get('SELECT * FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
       if (!old) return { changed: false };
       const used = ['volumes', 'type_templates', 'progress'].filter(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [edit.resourceTypeId]));
-      if (used.length) fail('물량·유형 템플릿·작업 진척에 쓰이는 리소스예요. 그곳에서 뺀 뒤 지우거나 "사용 안 함"으로 두세요.');
+      if (used.length) fail('물량·유형 템플릿·작업 진척에 쓰이는 리소스입니다. 그곳에서 제외한 뒤 삭제하거나 "사용 안 함"으로 두십시오.');
       const resourceParts = db.all('SELECT * FROM resource_parts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       db.run('DELETE FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
@@ -602,15 +602,15 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     }
     case 'effort': {
       // 기본 공수를 비우면 그 파트를 거치지 않는다(거치는 파트·공수를 지운다). 0은 "거치지만 할 일 없음"
-      if (edit.days != null && !(Number.isFinite(edit.days) && edit.days >= 0 && edit.days < 10000)) fail('공수는 0 이상의 숫자예요.');
-      if (!db.get('SELECT 1 AS ok FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId])) fail('없는 리소스예요.');
-      if (!db.get('SELECT 1 AS ok FROM parts WHERE part_id = ?', [edit.partId])) fail('없는 파트예요.');
+      if (edit.days != null && !(Number.isFinite(edit.days) && edit.days >= 0 && edit.days < 10000)) fail('공수는 0 이상의 숫자입니다.');
+      if (!db.get('SELECT 1 AS ok FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId])) fail('없는 리소스입니다.');
+      if (!db.get('SELECT 1 AS ok FROM parts WHERE part_id = ?', [edit.partId])) fail('없는 파트입니다.');
       const key = `${edit.resourceTypeId}|${edit.partId}`;
       const rp = db.get('SELECT * FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
       const cur = db.get('SELECT days FROM efforts WHERE resource_type_id = ? AND part_id = ? AND profile_id = ?', [edit.resourceTypeId, edit.partId, edit.profileId]);
       if (edit.profileId === 'BASE' && edit.days == null) {
         if (!rp) return { changed: false };
-        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 작업 진척 기록이 있어 뺄 수 없어요. 공수를 0으로 두세요.');
+        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 작업 진척 기록이 있어 제외할 수 없습니다. 공수를 0으로 두십시오.');
         const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
         db.run('DELETE FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
         log(db, ctx, 'DELETE', 'resource_parts', key, null, { ...rp, efforts }, undefined);
@@ -625,7 +625,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
         return { changed: true };
       }
       if (!rp) {
-        if (edit.profileId === 'AI') fail('기본 공수를 먼저 넣어 주세요.');
+        if (edit.profileId === 'AI') fail('기본 공수를 먼저 입력하십시오.');
         const row = { resource_type_id: edit.resourceTypeId, part_id: edit.partId, rework_rate: 0 };
         db.run('INSERT INTO resource_parts (resource_type_id, part_id, rework_rate) VALUES (?, ?, 0)', [edit.resourceTypeId, edit.partId]);
         log(db, ctx, 'INSERT', 'resource_parts', key, null, undefined, row);
@@ -648,8 +648,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed: true };
     }
     case 'aiShare': {
-      if (!(Number.isFinite(edit.share) && edit.share >= 0 && edit.share <= 1)) fail('AI 활용 비율은 0~100%예요.');
-      if (!db.get('SELECT 1 AS ok FROM parts WHERE part_id = ?', [edit.partId])) fail('없는 파트예요.');
+      if (!(Number.isFinite(edit.share) && edit.share >= 0 && edit.share <= 1)) fail('AI 활용 비율은 0~100%입니다.');
+      if (!db.get('SELECT 1 AS ok FROM parts WHERE part_id = ?', [edit.partId])) fail('없는 파트입니다.');
       const share = Math.round(edit.share * 1000) / 1000;
       const rows = db.all('SELECT * FROM effort_mix WHERE part_id = ?', [edit.partId]);
       const cur = Number(rows.find(r => r.profile_id === 'AI')?.share ?? 0);
@@ -674,9 +674,9 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed: true };
     }
     case 'rework': {
-      if (!(Number.isFinite(edit.rate) && edit.rate >= 0 && edit.rate <= 1)) fail('재작업률은 0~100%예요.');
+      if (!(Number.isFinite(edit.rate) && edit.rate >= 0 && edit.rate <= 1)) fail('재작업률은 0~100%입니다.');
       const old = db.get('SELECT rework_rate FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
-      if (!old) fail('이 리소스가 거치지 않는 파트예요.');
+      if (!old) fail('이 리소스가 거치지 않는 파트입니다.');
       if (Number(old!.rework_rate) === edit.rate) return { changed: false };
       db.run('UPDATE resource_parts SET rework_rate = ? WHERE resource_type_id = ? AND part_id = ?', [edit.rate, edit.resourceTypeId, edit.partId]);
       log(db, ctx, 'UPDATE', 'resource_parts', `${edit.resourceTypeId}|${edit.partId}`, 'rework_rate', Number(old!.rework_rate), edit.rate);

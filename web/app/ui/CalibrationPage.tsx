@@ -30,14 +30,14 @@ export function CalibrationPage(props: { version: number; readOnly: boolean; onC
         <div>
           <PageEyebrow page="calibration" />
           <h1>실제 투입으로 공수 기준 다듬기</h1>
-          <p class="muted" style="margin-top: 6px">작업 진척의 "완료 수량"과 "실투입 인·일"로 실제 공수를 구해 기준과 비교해요. 여유율은 빼고 비교해요.</p>
+          <p class="muted" style="margin-top: 6px">작업 진척의 "완료 수량"과 "실투입 인·일"로 실제 공수를 구해 기준과 비교합니다. 여유율은 빼고 비교합니다.</p>
         </div>
       </header>
 
       {view.rows.length === 0 ? (
         <section class="card"><div class="card-body">
-          <div class="banner warn"><IconAlert /><div><b>아직 비교할 실투입 기록이 없어요</b>
-            <p class="small muted">작업 진척에서 완료 수량과 함께 "실투입 인·일"을 넣으면 여기서 보정을 제안해요.</p>
+          <div class="banner warn"><IconAlert /><div><b>아직 비교할 실투입 기록이 없습니다</b>
+            <p class="small muted">작업 진척에서 완료 수량과 함께 "실투입 인·일"을 입력하면 여기서 보정을 제안합니다.</p>
             <button class="btn sm" style="margin-top: 8px" onClick={props.onGoProgress}>작업 진척으로</button></div></div>
         </div></section>
       ) : (
@@ -54,7 +54,7 @@ export function CalibrationPage(props: { version: number; readOnly: boolean; onC
 
           <section class="card">
             <div class="card-head">
-              <div><h2>리소스 · 파트별 제안</h2><p class="small muted" style="margin-top: 2px">배율 = 실투입 ÷ 기준. 근거가 충분한(완료 3개·실투입 5인·일 이상) 것을 미리 골라 두었어요.</p></div>
+              <div><h2>리소스 · 파트별 제안</h2><p class="small muted" style="margin-top: 2px">배율 = 실투입 ÷ 기준. 근거가 충분한(완료 3개·실투입 5인·일 이상) 것을 미리 골라 두었습니다.</p></div>
               <div class="inline">
                 <button class="btn sm" disabled={!picks.length} onClick={async () => setPreview(await rpc.calibrationPreview(picks))}><IconSpark />미리 보기</button>
                 {!props.readOnly && <button class="btn sm primary" disabled={!picks.length} onClick={async () => { if (await props.onCalibrate(picks)) setPreview(null); }}>{picks.length}개 적용</button>}

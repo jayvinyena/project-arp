@@ -1,4 +1,4 @@
-// 변경 이력: 한 번 고친 것마다 한 줄, 펼치면 칸별 이전 → 이후, 되돌리기
+// 변경 이력: 한 번 수정한 것마다 한 줄, 펼치면 칸별 이전 → 이후, 되돌리기
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
@@ -21,13 +21,13 @@ export function HistoryPage(props: { version: number; readOnly: boolean; onUndo:
         <div>
           <PageEyebrow page="history" />
           <h1>누가 언제 무엇을 바꿨나</h1>
-          <p class="muted" style="margin-top: 6px">한 번 고친 것마다 한 줄이에요. 되돌리면 이전 값으로 바꾸고, 되돌린 것도 이력에 남아요.</p>
+          <p class="muted" style="margin-top: 6px">한 번 수정한 것마다 한 줄입니다. 되돌리면 이전 값으로 바꾸고, 되돌린 것도 이력에 남습니다.</p>
         </div>
         <span class="small faint">전체 {data.total}개{data.total > data.batches.length ? ` · 최근 ${data.batches.length}개` : ''}</span>
       </header>
       <section class="card">
         <div class="card-body">
-          {data.batches.length === 0 && <p class="muted">아직 고친 기록이 없어요.</p>}
+          {data.batches.length === 0 && <p class="muted">아직 수정 기록이 없습니다.</p>}
           {data.batches.map(b => (
             <div class={`hist-item${b.undone ? ' undone' : ''}`}>
               <div class="hist-head">

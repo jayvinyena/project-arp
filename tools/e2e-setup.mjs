@@ -86,7 +86,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelectorAll('table.grid.vol tbody tr.row').length > 0", 10000);
   await sleep(500);
   const after = await daysOf(cdp, '신규 캐릭터');
-  check('AI 활용을 넣으면 신규 캐릭터 필요 공수가 준다', after != null && charDays != null && after < charDays, `${charDays} → ${after}`);
+  check('AI 활용을 입력하면 신규 캐릭터 필요 공수가 준다', after != null && charDays != null && after < charDays, `${charDays} → ${after}`);
 
   // 6. 화면 안내: 머리말의 버튼 → 패널 → 함께 쓰는 화면으로 이동 · 메뉴 이름 '작업 진척'
   await cdp.eval("document.querySelector('.page-head .help-btn').click()");

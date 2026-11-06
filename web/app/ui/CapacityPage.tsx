@@ -50,7 +50,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
         <div>
           <PageEyebrow page="capacity" />
           <h1>파트 × 달 인력</h1>
-          <p class="muted" style="margin-top: 6px">채용·충원·외주를 달마다 넣어요. 바꾸면 모든 화면의 계산이 바로 바뀌어요.</p>
+          <p class="muted" style="margin-top: 6px">채용·충원·외주를 달마다 입력합니다. 바꾸면 모든 화면의 계산이 바로 변경됩니다.</p>
         </div>
         <div class="horizon-box">
           <span class="form-label">계획 기간</span>
@@ -61,7 +61,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
             <button type="button" class="btn sm" disabled={props.readOnly || (horizon.start === view.horizon.start && horizon.end === view.horizon.end)}
               onClick={() => apply({ kind: 'horizon', startMonth: horizon.start, endMonth: horizon.end })}>바꾸기</button>
           </div>
-          <span class="form-help">늘린 달의 인력은 바로 앞 달 값을 복사해요(외주·지원은 0).</span>
+          <span class="form-help">늘린 달의 인력은 바로 앞 달 값을 복사합니다(외주·지원은 0).</span>
         </div>
       </header>
 
@@ -87,7 +87,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
                       <td class="n">{c
                         ? <Cell value={c[field]} pct={meta.pct} label={`${p.name} ${view.months[i]} ${meta.label}`} disabled={props.readOnly}
                           onCommit={v => apply({ kind: 'capacity', partId: p.partId, month: view.months[i], field, value: v })} />
-                        : <span class="err-text" title="이 달 인력 행이 없어요">없음</span>}</td>
+                        : <span class="err-text" title="이 달 인력 행이 없습니다">없음</span>}</td>
                     ))}
                   </tr>
                 ))}

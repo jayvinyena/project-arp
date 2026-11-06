@@ -272,8 +272,8 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     if (!best && out()) break;
     if (!best) {
       stuck.set(target.updateId, !tried
-        ? '허용한 수단을 다 썼어요(상한에 닿았거나 더 줄일 물량이 없어요)'
-        : '남은 수단으로는 더 당겨지지 않아요(상한을 올리거나 다른 수단을 켜 보세요)');
+        ? '허용한 수단을 다 사용했습니다(상한에 닿았거나 더 줄일 물량이 없습니다)'
+        : '남은 수단으로는 더 당겨지지 않습니다(상한을 올리거나 다른 수단을 켜십시오)');
       continue;
     }
     state = best.st;
@@ -349,14 +349,14 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     actions,
     runs,
     ms: now() - t0,
-    stuck: after.filter(o => o.late > 0).map(o => ({ name: o.name, why: stuck.get(o.updateId) ?? '계산 상한(횟수·시간)에 닿아 여기서 멈췄어요' })),
+    stuck: after.filter(o => o.late > 0).map(o => ({ name: o.name, why: stuck.get(o.updateId) ?? '계산 상한(횟수·시간)에 닿아 여기서 멈췄습니다' })),
     limited,
   };
 }
 
 /** 제안을 시나리오로 만든다(동작마다 한 묶음). 시뮬레이션에서 비교·원본 반영을 그대로 쓴다 */
 export function adviceToScenario(db: SqlDb, name: string, actions: ScenarioAction[]): string {
-  if (!actions.length) throw new Error('시나리오로 만들 제안이 없어요.');
+  if (!actions.length) throw new Error('시나리오로 만들 제안이 없습니다.');
   db.exec('SAVEPOINT advice');
   try {
     const id = applyScenarioOp(db, { kind: 'create', name }).createdId!;

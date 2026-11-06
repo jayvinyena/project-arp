@@ -31,7 +31,7 @@ await withBrowser(async (cdp, base) => {
   await setQty(cdp, '배경 맵 기본안', 5);
   let dirtyOk = true;
   try { await cdp.waitUntil(`${saveText}.includes('저장 대기')`, 3000); } catch { dirtyOk = false; }
-  check('고치면 저장 대기', dirtyOk, await cdp.eval(saveText));
+  check('수정하면 저장 대기', dirtyOk, await cdp.eval(saveText));
   const t0 = Date.now();
   await cdp.waitUntil(`${saveText}.includes('저장됨')`, 8000);
   const waited = Date.now() - t0;

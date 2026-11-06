@@ -52,7 +52,7 @@ export function ProgressPage(props: {
   const [asOf, setAsOf] = useState(today());
   useEffect(() => { void rpc.progress(wanted).then(setView); }, [props.version, wanted]);
   if (!view) return <div class="page"><p class="muted">불러오는 중…</p></div>;
-  if (!view.updateId) return <div class="page"><p class="muted">업데이트가 없어요. 업데이트 계획에서 먼저 만들어 주세요.</p></div>;
+  if (!view.updateId) return <div class="page"><p class="muted">업데이트가 없습니다. 업데이트 계획에서 먼저 만드십시오.</p></div>;
   const updateId = view.updateId;
   const rate = view.summary.totalDays > 0 ? view.summary.doneDays / view.summary.totalDays : 0;
   const apply = (e: Edit) => props.onApply(e);
@@ -69,7 +69,7 @@ export function ProgressPage(props: {
         <div>
           <PageEyebrow page="progress" />
           <h1>파트별 완료 수량</h1>
-          <p class="muted" style="margin-top: 6px">끝낸 수량을 넣으면 남은 일만 다시 계산해서 완료 예정이 바로 바뀌어요.</p>
+          <p class="muted" style="margin-top: 6px">끝낸 수량을 입력하면 남은 일만 다시 계산해서 완료 예정이 바로 변경됩니다.</p>
         </div>
         <div class="inline">
           <label class="form-row" style="gap: 4px">
@@ -79,7 +79,7 @@ export function ProgressPage(props: {
             </select>
           </label>
           <label class="form-row" style="gap: 4px">
-            <span class="small faint">기준일 · 새로 넣는 값에 남아요</span>
+            <span class="small faint">기준일 · 새로 입력하는 값에 남습니다</span>
             <input class="field" type="date" aria-label="진척 기준일" value={asOf} onInput={e => setAsOf((e.target as HTMLInputElement).value || today())} />
           </label>
         </div>
@@ -106,14 +106,14 @@ export function ProgressPage(props: {
         </section>
       </div>
 
-      {flagged > 0 && <div class="banner warn"><IconCheck /><div><b>확인할 칸 {flagged}개</b><p class="small muted">주황 테두리 칸에 올리면 이유가 보여요. 계산은 그대로 해요.</p></div></div>}
+      {flagged > 0 && <div class="banner warn"><IconCheck /><div><b>확인할 칸 {flagged}개</b><p class="small muted">주황 테두리 칸에 올리면 이유가 표시됩니다. 계산은 그대로 합니다.</p></div></div>}
 
       <section class="card">
         <div class="card-head">
           <div><h2>{field === 'done' ? '완료 수량' : '실투입 인·일'}</h2>
             <p class="small muted" style="margin-top: 2px">{field === 'done'
-              ? '칸 = 그 파트가 끝낸 리소스 개수. 0이나 빈칸은 아직 없음. 빗금 칸은 거치지 않는 파트예요.'
-              : '칸 = 그 완료 수량을 만드는 데 실제로 든 인·일. 공수 보정 제안에 쓰여요.'}</p></div>
+              ? '칸 = 그 파트가 끝낸 리소스 개수. 0이나 빈칸은 아직 없음. 빗금 칸은 거치지 않는 파트입니다.'
+              : '칸 = 그 완료 수량을 만드는 데 실제로 든 인·일. 공수 보정 제안에 사용됩니다.'}</p></div>
           <div class="inline">
             <div class="segmented wide" role="radiogroup" aria-label="입력 항목">
               <button type="button" role="radio" aria-checked={field === 'done'} class={field === 'done' ? 'on' : ''} onClick={() => setField('done')}>완료 수량</button>

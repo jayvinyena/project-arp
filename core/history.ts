@@ -1,4 +1,4 @@
-// 변경 이력 보기와 되돌리기. 묶음(batch_id) = 사람이 한 번 고친 것(물량 한 칸, 업데이트 만들기, 시나리오 반영 …).
+// 변경 이력 보기와 되돌리기. 묶음(batch_id) = 사람이 한 번 수정한 것(물량 한 칸, 업데이트 만들기, 시나리오 반영 …).
 // 되돌리기도 고치기다: 이력의 이전 값을 다시 쓰고, 그 자체가 새 묶음으로 이력에 남는다(이유 = "되돌리기: 묶음").
 import type { SqlDb } from './db.ts';
 import type { ProjectSession, EngineTable } from './pipeline.ts';
@@ -37,7 +37,7 @@ const TARGET_NAME: Record<string, string> = {
   parts: '파트', resource_types: '리소스', resource_groups: '분류', holidays: '휴일', meta: '프로젝트', effort_profiles: '공수 프로필',
 };
 const FIELD_NAME: Record<string, string> = {
-  min_qty: '최저', target_qty: '목표', stretch_qty: '확장', outsource_qty: '외주', name: '이름', start_date: '시작', freeze_date: '제작 완료 목표',
+  min_qty: '최소안', target_qty: '기본안', stretch_qty: '최대안', outsource_qty: '외주', name: '이름', start_date: '시작', freeze_date: '제작 완료 목표',
   release_date: '출시', priority: '우선순위', days: '1개당 인·일', spent_days: '실투입', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
   productivity: '생산성', outsource_days: '외주', support_days: '지원', completed_qty: '완료', horizon: '계획 기간', share: '비율', overlap_rate: '겹침률',
   sort_order: '순서', active: '사용', group_id: '분류', rework_rate: '재작업률', buffer_rate: '여유율', work_weekdays: '근무 요일', value: '값',
@@ -95,7 +95,7 @@ export function historyView(db: SqlDb, limit = 200): { batches: HistoryBatch[]; 
 function where(target: string, key: string): { sql: string; params: unknown[] } {
   if (target === 'settings') return { sql: 'id = 1', params: [] };
   const cols = KEYS[target];
-  if (!cols) throw new Error(`되돌릴 수 없는 대상이에요: ${target}`);
+  if (!cols) throw new Error(`되돌릴 수 없는 대상입니다: ${target}`);
   const parts = key.split('|');
   return { sql: cols.map(c => `${c} = ?`).join(' AND '), params: parts };
 }
@@ -114,10 +114,10 @@ export function laterConflicts(db: SqlDb, batchId: string): string[] {
 /** 묶음 하나를 되돌린다. 뒤에 같은 칸을 고친 묶음이 있으면 force 없이는 거절. 되돌린 뒤 검증 오류가 생기면 전부 취소 */
 export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, ctx: { editor: string; batchId: string }, force = false): { reverted: number } {
   const rows = db.all('SELECT * FROM change_log WHERE batch_id = ? ORDER BY log_id DESC', [batchId]);
-  if (!rows.length) throw new Error('없는 변경 묶음이에요.');
-  if (db.get("SELECT 1 AS ok FROM change_log WHERE reason = ?", [`되돌리기: ${batchId}`])) throw new Error('이미 되돌린 변경이에요.');
+  if (!rows.length) throw new Error('없는 변경 묶음입니다.');
+  if (db.get("SELECT 1 AS ok FROM change_log WHERE reason = ?", [`되돌리기: ${batchId}`])) throw new Error('이미 되돌린 변경입니다.');
   const conflicts = laterConflicts(db, batchId);
-  if (conflicts.length && !force) throw new Error(`이 뒤에 같은 칸을 ${conflicts.length}번 더 고쳤어요. 되돌리면 그 값도 덮어써요. 그래도 되돌리려면 "그래도 되돌리기"를 눌러 주세요.`);
+  if (conflicts.length && !force) throw new Error(`이 뒤에 같은 칸을 ${conflicts.length}번 더 수정했습니다. 되돌리면 그 값도 덮어씁니다. 그래도 되돌리려면 "그래도 되돌리기"를 누르십시오.`);
   const reason = `되돌리기: ${batchId}`;
   const log = (action: string, target: string, key: string, field: string | null, oldV: unknown, newV: unknown) =>
     db.run(`INSERT INTO change_log (batch_id, at, editor, action, target, target_key, field, old_json, new_json, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -149,7 +149,7 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
         }
         const w = where(target, key);
         // 칸 이름은 파일에서 읽은 값이라 실제 칸인지 확인한다(조작된 파일로 다른 SQL이 돌지 않게)
-        if (!field || !tableColumns(db, target).has(field)) throw new Error(`되돌릴 수 없는 칸이에요: ${target}.${field}`);
+        if (!field || !tableColumns(db, target).has(field)) throw new Error(`되돌릴 수 없는 칸입니다: ${target}.${field}`);
         db.run(`UPDATE ${target} SET ${field} = ? WHERE ${w.sql}`, [oldV ?? null, ...w.params]);
         log('UPDATE', target, key, field, newV, oldV);
       } else if (r.action === 'INSERT') {
@@ -177,7 +177,7 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
           delete row[k];
         }
         if (db.get(`SELECT 1 AS ok FROM ${target} WHERE ${where(target, key).sql}`, where(target, key).params)) {
-          throw new Error(`같은 ID(${key})가 이미 있어 되돌릴 수 없어요.`);
+          throw new Error(`같은 ID(${key})가 이미 있어 되돌릴 수 없습니다.`);
         }
         insertRow(target, row);
         for (const [table, rows2] of children) {
@@ -189,7 +189,7 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
     }
     const errors = validate(db).filter(f => f.level === 'ERROR' && !errorsBefore.has(errKey(f)));
     if (errors.length) {
-      throw new Error(`되돌리면 계산할 수 없는 상태가 돼서 취소했어요: ${errors.slice(0, 3).map(e => `${e.title}(${e.key})`).join(', ')}`);
+      throw new Error(`되돌리면 계산할 수 없는 상태가 되어 취소했습니다: ${errors.slice(0, 3).map(e => `${e.title}(${e.key})`).join(', ')}`);
     }
     db.exec('RELEASE undo_batch');
   } catch (error) {

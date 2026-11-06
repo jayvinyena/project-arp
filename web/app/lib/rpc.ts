@@ -25,8 +25,8 @@ const failAll = (message: string) => {
   pending.clear();
   window.dispatchEvent(new CustomEvent('arp:error', { detail: message }));
 };
-worker.onerror = e => { e.preventDefault(); failAll(`계산 스레드를 시작하지 못했어요(${e.message || '알 수 없는 오류'}). 페이지를 새로 고쳐 주세요.`); };
-worker.onmessageerror = () => failAll('계산 스레드 응답을 읽지 못했어요. 페이지를 새로 고쳐 주세요.');
+worker.onerror = e => { e.preventDefault(); failAll(`계산 스레드를 시작하지 못했습니다(${e.message || '알 수 없는 오류'}). 페이지를 새로 고침하십시오.`); };
+worker.onmessageerror = () => failAll('계산 스레드 응답을 읽지 못했습니다. 페이지를 새로 고침하십시오.');
 
 /** 이 브라우저의 표시(편집 중 표시에 같이 남긴다: 같은 이름이라도 다른 PC면 읽기 전용으로 연다) */
 export const DEVICE = (() => {

@@ -126,7 +126,7 @@ export type { EditContext };
 /** 런칭 물량·날짜 고치기 → 공통 고치기(core/edits.ts). 값이 그대로면 false */
 export function applyLaunchEdit(db: SqlDb, session: ProjectSession, edit: LaunchEdit, ctx: EditContext): boolean {
   const launchId = findLaunchId(db);
-  if (!launchId) throw new Error('런칭 업데이트가 없어요');
+  if (!launchId) throw new Error('런칭 업데이트가 없습니다');
   const e: Edit = edit.kind === 'date'
     ? { kind: 'updateField', updateId: launchId, field: edit.field, value: edit.value }
     : { ...edit, updateId: launchId };

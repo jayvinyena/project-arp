@@ -82,7 +82,7 @@ test('업데이트 고치기·지우기: 날짜·상태 바꾸고, 지우면 물
   raw.close();
 });
 
-test('유형·템플릿: 만들기, 이름 바꾸기, 템플릿 물량 고치기, 쓰는 업데이트가 있으면 지우기 거절', () => {
+test('유형·템플릿: 만들기, 이름 바꾸기, 템플릿 물량 고치기, 사용하는 업데이트가 있으면 지우기 거절', () => {
   const { raw, db, session } = open();
   const t = applyEdit(db, session, { kind: 'createType', name: '이벤트' }, ctx);
   assert.equal(t.createdId, 'T01');

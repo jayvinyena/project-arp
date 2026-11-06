@@ -40,7 +40,7 @@ await withBrowser(async (cdp, base) => {
 
   await setInput(cdp, 'input[aria-label="프랍 원화 완료"]', '40');
   const t1 = await cdp.eval(total);
-  check('칸을 넣으면 전체 진행률이 오른다', parseInt(t1) > parseInt(t0), `${t0} → ${t1}`);
+  check('칸을 입력하면 전체 진행률이 오른다', parseInt(t1) > parseInt(t0), `${t0} → ${t1}`);
 
   await setInput(cdp, 'input[aria-label="신규 캐릭터 애니메이션 완료"]', '2');
   const warn = await cdp.eval(`document.querySelector('input[aria-label="신규 캐릭터 애니메이션 완료"]').classList.contains('warn')`);

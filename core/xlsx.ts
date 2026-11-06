@@ -15,13 +15,13 @@ function zipEntries(b: Uint8Array): Map<string, Entry> {
   for (let i = b.length - 22; i >= Math.max(0, b.length - 22 - 65536); i -= 1) {
     if (u32(b, i) === 0x06054b50) { eocd = i; break; }
   }
-  if (eocd < 0) throw new Error('엑셀 파일(.xlsx)이 아니에요. 구글 시트에서 "파일 → 다운로드 → Microsoft Excel"로 받아 주세요.');
+  if (eocd < 0) throw new Error('엑셀 파일(.xlsx)이 아닙니다. 구글 시트에서 "파일 → 다운로드 → Microsoft Excel"로 받으십시오.');
   const count = u16(b, eocd + 10);
   let p = u32(b, eocd + 16);
   const dec = new TextDecoder();
   const out = new Map<string, Entry>();
   for (let n = 0; n < count; n += 1) {
-    if (u32(b, p) !== 0x02014b50) throw new Error('엑셀 파일 목차가 깨졌어요.');
+    if (u32(b, p) !== 0x02014b50) throw new Error('엑셀 파일 목차가 깨졌습니다.');
     const method = u16(b, p + 10);
     const compressedSize = u32(b, p + 20);
     const nameLen = u16(b, p + 28);
@@ -41,11 +41,11 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
 }
 
 async function readEntry(b: Uint8Array, e: Entry): Promise<string> {
-  if (u32(b, e.offset) !== 0x04034b50) throw new Error(`엑셀 파일 안의 ${e.name}을 읽지 못했어요.`);
+  if (u32(b, e.offset) !== 0x04034b50) throw new Error(`엑셀 파일 안의 ${e.name}을 읽지 못했습니다.`);
   const start = e.offset + 30 + u16(b, e.offset + 26) + u16(b, e.offset + 28);
   const raw = b.subarray(start, start + e.compressedSize);
   const data = e.method === 0 ? raw : e.method === 8 ? await inflateRaw(raw) : null;
-  if (!data) throw new Error(`지원하지 않는 압축 방식(${e.method})이에요.`);
+  if (!data) throw new Error(`지원하지 않는 압축 방식(${e.method})입니다.`);
   return new TextDecoder().decode(data);
 }
 
@@ -80,7 +80,7 @@ export async function readXlsx(bytes: Uint8Array): Promise<Sheets> {
   const get = async (name: string) => { const e = entries.get(name); return e ? readEntry(bytes, e) : null; };
   const workbook = await get('xl/workbook.xml');
   const rels = await get('xl/_rels/workbook.xml.rels');
-  if (!workbook || !rels) throw new Error('엑셀 통합 문서 정보를 찾지 못했어요.');
+  if (!workbook || !rels) throw new Error('엑셀 통합 문서 정보를 찾지 못했습니다.');
   const targets = new Map<string, string>();
   for (const m of rels.matchAll(/<Relationship\b([^>]*)\/?>/g)) {
     const id = attr(m[1], 'Id');

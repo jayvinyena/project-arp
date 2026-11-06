@@ -31,7 +31,7 @@ test('기본값: 문제없이 만들어지고, 검증 오류가 없고, 런칭 �
   assert.equal(cmp.blocked, false, JSON.stringify(cmp.findings));
   // 물량이 0이라 "물량 없는 업데이트" 주의만 있다
   assert.deepEqual([...new Set(cmp.findings.map(f => f.code))], ['U07']);
-  // 물량을 넣으면 계산된다
+  // 물량을 입력하면 계산된다
   const ctx = { editor: '검사', batchId: 'b' };
   for (const f of ['min_qty', 'target_qty', 'stretch_qty']) applyLaunchEdit(db, session, { kind: 'volume', resourceTypeId: 'R001', field: f, value: 5 }, ctx);
   const after = compareLaunchModes(db, session).modes.find(m => m.planMode === 'TARGET');

@@ -42,10 +42,10 @@ type Rows = Record<string, Record<string, unknown>[]>;
 const REQUIRED = ['01_Part_Master', '02_Resource_Master', '03_Effort_Standard', '10_Update_Master', '11_Update_Volume', '12_Capacity_Monthly'];
 const KNOWN = ['00_Config', ...REQUIRED, '05_Update_Type', '06_Update_Volume_Template', '13_Progress_Actual'];
 const NOT_IMPORTED: Record<string, string> = {
-  '04_Pipeline_Template': '공정 순서는 파트 순서 + 겹침률로 바뀌었어요(인계 방식·묶음·대기일은 쓰지 않아요)',
-  '20_Scenario_Master': '옛 시나리오는 가져오지 않아요. 시뮬레이션에서 다시 만들어 주세요',
-  '21_Scenario_Override': '옛 시나리오는 가져오지 않아요',
-  '90_Change_History': '옛 변경 이력은 가져오지 않아요(새 파일의 이력은 가져온 뒤부터)',
+  '04_Pipeline_Template': '공정 순서는 파트 순서 + 겹침률로 변경되었습니다(인계 방식·묶음·대기일은 쓰지 않습니다)',
+  '20_Scenario_Master': '옛 시나리오는 가져오지 않습니다. 시뮬레이션에서 다시 만드십시오',
+  '21_Scenario_Override': '옛 시나리오는 가져오지 않습니다',
+  '90_Change_History': '옛 변경 이력은 가져오지 않습니다(새 파일의 이력은 가져온 뒤부터)',
 };
 
 function table(sheets: Sheets, name: string): Row[] {
@@ -141,11 +141,11 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const skip = (m: string) => report.skipped.push(m);
   for (const name of Object.keys(sheets)) {
     if (KNOWN.includes(name)) continue;
-    report.ignoredSheets.push(NOT_IMPORTED[name] ? `${name}: ${NOT_IMPORTED[name]}` : `${name}: 옛 도구의 화면·보조 시트라 가져오지 않아요`);
+    report.ignoredSheets.push(NOT_IMPORTED[name] ? `${name}: ${NOT_IMPORTED[name]}` : `${name}: 옛 도구의 화면·보조 시트라 가져오지 않습니다`);
   }
   report.missingSheets = REQUIRED.filter(n2 => !sheets[n2]);
   if (report.missingSheets.length) {
-    throw Object.assign(new Error(`옛 도구의 시트가 아니거나 빠졌어요: ${report.missingSheets.join(', ')}`), { report });
+    throw Object.assign(new Error(`옛 도구의 시트가 아니거나 빠졌습니다: ${report.missingSheets.join(', ')}`), { report });
   }
 
   // ───────── 설정 ─────────
@@ -156,7 +156,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const partRows = uniqueBy(table(sheets, '01_Part_Master').filter(r => s(r.PART_ID)), r => s(r.PART_ID), k => skip(`파트 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
   const parts = partRows.map((r, i) => {
     const active = on(r, 'ACTIVE') && on(r, 'IS_CAPACITY_TARGET');
-    if (on(r, 'ACTIVE') && !on(r, 'IS_CAPACITY_TARGET')) adjust(`파트 ${s(r.PART_NAME) || s(r.PART_ID)}: 작업 가능량 대상이 아니라 "사용 안 함"으로 가져왔어요`);
+    if (on(r, 'ACTIVE') && !on(r, 'IS_CAPACITY_TARGET')) adjust(`파트 ${s(r.PART_NAME) || s(r.PART_ID)}: 작업 가능량 대상이 아니라 "사용 안 함"으로 가져왔습니다`);
     return { part_id: s(r.PART_ID), name: s(r.PART_NAME) || s(r.PART_ID), sort_order: int(r.SORT_ORDER) ?? i + 1, active: active ? 1 : 0 };
   });
   const partIds = new Set(parts.map(p => p.part_id));
@@ -182,7 +182,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   }));
   const rtIds = new Set(resourceTypes.map(r => r.resource_type_id));
   const nested = resRows.filter(r => !isGroup(r) && s(r.PARENT_RESOURCE_ID) && byId.get(s(r.PARENT_RESOURCE_ID)) && !isGroup(byId.get(s(r.PARENT_RESOURCE_ID))!)).length;
-  if (nested) adjust(`리소스 ${nested}종은 부모가 GROUP이 아니어서 가장 가까운 GROUP을 분류로 썼어요`);
+  if (nested) adjust(`리소스 ${nested}종은 부모가 GROUP이 아니어서 가장 가까운 GROUP을 분류로 사용했습니다`);
 
   // ───────── 공수 ─────────
   const resourceParts: Record<string, unknown>[] = [];
@@ -199,19 +199,19 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     if (!partIds.has(part)) { skip(`공수 ${rt}|${part}: 파트 마스터에 없는 파트`); continue; }
     const base = n(r.BASE_DAYS);
     const ai = n(r.AI_ASSISTED_DAYS);
-    if (base == null && ai == null) { skip(`공수 ${rt}|${part}: 기본·AI 공수가 모두 비어 거치지 않는 파트로 봤어요`); continue; }
+    if (base == null && ai == null) { skip(`공수 ${rt}|${part}: 기본·AI 공수가 모두 비어 거치지 않는 파트로 보았습니다`); continue; }
     resourceParts.push({ resource_type_id: rt, part_id: part, rework_rate: n(r.DEFAULT_REWORK_RATE) ?? 0 });
     if (base != null) efforts.push({ resource_type_id: rt, part_id: part, profile_id: 'BASE', days: base });
     else noBase += 1;
     if (ai != null && ai > 0) { efforts.push({ resource_type_id: rt, part_id: part, profile_id: 'AI', days: ai }); aiCount += 1; }
   }
-  if (noBase) adjust(`기본 공수가 빈 리소스·파트 ${noBase}개: 데이터 점검(E03)에서 채워 주세요`);
+  if (noBase) adjust(`기본 공수가 빈 리소스·파트 ${noBase}개: 데이터 점검(E03)에서 채우십시오`);
   const profiles = [{ profile_id: 'BASE', name: '기본', sort_order: 1 }, ...(aiCount ? [{ profile_id: 'AI', name: 'AI 사용 시', sort_order: 2 }] : [])];
   const effortMix: Record<string, unknown>[] = [];
   const profileCfg = s(config.get('EFFORT_PROFILE') ?? null).toUpperCase();
   if (aiCount && (profileCfg === 'AI' || profileCfg === 'AI_ASSISTED')) {
     for (const p of parts) effortMix.push({ part_id: p.part_id, profile_id: 'AI', share: 1 });
-    adjust('옛 설정 EFFORT_PROFILE = AI → 모든 파트를 AI 공수 100%로 섞었어요');
+    adjust('옛 설정 EFFORT_PROFILE = AI → 모든 파트를 AI 공수 100%로 섞었습니다');
   }
 
   // ───────── 겹침률 ─────────
@@ -219,7 +219,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   // 새 구조는 숨은 기본값이 없으므로 그 값을 설정에 적는다
   const LEGACY_BUILTIN_OVERLAP = 0.2;
   const defaultOverlap = n(config.get('STAGE_OVERLAP_RATE_DEFAULT') ?? null);
-  if (defaultOverlap == null) adjust(`기본 겹침률 설정이 없어 옛 도구가 쓰던 값 ${LEGACY_BUILTIN_OVERLAP * 100}%를 넣었어요`);
+  if (defaultOverlap == null) adjust(`기본 겹침률 설정이 없어 옛 도구가 쓰던 값 ${LEGACY_BUILTIN_OVERLAP * 100}%를 입력했습니다`);
   const overlaps: Record<string, unknown>[] = [];
   for (const [k, v] of config) {
     const m = /^STAGE_OVERLAP_RATE:(.+)>(.+)$/.exec(k);
@@ -231,7 +231,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const keepWorkdays = compat || !!options.keepLegacyWorkdays;
   const capRows = table(sheets, '12_Capacity_Monthly');
   const capMonths = capRows.map(r => month(r.YEAR_MONTH)).filter((x): x is string => !!x).sort();
-  if (!capMonths.length) throw Object.assign(new Error('12_Capacity_Monthly에 달이 없어요.'), { report });
+  if (!capMonths.length) throw Object.assign(new Error('12_Capacity_Monthly에 달이 없습니다.'), { report });
   const capStart = capMonths[0];
   const capEnd = capMonths[capMonths.length - 1];
   // 옛 엔진이 계산 기간을 정할 때 본 업데이트(사용 중) 날짜
@@ -250,7 +250,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   let span = monthsBetween(start, end);
   if (span.length > 60) {
     end = span[59];
-    adjust(`인력 기간이 ${span.length}개월이라 앞 60개월(${start} ~ ${end})만 계획 기간으로 썼어요`);
+    adjust(`인력 기간이 ${span.length}개월이라 앞 60개월(${start} ~ ${end})만 계획 기간으로 사용했습니다`);
     span = monthsBetween(start, end);
   }
   report.horizon = { start, end };
@@ -309,12 +309,12 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
         });
       }
     }
-    if (repeated) adjust(`대조용: 인력 행이 없는 ${repeated}칸(파트 × 달)을 옛 도구처럼 그 파트의 마지막 인력 행으로 채웠어요`);
+    if (repeated) adjust(`대조용: 인력 행이 없는 ${repeated}칸(파트 × 달)을 옛 도구처럼 그 파트의 마지막 인력 행으로 채웠습니다`);
   }
-  if (corrected) adjust(`옛 월 근무일 수에 맞추려고 인력 ${corrected}행의 생산성을 보정했어요(대조용 설정)`);
-  else if (!options.keepLegacyWorkdays) adjust('월 근무일 수는 옛 BUSINESS_DAYS 대신 근무 달력(월–금' + (holidays.length ? ', 고정 공휴일 제외' : '') + ')으로 계산해요. 작업 가능량이 옛 값과 조금 다를 수 있어요');
+  if (corrected) adjust(`옛 월 근무일 수에 맞추려고 인력 ${corrected}행의 생산성을 보정했습니다(대조용 설정)`);
+  else if (!options.keepLegacyWorkdays) adjust('월 근무일 수는 옛 BUSINESS_DAYS 대신 근무 달력(월–금' + (holidays.length ? ', 고정 공휴일 제외' : '') + ')으로 계산합니다. 작업 가능량이 옛 값과 조금 다를 수 있습니다');
   const missingCap = parts.filter(p => p.active).flatMap(p => span.filter(m => !seen.has(`${p.part_id}|${m}`)).map(m => `${p.name} ${m}`));
-  if (missingCap.length) adjust(`인력 행이 없는 달 ${missingCap.length}개(예: ${missingCap.slice(0, 3).join(', ')}): 데이터 점검(C01)에서 채워 주세요`);
+  if (missingCap.length) adjust(`인력 행이 없는 달 ${missingCap.length}개(예: ${missingCap.slice(0, 3).join(', ')}): 데이터 점검(C01)에서 채우십시오`);
 
   // ───────── 업데이트 유형 · 템플릿 ─────────
   const typeRows = uniqueBy(table(sheets, '05_Update_Type').filter(r => s(r.UPDATE_TYPE_ID)), r => s(r.UPDATE_TYPE_ID), k => skip(`업데이트 유형 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
@@ -341,7 +341,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     templates.push({ update_type_id: t, resource_type_id: rt, min_qty: tMin, target_qty: tTarget, stretch_qty: tStretch });
   }
 
-  if (templateFilled) adjust(`유형 템플릿의 빈 최저·확장 ${templateFilled}칸: 물량처럼 목표와 같게 넣었어요`);
+  if (templateFilled) adjust(`유형 템플릿의 빈 최소안·최대안 ${templateFilled}칸: 물량처럼 기본안과 같게 입력했습니다`);
 
   // ───────── 업데이트: 등급(HIGH/MEDIUM/LOW) → 숫자 순위 ─────────
   const updRows = uniqueBy(table(sheets, '10_Update_Master').filter(r => s(r.UPDATE_ID)), r => s(r.UPDATE_ID), k => skip(`업데이트 ${k}: 같은 ID가 두 번 있어 뒤의 행을 건너뜀`));
@@ -352,7 +352,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     const id = s(r.UPDATE_ID);
     let type = s(r.UPDATE_TYPE_ID);
     if (!typeIds.has(type)) {
-      skip(`업데이트 ${id}: 유형 "${type}"이 없어 "업데이트" 유형으로 넣었어요`);
+      skip(`업데이트 ${id}: 유형 "${type}"이 없어 "업데이트" 유형으로 입력했습니다`);
       if (!typeIds.has('UPDATE')) { updateTypes.push({ update_type_id: 'UPDATE', name: '업데이트', is_launch: 0, sort_order: 999, active: 1 }); typeIds.add('UPDATE'); }
       type = 'UPDATE';
     }
@@ -374,29 +374,29 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
       level: level(r.PRIORITY),
     };
   });
-  if (startFilled) adjust(`시작일이 빈 업데이트 ${startFilled}개: 옛 도구처럼 계획 기간 첫날(${start}-01)로 채웠어요. 실제 시작일을 넣어 주세요`);
-  if (releaseFilled) adjust(`출시일이 빈 업데이트 ${releaseFilled}개: 옛 도구처럼 목표 월(TARGET_YEAR_MONTH)의 말일로 채웠어요`);
-  if (statusUnknown.size) adjust(`알 수 없는 상태(${[...statusUnknown].join(', ')})는 "계획"으로 가져왔어요`);
+  if (startFilled) adjust(`시작일이 빈 업데이트 ${startFilled}개: 옛 도구처럼 계획 기간 첫날(${start}-01)로 채웠습니다. 실제 시작일을 입력하십시오`);
+  if (releaseFilled) adjust(`출시일이 빈 업데이트 ${releaseFilled}개: 옛 도구처럼 목표 월(TARGET_YEAR_MONTH)의 말일로 채웠습니다`);
+  if (statusUnknown.size) adjust(`알 수 없는 상태(${[...statusUnknown].join(', ')})는 "계획"으로 가져왔습니다`);
   const live = (x: { row: { status: string } }) => x.row.status === 'PLANNED' || x.row.status === 'IN_PROGRESS';
   const ordered = [...ups].sort((a, b) =>
     Number(!live(a)) - Number(!live(b)) || a.level - b.level
     || (a.row.release_date ?? '9999') .localeCompare(b.row.release_date ?? '9999') || a.row.sort_order - b.row.sort_order);
   ordered.forEach((x, i) => { x.row.priority = i + 1; });
-  if (ups.length) adjust('우선순위 등급(HIGH/MEDIUM/LOW)을 숫자 순위로 바꿨어요: 등급 → 출시일 → 표시 순서');
+  if (ups.length) adjust('우선순위 등급(HIGH/MEDIUM/LOW)을 숫자 순위로 변경했습니다: 등급 → 출시일 → 표시 순서');
   const updates = ups.map(x => x.row);
   const updIds = new Set(updates.map(u => u.update_id));
   if (!compat) {
     const liveRows = updates.filter(u => u.status === 'PLANNED' || u.status === 'IN_PROGRESS');
     const early = liveRows.filter(u => u.start_date && u.start_date.slice(0, 7) < capStart);
-    if (early.length) adjust(`업데이트 ${early.length}개(${early.slice(0, 3).map(u => u.name).join(', ')})가 인력 첫 달(${capStart})보다 먼저 시작해요. 옛 도구는 그 앞 달에도 마지막 달 인원이 있다고 보고 계산해 완료 예정이 더 빨랐어요. 새 도구는 인력이 있는 달부터 계산해요. 이미 한 작업은 작업 진척에 넣어 주세요`);
+    if (early.length) adjust(`업데이트 ${early.length}개(${early.slice(0, 3).map(u => u.name).join(', ')})가 인력 첫 달(${capStart})보다 먼저 시작합니다. 옛 도구는 그 앞 달에도 마지막 달 인원이 있다고 보고 계산해 완료 예정이 더 빨랐습니다. 새 도구는 인력이 있는 달부터 계산합니다. 이미 한 작업은 작업 진척에 입력하십시오`);
     const late = liveRows.filter(u => u.release_date && u.release_date.slice(0, 7) > capEnd);
-    if (late.length) adjust(`업데이트 ${late.length}개(${late.slice(0, 3).map(u => u.name).join(', ')})의 출시가 인력 마지막 달(${capEnd}) 뒤예요. 옛 도구는 마지막 달 인원이 계속된다고 보고 계산했어요. 인력 화면에서 계획 기간을 늘려 주세요`);
+    if (late.length) adjust(`업데이트 ${late.length}개(${late.slice(0, 3).map(u => u.name).join(', ')})의 출시가 인력 마지막 달(${capEnd}) 뒤입니다. 옛 도구는 마지막 달 인원이 계속된다고 보고 계산했습니다. 인력 화면에서 계획 기간을 늘리십시오`);
     const volUpd = new Set(table(sheets, '11_Update_Volume').map(r => s(r.UPDATE_ID)));
     const closed = activeUpd.filter(r => { const st = STATUS[s(r.STATUS).toUpperCase()]; return (st === 'DONE' || st === 'CANCELLED') && volUpd.has(s(r.UPDATE_ID)); });
-    if (closed.length) adjust(`출시 완료·취소 상태인 업데이트 ${closed.length}개(${closed.slice(0, 3).map(r => s(r.UPDATE_NAME) || s(r.UPDATE_ID)).join(', ')})는 계산에서 빠져요. 옛 도구는 상태와 관계없이 사용(ACTIVE)이면 물량을 계산했어요`);
+    if (closed.length) adjust(`출시 완료·취소 상태인 업데이트 ${closed.length}개(${closed.slice(0, 3).map(r => s(r.UPDATE_NAME) || s(r.UPDATE_ID)).join(', ')})는 계산에서 빠집니다. 옛 도구는 상태와 관계없이 사용(ACTIVE)이면 물량을 계산했습니다`);
   }
   const liveLaunch = updates.filter(u => (u.status === 'PLANNED' || u.status === 'IN_PROGRESS') && updateTypes.find(t => t.update_type_id === u.update_type_id)?.is_launch);
-  if (liveLaunch.length > 1) adjust(`런칭 유형 업데이트가 ${liveLaunch.length}개예요(${liveLaunch.map(u => u.name).join(', ')}). 하나만 남겨 주세요(U05)`);
+  if (liveLaunch.length > 1) adjust(`런칭 유형 업데이트가 ${liveLaunch.length}개입니다(${liveLaunch.map(u => u.name).join(', ')}). 하나만 남기십시오(U05)`);
 
   // ───────── 물량: 추가·이월·취소 수량을 물량에 합친다 ─────────
   const volumes: Record<string, unknown>[] = [];
@@ -430,10 +430,10 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
       note: s(r.CHANGE_REASON) || null,
     });
   }
-  if (folded) adjust(`물량 ${folded}행: 추가·이월·취소 수량을 최저·목표·확장에 합쳤어요(새 구조에는 그 칸이 없어요)`);
-  if (minFilled) adjust(`최저가 비었거나 0인 물량 ${minFilled}행: 옛 도구처럼 목표와 같게 넣었어요`);
-  if (stretchFilled) adjust(`확장이 빈 물량 ${stretchFilled}행: 목표와 같게 넣었어요`);
-  adjust('필수 여부: SHOULD·COULD 등은 선택, 그 밖(MUST·빈칸·UNCLASSIFIED)은 필수로 가져왔어요');
+  if (folded) adjust(`물량 ${folded}행: 추가·이월·취소 수량을 템플릿 세 개에 합쳤습니다(새 구조에는 그 칸이 없습니다)`);
+  if (minFilled) adjust(`최저가 비었거나 0인 물량 ${minFilled}행: 옛 도구처럼 목표와 같게 입력했습니다`);
+  if (stretchFilled) adjust(`최대안이 빈 물량 ${stretchFilled}행: 기본안과 같게 입력했습니다`);
+  adjust('필수 여부: SHOULD·COULD 등은 선택, 그 밖(MUST·빈칸·UNCLASSIFIED)은 필수로 가져왔습니다');
 
   // ───────── 실적: 완료 + 외주 완료 + 규격 제외 = 완료 수량 ─────────
   const progress: Record<string, unknown>[] = [];
@@ -447,7 +447,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
       // 같은 실적 행이 또 나오면 뒤의 값을 쓴다(시트가 시간 순이면 최신 값)
       const i = progress.findIndex(p => `${p.update_id}|${p.resource_type_id}|${p.part_id}` === pk);
       if (i >= 0) progress.splice(i, 1);
-      skip(`작업 진척 ${pk}: 같은 행이 두 번 있어 뒤의 값을 썼어요`);
+      skip(`작업 진척 ${pk}: 같은 행이 두 번 있어 뒤의 값을 사용했습니다`);
     }
     pSeen.add(pk);
     if (!qty) continue;
@@ -511,6 +511,6 @@ export function writeImported(db: SqlDb, schemaSql: string, rows: Rows): void {
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
-    throw new Error(`가져온 값을 저장하지 못했어요: ${(error as Error).message}`);
+    throw new Error(`가져온 값을 저장하지 못했습니다: ${(error as Error).message}`);
   }
 }

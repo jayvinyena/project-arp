@@ -52,7 +52,7 @@ test('물량 템플릿 복사: 기본안 수량을 최대안으로(한 묶음, �
   raw.close();
 });
 
-test('프로젝트: 이름·여유율·근무 요일·휴일을 고치면 계산에 바로 들고, 되돌릴 수 있다', () => {
+test('프로젝트: 이름·여유율·근무 요일·휴일을 수정하면 계산에 바로 들고, 되돌릴 수 있다', () => {
   const { raw, db, session, edit, undo } = open();
   const base = session.calculate().result.parts.find(p => p.partId === 'MODELING').capacityDays;
   edit({ kind: 'projectName', name: '새 이름' });
@@ -120,7 +120,7 @@ test('리소스: 만들기(새 분류)·이름·분류 옮기기·공수 넣기(
   assert.equal(r.name, '탈것(소형)');
   assert.equal(r.groupName, '캐릭터');
   assert.deepEqual(r.efforts.MODELING, { base: 4, ai: 3, rework: 0.1 });
-  // 물량에 넣으면 계산된다
+  // 물량에 입력하면 계산된다
   edit({ kind: 'addResource', updateId: 'LAUNCH', resourceTypeId: id });
   edit({ kind: 'volume', updateId: 'LAUNCH', resourceTypeId: id, field: 'target_qty', value: 5 });
   assert.ok(session.calculate().result.stages.some(g => g.resourceTypeId === id && g.partId === 'MODELING'));

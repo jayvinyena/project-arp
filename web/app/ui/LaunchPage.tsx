@@ -14,17 +14,17 @@ import { MODE_LABEL } from '../lib/modes.ts';
 export { MODE_LABEL };
 const STATUS: Record<UpdateStatus, { text: string; tone: string }> = {
   ON_TRACK: { text: '목표 안', tone: 'ok' },
-  TIGHT: { text: '빠듯해요', tone: 'warn' },
-  LATE: { text: '늦어요', tone: 'bad' },
-  UNFINISHED: { text: '기간 안에 못 끝나요', tone: 'bad' },
+  TIGHT: { text: '빠듯', tone: 'warn' },
+  LATE: { text: '늦음', tone: 'bad' },
+  UNFINISHED: { text: '기간 안에 못 끝남', tone: 'bad' },
   NO_RELEASE_DATE: { text: '출시일 없음', tone: '' },
 };
 
 function slackText(m: ModeOutcome): { text: string; tone: string } {
-  if (m.slackWorkdays == null) return { text: '판단할 수 없어요', tone: '' };
+  if (m.slackWorkdays == null) return { text: '판단 불가', tone: '' };
   if (m.slackWorkdays < 0) return { text: `${-m.slackWorkdays}영업일 여유`, tone: 'ok' };
-  if (m.slackWorkdays === 0) return { text: '딱 맞아요', tone: 'warn' };
-  return { text: `${m.slackWorkdays}영업일 늦어요`, tone: 'bad' };
+  if (m.slackWorkdays === 0) return { text: '여유 없음', tone: 'warn' };
+  return { text: `${m.slackWorkdays}영업일 늦음`, tone: 'bad' };
 }
 
 /** 'LAUNCH|PROP' 같은 키를 '런칭 · 프랍'처럼 이름으로 */
@@ -136,7 +136,7 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
   const changed = scale?.r.suggestion.filter(s => s.suggested !== s.current).slice(0, 6) ?? [];
   return (
     <section class="card">
-      <div class="card-head"><div><h2>거꾸로 계산하기</h2><p class="small muted" style="margin-top: 2px">날짜를 지키려면 물량 · 인원을 얼마나 바꿔야 하는지 자동으로 계산해요</p></div><span class="tag">{mode} 기준</span></div>
+      <div class="card-head"><div><h2>거꾸로 계산하기</h2><p class="small muted" style="margin-top: 2px">날짜를 지키려면 물량 · 인원을 얼마나 바꿔야 하는지 자동으로 계산합니다</p></div><span class="tag">{mode} 기준</span></div>
       <div class="card-body" style="padding-top: 4px">
         <div class="ask">
           <div class="ask-q">
@@ -146,17 +146,17 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
           {scale && (
             <div class={`answer${stale(scale) ? ' stale' : ''}`}>
               {scale.r.scale == null
-                ? <span class="big">물량을 줄여도 맞추기 어려워요</span>
+                ? <span class="big">물량을 줄여도 맞추기 어렵습니다</span>
                 : <span class="big">{mode} 물량의 {fmtPct(scale.r.scale)}</span>}
               <span class="small muted">
-                {scale.r.scale == null ? '날짜나 인원을 바꿔야 해요.'
-                  : scale.r.currentOk ? `지금 인원으로 모든 리소스를 같은 비율로 ${fmtPct(scale.r.scale - 1)} 더 만들 수 있어요.`
-                    : `모든 리소스를 같은 비율로 ${fmtPct(1 - scale.r.scale)} 줄이면 맞아요.`}
+                {scale.r.scale == null ? '날짜나 인원을 바꿔야 합니다.'
+                  : scale.r.currentOk ? `지금 인원으로 모든 리소스를 같은 비율로 ${fmtPct(scale.r.scale - 1)} 더 만들 수 있습니다.`
+                    : `모든 리소스를 같은 비율로 ${fmtPct(1 - scale.r.scale)} 줄이면 맞습니다.`}
               </span>
               {changed.length > 0 && (
                 <div class="chips">{changed.map(s => <span class="tag">{props.resNames[s.resourceTypeId] ?? s.resourceTypeId} {fmtInt(s.current)} → {fmtInt(s.suggested)}</span>)}</div>
               )}
-              {stale(scale) && <span class="small faint">물량·날짜·구간이 바뀌었어요. 다시 계산해 주세요.</span>}
+              {stale(scale) && <span class="small faint">물량·날짜·구간이 변경되었습니다. 다시 계산하십시오.</span>}
             </div>
           )}
         </div>
@@ -167,14 +167,14 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
           </div>
           {heads && (
             <div class={`answer${stale(heads) ? ' stale' : ''}`}>
-              {heads.r.currentOk ? <span class="big">지금 인원으로 충분해요</span>
-                : !heads.r.feasible ? <span class="big">인원만으로는 어려워요</span>
+              {heads.r.currentOk ? <span class="big">지금 인원으로 충분합니다</span>
+                : !heads.r.feasible ? <span class="big">인원만으로는 어렵습니다</span>
                   : <div class="chips">{heads.r.additions.map(a => <span class="pill accent plain" style="height: 28px; font-size: 13px">{props.names[a.partId] ?? a.partId} +{fmtHeads(a.heads)}</span>)}</div>}
               {heads.r.feasible && !heads.r.currentOk && heads.r.months && (
-                <span class="small muted">{heads.r.months.from} ~ {heads.r.months.to} 동안 더하면 {fmtDate(heads.r.completion)}에 끝나요.</span>
+                <span class="small muted">{heads.r.months.from} ~ {heads.r.months.to} 동안 더하면 {fmtDate(heads.r.completion)}에 끝납니다.</span>
               )}
-              {!heads.r.feasible && <span class="small muted">날짜를 늦추거나 물량을 줄여야 해요.</span>}
-              {stale(heads) && <span class="small faint">물량·날짜·구간이 바뀌었어요. 다시 계산해 주세요.</span>}
+              {!heads.r.feasible && <span class="small muted">날짜를 늦추거나 물량을 줄여야 합니다.</span>}
+              {stale(heads) && <span class="small faint">물량·날짜·구간이 변경되었습니다. 다시 계산하십시오.</span>}
             </div>
           )}
         </div>
@@ -192,7 +192,7 @@ export function LaunchPage(props: {
   if (!launch) {
     return (
       <div class="page">
-        <div class="banner warn"><IconAlert /><div><b>런칭 업데이트가 없어요</b><p class="small muted">업데이트 유형이 "런칭"인 업데이트를 하나 만들면 여기서 물량을 설계할 수 있어요.</p></div></div>
+        <div class="banner warn"><IconAlert /><div><b>런칭 업데이트가 없습니다</b><p class="small muted">업데이트 유형이 "런칭"인 업데이트를 하나 만들면 여기서 물량을 설계할 수 있습니다.</p></div></div>
       </div>
     );
   }
@@ -216,7 +216,7 @@ export function LaunchPage(props: {
         <div>
           <PageEyebrow page="launch" />
           <h1>{launch.name}</h1>
-          <p class="muted" style="margin-top: 6px">물량 템플릿 세 가지({MODE_LABEL.MIN} · {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH})를 골라 보며, 아트 작업이 언제 끝나는지와 어느 파트가 막히는지 봐요.</p>
+          <p class="muted" style="margin-top: 6px">물량 템플릿 세 가지({MODE_LABEL.MIN} · {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH})를 골라 보며, 아트 작업이 언제 끝나는지와 어느 파트가 막히는지 확인합니다.</p>
         </div>
         <div class="dates">
           {date('start_date', '작업 시작', launch.startDate)}
@@ -229,9 +229,9 @@ export function LaunchPage(props: {
         <div class="banner bad" role="alert">
           <IconAlert />
           <div>
-            <b>계산할 수 없어요 · 고칠 곳 {errors.length}개</b>
+            <b>계산할 수 없습니다 · 고칠 곳 {errors.length}개</b>
             <ul class="small">{errors.slice(0, 6).map(f => <li>{humanKey(f.key, allNames)} — {f.title} ({f.detail})</li>)}</ul>
-            {errors.length > 6 && <p class="small muted">나머지는 데이터 점검에서 볼 수 있어요.</p>}
+            {errors.length > 6 && <p class="small muted">나머지는 데이터 점검에서 볼 수 있습니다.</p>}
           </div>
         </div>
       )}

@@ -20,8 +20,8 @@ class ErrorBoundary extends Component<{ children: ComponentChildren }, { error: 
     return (
       <div class="welcome">
         <div class="card welcome-card">
-          <h1 style="font-size: 22px">문제가 생겼어요</h1>
-          <p class="muted">화면을 그리다 예기치 못한 오류가 났어요. 저장하지 않은 작업은 이 브라우저에 사본이 있어요. 새로 고치면 시작 화면에서 되살릴 수 있어요.</p>
+          <h1 style="font-size: 22px">문제가 생겼습니다</h1>
+          <p class="muted">화면을 그리다 예기치 못한 오류가 났습니다. 저장하지 않은 작업은 이 브라우저에 사본이 있습니다. 새로 수정하면 시작 화면에서 복구할 수 있습니다.</p>
           <pre class="small faint" style="white-space: pre-wrap; margin: 0">{String(this.state.error.message ?? this.state.error)}</pre>
           <div class="actions">
             <button class="btn primary lg" onClick={() => location.reload()}>새로 고치기</button>

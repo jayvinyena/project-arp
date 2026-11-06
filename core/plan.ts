@@ -312,8 +312,8 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
       let flag: string | null = null;
       if (on) {
         const c = completed ?? 0;
-        if (c > (vol.get(rt) ?? 0)) flag = '확장 물량보다 많아요';
-        else if (prev !== null && c > prev) flag = '앞 공정보다 많이 끝났어요';
+        if (c > (vol.get(rt) ?? 0)) flag = '세 번째 템플릿 물량보다 많습니다';
+        else if (prev !== null && c > prev) flag = '앞 공정보다 많이 끝났습니다';
         prev = c;
         last = c;
         const days = base.get(key) ?? 0;
@@ -349,7 +349,7 @@ export interface SetupView {
   hasAI: boolean;
 }
 
-/** 새 프로젝트 마법사에서 넣은 것(기본 정보·파트·리소스·공수)을 만든 뒤에 고치는 화면용 */
+/** 새 프로젝트 마법사에서 입력한 것(기본 정보·파트·리소스·공수)을 만든 뒤에 고치는 화면용 */
 export function setupView(db: SqlDb): SetupView {
   const meta = Object.fromEntries(db.all('SELECT key, value FROM meta').map(r => [String(r.key), r.value]));
   const s = db.get('SELECT * FROM settings WHERE id = 1')!;

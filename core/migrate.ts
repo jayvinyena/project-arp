@@ -27,7 +27,7 @@ export interface MigrationResult { from: number; to: number; notes: string[] }
 /** 지금 버전에서 최신까지. 한 트랜잭션이라 실패하면 그대로다. 더 새 버전이면 거절 */
 export function migrate(db: SqlDb): MigrationResult {
   const from = Number(db.get('PRAGMA user_version')?.user_version ?? 0);
-  if (from > LATEST_SCHEMA) throw new Error(`더 새 구조(v${from})의 파일이에요. 앱을 새로 고쳐 주세요.`);
+  if (from > LATEST_SCHEMA) throw new Error(`더 새 구조(v${from})의 파일입니다. 앱을 새로 고침하십시오.`);
   const steps = STEPS.filter(s => s.to > from);
   if (!steps.length) return { from, to: from, notes: [] };
   db.exec('BEGIN');
@@ -39,7 +39,7 @@ export function migrate(db: SqlDb): MigrationResult {
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
-    throw new Error(`구조를 바꾸지 못했어요: ${(error as Error).message}`);
+    throw new Error(`구조를 바꾸지 못했습니다: ${(error as Error).message}`);
   }
   return { from, to: LATEST_SCHEMA, notes: steps.map(s => s.note) };
 }

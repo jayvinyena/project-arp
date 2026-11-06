@@ -25,7 +25,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelector('.dialog[aria-label=\"가져오기 보고서\"]')", 15000);
   const text = await cdp.eval("document.querySelector('.dialog').textContent");
   check('보고서: 기간·개수·바꾼 것·가져오지 않은 시트', text.includes('2026-11 ~ 2027-06') && text.includes('우선순위 등급') && text.includes('04_Pipeline_Template'), text.slice(0, 60));
-  check('보고서: 바로 계산할 수 있어요', text.includes('바로 계산할 수 있어요'));
+  check('보고서: 바로 계산할 수 있습니다', text.includes('바로 계산할 수 있습니다'));
   await shot(cdp, 'import-report');
   await shot(cdp, 'import-report-390', 390);
 
@@ -47,7 +47,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${base}/app/index.html?importSample=operating-sheet&nosw` });
   await cdp.waitUntil("document.querySelector('.dialog[aria-label=\"가져오기 보고서\"]')", 20000);
   const op = await cdp.eval("document.querySelector('.dialog').textContent");
-  check('운영 시트: 기간 2026-11 ~ 2028-10 · 바로 계산', op.includes('2026-11 ~ 2028-10') && op.includes('바로 계산할 수 있어요'), op.slice(0, 60));
+  check('운영 시트: 기간 2026-11 ~ 2028-10 · 바로 계산', op.includes('2026-11 ~ 2028-10') && op.includes('바로 계산할 수 있습니다'), op.slice(0, 60));
   check('운영 시트: 옛 도구와 달라지는 이유(인력 앞 시작 · 출시 완료·취소)를 알린다', op.includes('인력 첫 달(2026-11)보다 먼저') && op.includes('CBT 빌드'));
   check('운영 시트: 보조 시트 8개는 가져오지 않음(이유)', ['사용 안내', '33_Update_Allocation_Snapshot', '98_Input_Hub_Baseline', '90_Change_History'].every(x => op.includes(x)));
   await shot(cdp, 'import-operating');
