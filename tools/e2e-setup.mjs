@@ -46,7 +46,7 @@ await withBrowser(async (cdp, base) => {
   // 3. 표의 최대안 머리글을 눌러 편집을 넘기고, 계획안 → 최대안 복사
   await cdp.eval("[...document.querySelectorAll('table.grid.vol th.mode-th button')].find(b => b.textContent === '최대안').click()");
   await cdp.waitUntil("document.querySelector('input[aria-label=\"신규 캐릭터 최대안\"]') && document.querySelector('.mode-card.selected .label')?.textContent === '최대안'", 8000);
-  await clickText(cdp, '계획안 → 최대안 복사');
+  await cdp.eval("document.querySelector('button[aria-label=\"계획안 → 최대안 복사\"]').click()");
   await sleep(700);
   const same = await cdp.eval("[...document.querySelectorAll('table.grid.vol tbody tr.row')].every(r => r.querySelector('td.mode-cell.sel input.qty')?.value === r.querySelector('td.mode-cell[data-mode=\"TARGET\"] .ro-val')?.textContent)");
   check('머리글로 편집 전환 + 계획안 → 최대안 복사: 최대안 = 계획안', same);

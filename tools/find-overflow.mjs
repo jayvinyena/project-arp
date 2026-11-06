@@ -14,7 +14,7 @@ await withBrowser(async (cdp, base) => {
     const out = [];
     for (const el of document.querySelectorAll('.app *')) {
       const b = el.getBoundingClientRect();
-      if (b.right > W + 1 && !el.closest('.table-wrap, .timeline-wrap, .card-body:has(> .heatmap), .segmented.scroll, .nav')) out.push(el.tagName.toLowerCase() + '.' + [...el.classList].join('.') + ' ' + Math.round(b.left) + '→' + Math.round(b.right) + ' ' + (el.textContent || '').trim().slice(0, 30));
+      if (b.right > W + 1 && !el.closest('.table-wrap, .timeline-wrap, .card-body:has(> .heatmap), .segmented.scroll, .nav, .answer .chips')) out.push(el.tagName.toLowerCase() + '.' + [...el.classList].join('.') + ' ' + Math.round(b.left) + '→' + Math.round(b.right) + ' ' + (el.textContent || '').trim().slice(0, 30));
     }
     return { scroll: document.documentElement.scrollWidth, W, out: out.slice(0, 12) };
   })()`);

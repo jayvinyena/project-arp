@@ -9,7 +9,7 @@ export type VolumeEdit = Exclude<LaunchEdit, { kind: 'date' }>;
 import type { Finding } from '../../../core/pipeline.ts';
 import type { PlanMode } from '../../../engine/types.ts';
 import { fmtDays, fmtInt } from '../lib/format.ts';
-import { IconPlus, IconX, IconPencil } from './icons.tsx';
+import { IconPlus, IconX, IconPencil, IconCopy } from './icons.tsx';
 import { afterCommit } from './commit.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { PLAN_MODES, MODE_FIELD } from '../../../core/modes.ts';
@@ -114,12 +114,15 @@ export function VolumeTable(props: {
         <div class="inline">
         {!readOnly && props.onCopy && (
           <span class="copy-group" role="group" aria-label="수량 복사">
-            {others.map(m => (
-              <button type="button" class="btn sm ghost" title={`${MODE_LABEL[m]}의 수량을 모두 ${modeLabel}에 덮어씁니다(되돌리기 가능)`}
-                onClick={() => props.onCopy!(MODE_FIELD[m], field)}>{MODE_LABEL[m]} → {modeLabel} 복사</button>
-            ))}
-            <button type="button" class="btn sm ghost" title={`${modeLabel}의 수량을 ${others.map(m => MODE_LABEL[m]).join('·')}에 덮어씁니다(되돌리기 가능)`}
-              onClick={async () => { for (const m of others) await props.onCopy!(field, MODE_FIELD[m]); }}>{modeLabel} → {others.map(m => MODE_LABEL[m]).join('·')} 복사</button>
+            <span class="copy-label"><IconCopy />수량 복사</span>
+            <span class="btn-group">
+              {others.map(m => (
+                <button type="button" class="btn sm" aria-label={`${MODE_LABEL[m]} → ${modeLabel} 복사`} title={`${MODE_LABEL[m]}의 수량을 모두 ${modeLabel}에 덮어씁니다(되돌리기 가능)`}
+                  onClick={() => props.onCopy!(MODE_FIELD[m], field)}>{MODE_LABEL[m]}<span class="arrow" aria-hidden="true">→</span>{modeLabel}</button>
+              ))}
+              <button type="button" class="btn sm" aria-label={`${modeLabel} → ${others.map(m => MODE_LABEL[m]).join('·')} 복사`} title={`${modeLabel}의 수량을 ${others.map(m => MODE_LABEL[m]).join('·')}에 덮어씁니다(되돌리기 가능)`}
+                onClick={async () => { for (const m of others) await props.onCopy!(field, MODE_FIELD[m]); }}>{modeLabel}<span class="arrow" aria-hidden="true">→</span>{others.map(m => MODE_LABEL[m]).join('·')}</button>
+            </span>
           </span>
         )}
         {!readOnly && props.addable.length > 0 && (

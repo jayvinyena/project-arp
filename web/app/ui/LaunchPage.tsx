@@ -111,13 +111,15 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
   const [scale, setScale] = useState<{ r: MaxScaleResult; v: number; mode: PlanMode } | null>(null);
   const [heads, setHeads] = useState<{ r: HeadcountResult; v: number; mode: PlanMode } | null>(null);
   const [busy, setBusy] = useState<'' | 'scale' | 'heads'>('');
-  const runScale = async () => { setBusy('scale'); try { setScale({ r: await rpc.maxScale(props.planMode), v: props.version, mode: props.planMode }); } finally { setBusy(''); } };
-  const runHeads = async () => { setBusy('heads'); try { setHeads({ r: await rpc.headcount(props.planMode), v: props.version, mode: props.planMode }); } finally { setBusy(''); } };
+  const [failed, setFailed] = useState(false);
+  const runScale = async () => { setBusy('scale'); setFailed(false); try { setScale({ r: await rpc.maxScale(props.planMode), v: props.version, mode: props.planMode }); } catch { setFailed(true); } finally { setBusy(''); } };
+  const runHeads = async () => { setBusy('heads'); setFailed(false); try { setHeads({ r: await rpc.headcount(props.planMode), v: props.version, mode: props.planMode }); } catch { setFailed(true); } finally { setBusy(''); } };
   // 물량·날짜·템플릿이 바뀌면 잠시 뒤 두 질문을 다시 계산한다(빈 카드 대신 늘 답이 보이게, 실데이터에서 수십 ms)
   useEffect(() => {
     let alive = true;
     const t = window.setTimeout(async () => {
       try {
+        setFailed(false);
         setBusy('scale');
         const r1 = await rpc.maxScale(props.planMode);
         if (!alive) return;
@@ -126,12 +128,18 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
         const r2 = await rpc.headcount(props.planMode);
         if (!alive) return;
         setHeads({ r: r2, v: props.version, mode: props.planMode });
-      } catch { /* 계산이 막히면 버튼으로 다시 */ } finally { if (alive) setBusy(''); }
+      } catch { if (alive) setFailed(true); /* 계산이 막히면 버튼으로 다시 */ } finally { if (alive) setBusy(''); }
     }, 450);
     return () => { alive = false; window.clearTimeout(t); };
   }, [props.version, props.planMode]);
   const stale = (x: { v: number; mode: PlanMode } | null) => !!x && (x.v !== props.version || x.mode !== props.planMode);
   const mode = MODE_LABEL[props.planMode];
+  // 진행 상태는 답 칸 오른쪽 위에 겹쳐 표시한다(문구가 생기고 사라져도 줄·카드 높이가 변하지 않게)
+  const status = (which: 'scale' | 'heads', x: { v: number; mode: PlanMode } | null) => {
+    if (busy === which || (!failed && (!x || stale(x)))) return <span class="ask-status working" aria-live="polite">계산 중…</span>;
+    if (failed && (!x || stale(x))) return <span class="ask-status bad" aria-live="polite">계산하지 못했습니다</span>;
+    return <span class="ask-status" aria-live="polite" />;
+  };
 
   const changed = scale?.r.suggestion.filter(s => s.suggested !== s.current).slice(0, 6) ?? [];
   return (
@@ -141,10 +149,12 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
         <div class="ask">
           <div class="ask-q">
             <span class="q">{props.deadlineLabel}까지 물량을 최대 얼마나?</span>
-            <button class="btn sm ghost" disabled={busy !== ''} onClick={runScale}><IconSpark />{busy === 'scale' ? '계산 중…' : '다시 계산'}</button>
+            <button class="btn sm ghost" disabled={busy !== ''} onClick={runScale}><IconSpark />다시 계산</button>
           </div>
+          {!scale && <div class="answer reserve-scale placeholder">{status('scale', scale)}</div>}
           {scale && (
-            <div class={`answer${stale(scale) ? ' stale' : ''}`}>
+            <div class={`answer reserve-scale${stale(scale) ? ' stale' : ''}`}>
+              {status('scale', scale)}
               {scale.r.scale == null
                 ? <span class="big">물량을 줄여도 맞추기 어렵습니다</span>
                 : <span class="big">{mode} 물량의 {fmtPct(scale.r.scale)}</span>}
@@ -156,17 +166,18 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
               {changed.length > 0 && (
                 <div class="chips">{changed.map(s => <span class="tag">{props.resNames[s.resourceTypeId] ?? s.resourceTypeId} {fmtInt(s.current)} → {fmtInt(s.suggested)}</span>)}</div>
               )}
-              {stale(scale) && <span class="small faint">물량·날짜·구간이 변경되었습니다. 다시 계산하십시오.</span>}
             </div>
           )}
         </div>
         <div class="ask">
           <div class="ask-q">
             <span class="q">{mode} 물량을 지키려면 몇 명 더?</span>
-            <button class="btn sm ghost" disabled={busy !== ''} onClick={runHeads}><IconUsers />{busy === 'heads' ? '계산 중…' : '다시 계산'}</button>
+            <button class="btn sm ghost" disabled={busy !== ''} onClick={runHeads}><IconUsers />다시 계산</button>
           </div>
+          {!heads && <div class="answer reserve-heads placeholder">{status('heads', heads)}</div>}
           {heads && (
-            <div class={`answer${stale(heads) ? ' stale' : ''}`}>
+            <div class={`answer reserve-heads${stale(heads) ? ' stale' : ''}`}>
+              {status('heads', heads)}
               {heads.r.currentOk ? <span class="big">지금 인원으로 충분합니다</span>
                 : !heads.r.feasible ? <span class="big">인원만으로는 어렵습니다</span>
                   : <div class="chips">{heads.r.additions.map(a => <span class="pill accent plain" style="height: 28px; font-size: 13px">{props.names[a.partId] ?? a.partId} +{fmtHeads(a.heads)}</span>)}</div>}
@@ -174,7 +185,6 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
                 <span class="small muted">{heads.r.months.from} ~ {heads.r.months.to} 동안 더하면 {fmtDate(heads.r.completion)}에 끝납니다.</span>
               )}
               {!heads.r.feasible && <span class="small muted">날짜를 늦추거나 물량을 줄여야 합니다.</span>}
-              {stale(heads) && <span class="small faint">물량·날짜·구간이 변경되었습니다. 다시 계산하십시오.</span>}
             </div>
           )}
         </div>

@@ -78,7 +78,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(150);
   await cdp.eval(`document.querySelector('input[aria-label="신규 캐릭터 기본안"]').dispatchEvent(new FocusEvent('blur'))`);
   await sleep(400);
-  await cdp.eval("[...document.querySelectorAll('button')].find(b => b.textContent === '기본안 → 최소안·최대안 복사').click()");
+  await cdp.eval(`document.querySelector('button[aria-label="기본안 → 최소안·최대안 복사"]').click()`);
   await sleep(600);
   await cdp.waitUntil("document.querySelectorAll('.mode-card').length === 3");
   const big = await cdp.eval("document.querySelectorAll('.mode-card .big')[1]?.textContent");

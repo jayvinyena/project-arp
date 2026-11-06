@@ -214,7 +214,7 @@ h2 { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
 /* 파트 부하 */
 .part-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 112px; align-items: center; gap: 14px; padding: 9px 0; }
 .part-row + .part-row { border-top: 1px solid var(--line); }
-.part-name { font-weight: 600; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.part-name { font-weight: 600; font-size: 13px; display: flex; flex-direction: column; justify-content: center; gap: 3px; min-height: 46px; } /* 병목 배지 자리 확보: 템플릿을 바꿔도 행 높이가 그대로 */
 .bar { position: relative; height: 10px; border-radius: 999px; background: var(--hover); overflow: hidden; }
 .bar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--accent); }
 .bar .fill.other { background: var(--bar-other); }
@@ -233,9 +233,22 @@ h2 { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
 .ask + .ask { border-top: 1px solid var(--line); }
 .ask-q { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ask-q .q { font-weight: 600; font-size: 13.5px; }
+.ask-q .q { flex: 1; min-width: 0; }
+/* 진행 상태는 답 칸 오른쪽 위에 겹쳐 표시(흐름 밖이라 문구가 바뀌어도 높이가 그대로) */
+.answer { position: relative; }
+.ask-status { position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.ask-status.working { animation: pulse 1.2s ease-in-out infinite; }
+.answer.stale .ask-status { opacity: 1; }
+.answer > .ask-status + * { margin-right: 64px; }
+.ask-status.bad { color: var(--bad); }
+/* 답 칸 높이를 미리 확보: 템플릿마다 줄 수가 달라도 아래 물량 표가 움직이지 않게 */
+.answer.reserve-scale { min-height: 136px; }
+.answer.reserve-heads { min-height: 104px; }
+.answer.placeholder { background: repeating-linear-gradient(90deg, var(--surface-2), var(--surface-2) 40%, var(--surface) 50%, var(--surface-2) 60%); background-size: 300% 100%; animation: pulse 1.4s ease-in-out infinite; }
 .answer { padding: 12px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .answer .big { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .answer.stale { opacity: .55; }
+.answer { transition: opacity .15s; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ───────── 물량 표 ───────── */
@@ -554,6 +567,9 @@ table.grid.calib input[type="checkbox"] { width: 16px; height: 16px; accent-colo
   .part-row { grid-template-columns: 72px minmax(0, 1fr); row-gap: 6px; }
   .part-num { grid-column: 2; display: flex; justify-content: flex-end; align-items: baseline; gap: 8px; }
   .part-num span { display: inline; }
+  /* 답 칸의 칩은 한 줄로(가로로 밀어 봄): 템플릿마다 줄 수가 달라 높이가 바뀌지 않게 */
+  .answer .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); padding-right: 24px; }
+  .answer .chips > * { flex: 0 0 auto; }
 }
 
 /* 휴대폰: 물량 표를 줄마다 카드로 */
@@ -682,7 +698,16 @@ kbd { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 5px
 .title-edit { display: inline-flex; align-items: center; gap: 2px; color: var(--text-3); cursor: text; }
 .title-edit .icon { width: 15px; height: 15px; }
 .title-edit:hover .icon, .title-edit:focus-within .icon { color: var(--accent-ink); }
-.copy-group { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.copy-group { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.copy-label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+.copy-label .icon { width: 14px; height: 14px; }
+/* 붙은 버튼 묶음: 테두리 하나로 이어 보이게 */
+.btn-group { display: inline-flex; flex-wrap: wrap; }
+.btn-group > .btn { border-radius: 0; margin-left: -1px; gap: 6px; }
+.btn-group > .btn:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
+.btn-group > .btn:last-child { border-radius: 0 8px 8px 0; }
+.btn-group > .btn:hover { position: relative; z-index: 1; }
+.btn-group .arrow { color: var(--accent-ink); font-weight: 700; }
 .copy-group:not(:last-child) { padding-right: 8px; margin-right: 4px; border-right: 1px solid var(--line); }
 table.grid.vol th.mode-th { padding-top: 6px; padding-bottom: 6px; }
 table.grid.vol th.mode-th.sel, table.grid.vol td.mode-cell.sel { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
@@ -697,6 +722,8 @@ td.mode-cell.ro button.ro-val:hover { color: var(--text); background: var(--surf
 td.mode-cell.ro.blank .ro-val { color: var(--bad); }
 @media (max-width: 640px) {
   .copy-group:not(:last-child) { border-right: 0; padding-right: 0; margin-right: 0; }
+  .btn-group { gap: 4px; }
+  .btn-group > .btn, .btn-group > .btn:first-child, .btn-group > .btn:last-child { border-radius: 8px; margin-left: 0; }
   table.grid.vol tr.row td.mode-cell { text-align: left; }
   td.mode-cell.ro .ro-val { padding: 4px 0; text-align: left; min-width: 0; height: 30px; }
   table.grid.vol tr.row td.mode-cell.sel { border-radius: 6px; background: color-mix(in srgb, var(--accent-soft) 70%, transparent) !important; padding: 0 4px; }
