@@ -266,6 +266,7 @@ export function LaunchPage(props: {
         onEdit={props.onEdit}
         onCopy={props.onApply ? (from, to) => props.onApply!({ kind: 'copyQty', updateId: launch.updateId, from, to }) : undefined}
         onRename={props.onApply ? t => props.onApply!({ kind: 'modeName', mode: props.planMode, name: t }) : undefined}
+        onSelectMode={props.setPlanMode}
       />
       <p class="small faint">계산 {fmtDays(compare.ms)}ms · 데이터 버전 {snapshot.dataVersion}</p>
     </div>

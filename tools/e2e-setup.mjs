@@ -1,5 +1,5 @@
 // 만든 뒤 고치기 · 물량 템플릿 시험(크롬, 화면 없음):
-//   프로젝트·파트·리소스 화면(기본 가동률을 기간 전체에, AI 활용 비율·AI 공수, 파트·리소스 더하기) · 템플릿 이름 바꾸기 · 템플릿 수량 가져오기
+//   프로젝트·파트·리소스 화면(기본 가동률을 기간 전체에, AI 활용 비율·AI 공수, 파트·리소스 더하기) · 템플릿 이름 바꾸기 · 템플릿 수량 복사
 //   node tools/e2e-setup.mjs [--no-build]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { withBrowser, sleep, ROOT } from './lib/cdp.mjs';
@@ -32,10 +32,10 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&nosw` });
   await cdp.waitUntil("document.querySelectorAll('.mode-card').length === 3", 15000);
 
-  // 1. 물량 템플릿: 기본 이름 · 탭 · 한 칸 입력 · 다른 템플릿 흐리게
+  // 1. 물량 템플릿: 기본 이름 · 세 열 나란히 · 편집 중인 열만 입력
   const labels = await cdp.eval("[...document.querySelectorAll('.mode-card .label')].map(x => x.textContent)");
   check('템플릿 기본 이름: 최소안 · 기본안 · 최대안', labels.join(',') === '최소안,기본안,최대안', labels.join(','));
-  check('물량 표는 고른 템플릿(기본안) 한 칸 + 다른 템플릿 흐리게', !!(await value(cdp, '신규 캐릭터 기본안')) && (await cdp.eval("document.querySelector('td.others')?.textContent ?? ''")).includes('최소안'));
+  check('물량 표는 세 템플릿 열 · 편집 중(기본안) 열만 입력 칸', !!(await value(cdp, '신규 캐릭터 기본안')) && (await cdp.eval("[...document.querySelectorAll('table.grid.vol th.mode-th')].map(x => x.textContent).join(',')")) === '최소안,기본안편집,최대안' && (await cdp.eval("document.querySelectorAll('table.grid.vol tr.row')[0].querySelectorAll('td.mode-cell.ro').length")) === 2);
   const charDays = await daysOf(cdp, '신규 캐릭터');
 
   // 2. 템플릿 이름 바꾸기
@@ -43,13 +43,13 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("[...document.querySelectorAll('.mode-card .label')].some(x => x.textContent === '계획안')", 8000).catch(() => {});
   check('템플릿 이름을 바꾸면 탭·표·칸 이름이 바뀐다', (await cdp.eval("[...document.querySelectorAll('.mode-card .label')].map(x => x.textContent).join(',')")) === '최소안,계획안,최대안' && (await value(cdp, '신규 캐릭터 계획안')) !== null);
 
-  // 3. 최대안으로 넘어가 계획안 수량 가져오기
-  await cdp.eval("document.querySelectorAll('.mode-card')[2].click()");
-  await cdp.waitUntil("document.querySelector('input[aria-label=\"신규 캐릭터 최대안\"]')", 8000);
-  await clickText(cdp, '계획안 수량 가져오기');
+  // 3. 표의 최대안 머리글을 눌러 편집을 넘기고, 계획안 → 최대안 복사
+  await cdp.eval("[...document.querySelectorAll('table.grid.vol th.mode-th button')].find(b => b.textContent === '최대안').click()");
+  await cdp.waitUntil("document.querySelector('input[aria-label=\"신규 캐릭터 최대안\"]') && document.querySelector('.mode-card.selected .label')?.textContent === '최대안'", 8000);
+  await clickText(cdp, '계획안 → 최대안 복사');
   await sleep(700);
-  const same = await cdp.eval("[...document.querySelectorAll('table.grid.vol tbody tr.row')].every(r => { const v = r.querySelector('td.n input.qty')?.value; const o = [...r.querySelectorAll('td.others .other')].find(x => x.textContent.includes('계획안'))?.querySelector('.num')?.textContent; return v === o; })");
-  check('다른 템플릿 수량 가져오기: 최대안 = 계획안', same);
+  const same = await cdp.eval("[...document.querySelectorAll('table.grid.vol tbody tr.row')].every(r => r.querySelector('td.mode-cell.sel input.qty')?.value === r.querySelector('td.mode-cell[data-mode=\"TARGET\"] .ro-val')?.textContent)");
+  check('머리글로 편집 전환 + 계획안 → 최대안 복사: 최대안 = 계획안', same);
   await shot(cdp, 'templates-1440');
   await cdp.eval("document.querySelectorAll('.mode-card')[1].click()");
   await sleep(400);

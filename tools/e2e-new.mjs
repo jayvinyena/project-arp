@@ -72,13 +72,13 @@ await withBrowser(async (cdp, base) => {
   check('아이콘이 원화·UI를 거친다', icon.includes('원화') && icon.includes('UI'), icon);
 
   // 물량 넣고 계산
-  // 기본안에 넣고 "다른 템플릿에도 똑같이"로 세 템플릿을 채운다(계산이 막혀 있어도 템플릿 전환·채우기가 된다)
+  // 기본안에 넣고 "기본안 → 최소안·최대안 복사"로 세 템플릿을 채운다(계산이 막혀 있어도 템플릿 전환·채우기가 된다)
   check('계산이 막혀도 템플릿을 고를 수 있다', await cdp.eval("document.querySelectorAll('[aria-label=\"물량 템플릿\"] button').length === 3"));
   await cdp.eval(`(() => { const i = document.querySelector('input[aria-label="신규 캐릭터 기본안"]'); i.value = '6'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await sleep(150);
   await cdp.eval(`document.querySelector('input[aria-label="신규 캐릭터 기본안"]').dispatchEvent(new FocusEvent('blur'))`);
   await sleep(400);
-  await cdp.eval("[...document.querySelectorAll('button')].find(b => b.textContent === '다른 템플릿에도 똑같이').click()");
+  await cdp.eval("[...document.querySelectorAll('button')].find(b => b.textContent === '기본안 → 최소안·최대안 복사').click()");
   await sleep(600);
   await cdp.waitUntil("document.querySelectorAll('.mode-card').length === 3");
   const big = await cdp.eval("document.querySelectorAll('.mode-card .big')[1]?.textContent");

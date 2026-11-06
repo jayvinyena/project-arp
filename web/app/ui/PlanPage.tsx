@@ -232,7 +232,7 @@ function CreateUpdate(props: { view: PlanView; onClose: () => void; onCreate: (e
 
 function UpdateDrawer(props: {
   updateId: string; planMode: PlanMode; version: number; readOnly: boolean; types: PlanView['types']; row: PlanRow | undefined; names: Record<string, string>;
-  onClose: () => void; onApply: (e: Edit) => Promise<boolean>;
+  onClose: () => void; onApply: (e: Edit) => Promise<boolean>; setPlanMode: (m: PlanMode) => void;
 }) {
   const [data, setData] = useState<{ detail: UpdateDetail | null; days: { blocked: boolean; byResource: Record<string, number>; total: number } | null; findings: Finding[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -291,6 +291,7 @@ function UpdateDrawer(props: {
                 readOnly={props.readOnly}
                 onEdit={e => apply({ ...e, updateId: d.updateId } as Edit)}
                 onCopy={props.readOnly ? undefined : (from, to) => apply({ kind: 'copyQty', updateId: d.updateId, from, to })}
+                onSelectMode={props.setPlanMode}
               />
               {!d.isLaunch && !props.readOnly && (
                 <div class="danger-zone">
@@ -347,7 +348,7 @@ export function PlanPage(props: {
       {creating && <CreateUpdate view={view} onClose={() => setCreating(false)} onCreate={async e => { if (await props.onApply(e)) setCreating(false); }} />}
       {openId && (
         <UpdateDrawer updateId={openId} planMode={props.planMode} version={props.version} readOnly={props.readOnly} types={view.types}
-          row={view.rows.find(r => r.updateId === openId)} names={names} onClose={() => setOpenId(null)} onApply={props.onApply} />
+          row={view.rows.find(r => r.updateId === openId)} names={names} onClose={() => setOpenId(null)} onApply={props.onApply} setPlanMode={props.setPlanMode} />
       )}
     </div>
   );
