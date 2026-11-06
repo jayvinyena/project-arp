@@ -46,7 +46,7 @@ test('마감을 당기면: 인원 위주로 맞추고, 아무도 늦어지지 �
   const data = session.currentData();
   raw.close();
   const r = adviseDeadlines(data);
-  assert.equal(r.before.find(o => o.updateId === 'LAUNCH').late, 32);
+  assert.equal(r.before.find(o => o.updateId === 'LAUNCH').late, 35); // 작업 진척 기준일(11-04) 다음 날부터 남은 일 → 시작일(11-02)보다 3영업일 뒤
   assert.equal(r.alreadyOk, false);
   assert.equal(r.feasible, true);
   assert.ok(r.after.every(o => o.late === 0));

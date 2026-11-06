@@ -159,7 +159,7 @@ export function VolumeTable(props: {
                   </th>
                 ))}
                 <th class="n">외주</th>
-                <th class="n">필요 공수 · {modeLabel}</th>
+                <th class="n" title="작업 진척에서 이미 끝낸 수량을 뺀 공수입니다">남은 공수 · {modeLabel}</th>
                 <th aria-label="행 작업" />
               </tr>
             </thead>
@@ -197,7 +197,7 @@ export function VolumeTable(props: {
                           );
                         })}
                         <td class="n" data-label="외주"><QtyInput value={r.outsource} field="outsource_qty" label={`${r.name} 외주`} nullable={false} disabled={readOnly} onCommit={edit(r, 'outsource_qty')} /></td>
-                        <td class="n days" data-label={`필요 공수 · ${modeLabel}`}>
+                        <td class="n days" data-label={`남은 공수 · ${modeLabel}`}>
                           {props.blocked
                             ? <span class="faint" title="계산할 수 없습니다">—</span>
                             : (

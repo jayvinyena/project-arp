@@ -50,7 +50,7 @@ export interface Volume {
   outsource_qty: number;
 }
 
-export interface Progress { update_id: string; resource_type_id: string; part_id: string; completed_qty: number }
+export interface Progress { update_id: string; resource_type_id: string; part_id: string; completed_qty: number; as_of?: string | null }
 
 export interface Capacity {
   part_id: string;
@@ -81,6 +81,11 @@ export interface ProjectData {
 
 export interface PlanOptions {
   planMode?: PlanMode;
+  /**
+   * 옛 도구와 대조할 때만 true: 작업 진척 기준일을 보지 않고(남은 일도 업데이트 시작일부터),
+   * 앞 공정 진행률을 남은 일 기준으로 센다(옛 엔진 방식).
+   */
+  legacyProgress?: boolean;
 }
 
 // ───────── 결과 ─────────

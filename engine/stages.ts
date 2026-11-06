@@ -15,11 +15,14 @@ export interface Stage {
   partId: string;
   partIndex: number;
   requiredDays: number;
+  /** 이미 끝낸 수량의 공수(작업 진척). 앞 공정 진행률을 셀 때 전체 = 이미 끝낸 몫 + 남은 일 */
+  preDoneDays: number;
   predecessor: Stage | null;
   overlapRate: number | null;
   overlapSource: 'FIRST' | 'PAIR' | 'DEFAULT';
   /** 배정 순서 비교용 */
   order: number[];
+  /** 남은 일을 배정하기 시작하는 날: 업데이트 시작일과 작업 진척 기준일 다음 날 중 늦은 날 */
   updateStartDate: string;
 
   // 계산 중 상태 (영업일 순번, -1 = 계획 기간 전에 이미 끝남)
@@ -40,7 +43,7 @@ export function liveUpdates(data: ProjectData): Update[] {
   return data.updates.filter(u => LIVE_STATUSES.has(u.status));
 }
 
-export function buildStages(data: ProjectData, planMode: PlanMode): Stage[] {
+export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgress = false): Stage[] {
   const s = data.settings;
   const parts = data.parts.filter(p => p.active === 1).sort((a, b) => a.sort_order - b.sort_order);
   const partIndex = new Map(parts.map((p, i) => [p.part_id, i]));
@@ -54,6 +57,21 @@ export function buildStages(data: ProjectData, planMode: PlanMode): Stage[] {
     mix.get(m.part_id)!.push(m);
   }
   const done = new Map(data.progress.map(p => [`${p.update_id}|${p.resource_type_id}|${p.part_id}`, p.completed_qty]));
+  // 업데이트마다 작업 진척의 가장 늦은 기준일: 그날까지의 작업은 완료 수량에 들어 있으므로 남은 일은 그 다음 날부터
+  const asOf = new Map<string, string>();
+  if (!legacyProgress) {
+    for (const p of data.progress) {
+      if (!p.as_of || !(p.completed_qty > 0)) continue;
+      const cur = asOf.get(p.update_id);
+      if (!cur || p.as_of > cur) asOf.set(p.update_id, p.as_of);
+    }
+  }
+  const nextDay = (iso: string) => new Date(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const workFrom = (u: Update): string => {
+    const a = asOf.get(u.update_id);
+    const after = a ? nextDay(a) : null;
+    return after && after > u.start_date! ? after : u.start_date!;
+  };
   const rtSort = new Map(data.resource_types.map(r => [r.resource_type_id, r.sort_order]));
 
   const resourceParts = new Map<string, { part_id: string; rework_rate: number }[]>();
@@ -90,9 +108,12 @@ export function buildStages(data: ProjectData, planMode: PlanMode): Stage[] {
     let prev: Stage | null = null;
     for (const rp of chain) {
       const completed = done.get(`${v.update_id}|${v.resource_type_id}|${rp.part_id}`) ?? 0;
-      const remaining = Math.max(0, qty - v.outsource_qty - completed);
-      const requiredDays = remaining * mixedDays(v.resource_type_id, rp.part_id) * v.difficulty
+      const own = Math.max(0, qty - v.outsource_qty);
+      const remaining = Math.max(0, own - completed);
+      const perUnit = mixedDays(v.resource_type_id, rp.part_id) * v.difficulty
         * Math.max(0, 1 - v.reuse_rate) * (1 + rp.rework_rate) * (1 + s.buffer_rate);
+      const requiredDays = remaining * perUnit;
+      const preDoneDays = legacyProgress ? 0 : Math.min(own, Math.max(0, completed)) * perUnit;
       let overlapRate: number | null = null;
       let overlapSource: Stage['overlapSource'] = 'FIRST';
       if (prev) {
@@ -107,6 +128,7 @@ export function buildStages(data: ProjectData, planMode: PlanMode): Stage[] {
         partId: rp.part_id,
         partIndex: partIndex.get(rp.part_id)!,
         requiredDays: requiredDays < EPS ? 0 : requiredDays,
+        preDoneDays,
         predecessor: prev,
         overlapRate,
         overlapSource,
@@ -119,7 +141,7 @@ export function buildStages(data: ProjectData, planMode: PlanMode): Stage[] {
           v.priority,
           rtSort.get(v.resource_type_id) ?? 0,
         ],
-        updateStartDate: u.start_date,
+        updateStartDate: workFrom(u),
         done: 0,
         doneMorning: 0,
         touchDay: -2,

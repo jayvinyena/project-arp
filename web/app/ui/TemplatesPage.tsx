@@ -79,13 +79,17 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
             </div>
             <div class="card-body" style="padding-top: 8px">
               <div class="table-wrap">
-                <table class="grid vol">
-                  <colgroup><col /><col class="qty-col" /><col class="qty-col" /><col class="qty-col" /><col class="act-col" /></colgroup>
+                <table class="grid vol tpl-table">
+                  <colgroup><col /><col class="tpl-qty-col" /><col class="tpl-qty-col" /><col class="tpl-qty-col" /><col class="act-col" /></colgroup>
                   <thead><tr><th>리소스</th><th class="n">{MODE_LABEL.MIN}</th><th class="n">{MODE_LABEL.TARGET}</th><th class="n">{MODE_LABEL.STRETCH}</th><th aria-label="행 작업" /></tr></thead>
                   <tbody>
-                    {cur.rows.map(r => (
-                      <tr class="row">
-                        <td><div class="res-name"><span class="title">{r.name}</span><span class="small faint">{r.groupName}</span></div></td>
+                    {cur.rows.map((r, i) => (
+                      <>
+                      {(i === 0 || cur.rows[i - 1].groupName !== r.groupName) && (
+                        <tr class="group group-strong"><td colSpan={5}><span class="group-head"><b>{r.groupName || '분류 없음'}</b><span class="group-count">{cur.rows.filter(x => x.groupName === r.groupName).length}종</span></span></td></tr>
+                      )}
+                      <tr class="row in-group">
+                        <td><div class="res-name"><span class="title">{r.name}</span></div></td>
                         {(['min_qty', 'target_qty', 'stretch_qty'] as const).map((f, i) => (
                           <td class="n" data-label={[MODE_LABEL.MIN, MODE_LABEL.TARGET, MODE_LABEL.STRETCH][i]}>
                             <Qty value={[r.min, r.target, r.stretch][i]} label={`${r.name} ${[MODE_LABEL.MIN, MODE_LABEL.TARGET, MODE_LABEL.STRETCH][i]}`} disabled={props.readOnly}
@@ -97,6 +101,7 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
                             onClick={() => apply({ kind: 'removeTemplateResource', typeId: cur.typeId, resourceTypeId: r.resourceTypeId })}><IconX /></button></span>
                         )}</td>
                       </tr>
+                      </>
                     ))}
                     {cur.rows.length > 0 && (
                       <tr class="total"><td>합계</td><td class="n num">{fmtInt(sum('min'))}</td><td class="n num">{fmtInt(sum('target'))}</td><td class="n num">{fmtInt(sum('stretch'))}</td><td /></tr>

@@ -58,6 +58,41 @@ test('손 계산: 원화 10일 · 모델링 15일 · 겹침 20% → 모델링 9�
   assert.equal(b.completionDate, days[22]);
 });
 
+/** 수량 2개(원화 5일/개 · 모델링 7.5일/개 = 원화 10일 · 모델링 15일), 원화 1개는 이미 끝냄(작업 진척) */
+function tinyWithProgress(overlapRate, asOf) {
+  const d = tinyData(overlapRate);
+  d.efforts[0].days = 5; d.efforts[1].days = 7.5;
+  Object.assign(d.volumes[0], { min_qty: 2, target_qty: 2, stretch_qty: 2 });
+  d.progress = [{ update_id: 'U', resource_type_id: 'R', part_id: 'A', completed_qty: 1, as_of: asOf }];
+  return d;
+}
+
+test('작업 진척 · 앞 공정 진행률은 이미 끝낸 몫을 넣어 센다: 원화 절반 완료, 겹침 20% → 원화 3일 더 하면(전체 80%) 모델링 시작', () => {
+  const r = runPlan(tinyWithProgress(0.2, '2027-02-26'));
+  const days = r.daily.dates;
+  const [a, b] = r.stages;
+  assert.equal(a.startDate, days[0]);
+  assert.equal(a.workDoneDate, days[4], '남은 원화 5일');
+  assert.equal(b.startDate, days[3], '(5 + 3) ÷ 10 = 80%가 된 다음 날 아침');
+  // 옛 방식(남은 일 기준 진행률)은 남은 5일의 80% = 4일 뒤
+  const old = runPlan(tinyWithProgress(0.2, '2027-02-26'), { legacyProgress: true });
+  assert.equal(old.stages[1].startDate, old.daily.dates[4]);
+});
+
+test('작업 진척 · 남은 일은 기준일 다음 날부터: 기준일 3/10 → 3/11부터 배정, 완료 예정은 기준일보다 빠르지 않다', () => {
+  const r = runPlan(tinyWithProgress(0.2, '2027-03-10'));
+  const days = r.daily.dates;
+  assert.equal(r.stages[0].startDate, '2027-03-11');
+  assert.equal(r.stages[0].startDate, days[8]);
+  assert.ok(r.updates[0].expectedCompletionDate > '2027-03-10');
+  // 기준일이 시작일보다 앞이면 시작일 그대로 · 옛 방식은 기준일을 보지 않는다
+  assert.equal(runPlan(tinyWithProgress(0.2, '2027-02-26')).stages[0].startDate, days[0]);
+  assert.equal(runPlan(tinyWithProgress(0.2, '2027-03-10'), { legacyProgress: true }).stages[0].startDate, days[0]);
+  // 완료 수량이 0인 진척 행은 기준일로 치지 않는다
+  const zero = tinyWithProgress(0.2, '2027-03-10'); zero.progress[0].completed_qty = 0;
+  assert.equal(runPlan(zero).stages[0].startDate, days[0]);
+});
+
 test('손 계산: 겹침 0% → 모델링 11일째 시작, 25일째 완료 (2영업일 늦음)', () => {
   const r = runPlan(tinyData(0));
   const days = r.daily.dates;

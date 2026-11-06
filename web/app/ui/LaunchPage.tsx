@@ -57,7 +57,7 @@ function ModeCards(props: { modes: ModeOutcome[]; selected: PlanMode; onSelect: 
             </div>
             <div class="meta">
               <span class={`pill plain ${sl.tone}`}>{unfinished ? sl.text : `${props.deadlineLabel} 대비 ${sl.text}`}</span>
-              <span class="num">{fmtInt(m.launchDays)} 인·일</span>
+              <span class="num" title="남은 공수: 작업 진척에서 이미 끝낸 수량을 뺀 공수">남은 {fmtInt(m.launchDays)} 인·일</span>
             </div>
           </button>
         );

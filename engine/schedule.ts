@@ -21,11 +21,11 @@ export interface ScheduleOutput {
   monthEndRemaining: number[][];
 }
 
-/** 앞 스테이지의 그날 아침 진행률 (0–1) */
+/** 앞 스테이지의 그날 아침 진행률 (0–1). 이미 끝낸 수량(작업 진척)도 진행에 들어간다: (이미 끝낸 몫 + 오늘 아침까지 한 일) ÷ 전체 */
 function morningProgress(p: Stage, day: number): number {
   if (p.requiredDays <= 0) return 1;
   const done = p.touchDay === day ? p.doneMorning : p.done;
-  return done / p.requiredDays;
+  return (p.preDoneDays + done) / (p.preDoneDays + p.requiredDays);
 }
 
 /** 아침 판정: 앞 공정이 어제까지 시작했고, 진행률이 1 − 겹침률 이상 */

@@ -640,9 +640,6 @@ table.grid.advisor-table { min-width: 560px; }
 .setup-project .form-row:last-child { grid-column: 1 / -1; }
 table.grid.setup-parts { min-width: 720px; }
 table.grid.setup-res { min-width: 760px; }
-.effort-pair { display: inline-flex; gap: 4px; }
-.effort-pair .qty { width: 58px; border: 1px solid var(--line); }
-.effort-pair .qty.ai { border-style: dashed; color: var(--accent-ink); }
 .field.group-name { height: 26px; font-weight: 650; background: transparent; border-color: transparent; padding-left: 0; }
 .field.group-name:hover, .field.group-name:focus { border-color: var(--line-strong); background: var(--surface); padding-left: 8px; }
 .nowrap { flex-wrap: nowrap; }
@@ -791,4 +788,50 @@ table.grid.spec-table td:first-child { white-space: nowrap; }
 .pick-chip input { width: 15px; height: 15px; accent-color: var(--accent); }
 .pick-chip.on { background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .answer.reserve-mini { min-height: 96px; }
+
+/* ───────── 기준 정보 표: 머리글과 숫자 한 줄 맞춤 · 분류 묶음 ───────── */
+/* 숫자 칸 입력: 열 너비를 채우고, 숫자 오른쪽 끝 = 머리글 오른쪽 끝(칸 여백 12 + 테두리 1 + 안쪽 7 = 머리글 20) */
+table.grid.edit .field.num-in { width: 100%; padding-right: 7px; text-align: right; font-variant-numeric: tabular-nums; }
+table.grid.edit .field.num-in.ai { border-style: dashed; color: var(--accent-ink); }
+table.grid.edit .field.num-in.ai::placeholder { color: var(--text-3); }
+table.grid col.num-col { width: 132px; }
+table.grid col.eff-col { width: 78px; }
+table.grid th .unit { font-weight: 500; color: var(--text-3); margin-left: 2px; }
+table.grid th.c, table.grid td.c { text-align: center; }
+table.grid.setup-res td.eff-base, table.grid.setup-res td.eff-ai { padding-left: 4px; padding-right: 4px; }
+table.grid.setup-res td.eff-base .field.num-in, table.grid.setup-res td.eff-ai .field.num-in { padding-right: 7px; }
+table.grid.setup-res th.sub-th { padding-right: 12px; padding-top: 4px; font-weight: 600; }
+table.grid.setup-res th.ai-th { color: var(--accent-ink); }
+table.grid.setup-res th.part-th { text-align: center; border-bottom: 1px solid var(--line); padding-bottom: 6px; color: var(--text-2); font-weight: 650; }
+table.grid.setup-res th.part-th + th.part-th, table.grid.setup-res td.eff-base { box-shadow: inset 1px 0 0 var(--line); }
+table.grid.setup-res thead tr:first-child th[rowspan] { vertical-align: bottom; }
+table.grid.setup-res { min-width: 900px; }
+/* 분류 머리 줄: 굵게, 왼쪽 강조선, 종 수. 그 아래 행은 들여 씀 */
+table.grid tr.group.group-strong td { background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface-2)); box-shadow: inset 3px 0 0 var(--accent); color: var(--text); font-size: 13px; padding-top: 8px; padding-bottom: 8px; }
+.group-head { display: inline-flex; align-items: center; gap: 8px; }
+.group-head b { font-weight: 700; }
+.group-count { font-size: 11.5px; font-weight: 600; color: var(--accent-ink); background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 999px; padding: 0 7px; line-height: 18px; }
+table.grid tr.group.group-strong .field.group-name { font-weight: 700; color: var(--text); width: auto; min-width: 8em; }
+table.grid tr.row.in-group td:first-child { padding-left: 22px; }
+table.grid.edit .field.ghost-field { border-color: transparent; background: transparent; color: var(--text-2); font-size: 12.5px; }
+table.grid.edit .field.ghost-field:hover, table.grid.edit .field.ghost-field:focus { border-color: var(--line-strong); background: var(--surface); }
+/* 유형 템플릿: 숫자 열을 넓혀 이름과 숫자 사이가 덜 비게, 합계 숫자도 입력 숫자와 같은 선 */
+table.grid col.tpl-qty-col { width: 140px; }
+table.grid.tpl-table tr.total td.n { padding-right: 21px; }
+/* 인력: 머리글 오른쪽 끝 = 숫자 오른쪽 끝(칸 여백 4 + 테두리 1 + 안쪽 6), 해 구분선 */
+table.grid.cap-grid th.n { padding-right: 18px; }
+table.grid.cap-grid th.year-th { text-align: left; padding-left: 10px; color: var(--text-2); font-weight: 650; }
+table.grid.cap-grid .year-start { box-shadow: inset 1px 0 0 var(--line-strong); }
+table.grid.setup-parts th.n, table.grid.setup-parts td.n.num { padding-right: 16px; }
+/* 분류 이름 칸은 글자 길이만큼(종 수가 이름 바로 옆에) */
+@supports (field-sizing: content) { table.grid tr.group.group-strong .field.group-name { field-sizing: content; min-width: 4em; } }
+@media (max-width: 640px) {
+  /* 휴대폰 카드 모양에서는 들여쓰기 없이 이름 · 숫자를 같은 왼쪽 선에, 합계도 위 칸과 같은 열에 */
+  table.grid.vol tr.row.in-group td:first-child { padding-left: 0; }
+  table.grid.vol tr.total { padding: 8px 0; gap: 2px 6px; }
+  table.grid.vol tr.total td { text-align: left; padding: 0; border: 0; }
+  table.grid.vol tr.total td:empty { display: none; }
+  table.grid.tpl-table tr.total td.n { padding-right: 0; }
+  table.grid.tpl-table tr.total td:first-child { grid-column: 1 / -1; font-size: 11px; color: var(--text-3); }
+}
 

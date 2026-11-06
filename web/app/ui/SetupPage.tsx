@@ -99,7 +99,8 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap">
             <table class="grid edit setup-parts">
-              <thead><tr><th style="width: 72px">순서</th><th style="width: 240px">이름</th><th class="n">기본 인원</th><th class="n">기본 가동률</th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용</th><th class="n">거치는 리소스</th><th style="width: 56px">사용</th><th style="width: 44px" aria-label="행 작업" /></tr></thead>
+              <colgroup><col style="width: 80px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 120px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
+              <thead><tr><th>순서</th><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
               <tbody>
                 {v.parts.map((p, i) => (
                   <tr class={`row${p.active ? '' : ' muted-row'}`}>
@@ -108,14 +109,14 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                       <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 뒤로`} disabled={ro || i === v.parts.length - 1} onClick={() => void apply({ kind: 'movePart', partId: p.partId, direction: 1 })}>↓</button>
                     </span></td>
                     <td><Field value={p.name} label={`${p.name} 파트 이름`} disabled={ro} onCommit={t => apply({ kind: 'renamePart', partId: p.partId, name: t })} /></td>
-                    <td class="n"><span class="inline nowrap"><Field class="field narrow n" numeric value={numText(p.headcount)} label={`${p.name} 기본 인원`} disabled={ro || !p.active}
-                      onCommit={t => (num(t) == null || num(t)! < 0 ? false : fillAll(p.partId, 'headcount', num(t)!))} /><span class="faint">명</span></span></td>
-                    <td class="n"><span class="inline nowrap"><Field class="field narrow n" numeric value={pctText(p.utilization)} label={`${p.name} 기본 가동률`} disabled={ro || !p.active}
-                      onCommit={t => (num(t) == null || num(t)! < 0 || num(t)! > 100 ? false : fillAll(p.partId, 'utilization', num(t)! / 100))} /><span class="faint">%</span></span></td>
-                    <td class="n"><span class="inline nowrap"><Field class="field narrow n" numeric value={pctText(p.aiShare)} label={`${p.name} AI 활용 비율`} disabled={ro || !p.active}
-                      onCommit={t => apply({ kind: 'aiShare', partId: p.partId, share: (num(t) ?? 0) / 100 })} /><span class="faint">%</span></span></td>
+                    <td class="n"><Field class="field n num-in" numeric value={numText(p.headcount)} label={`${p.name} 기본 인원`} disabled={ro || !p.active}
+                      onCommit={t => (num(t) == null || num(t)! < 0 ? false : fillAll(p.partId, 'headcount', num(t)!))} /></td>
+                    <td class="n"><Field class="field n num-in" numeric value={pctText(p.utilization)} label={`${p.name} 기본 가동률`} disabled={ro || !p.active}
+                      onCommit={t => (num(t) == null || num(t)! < 0 || num(t)! > 100 ? false : fillAll(p.partId, 'utilization', num(t)! / 100))} /></td>
+                    <td class="n"><Field class="field n num-in" numeric value={pctText(p.aiShare)} label={`${p.name} AI 활용 비율`} disabled={ro || !p.active}
+                      onCommit={t => apply({ kind: 'aiShare', partId: p.partId, share: (num(t) ?? 0) / 100 })} /></td>
                     <td class="n num faint">{p.usedBy}종</td>
-                    <td><label class="check"><input type="checkbox" aria-label={`${p.name} 사용`} checked={p.active} disabled={ro} onChange={() => void apply({ kind: 'partActive', partId: p.partId, active: !p.active })} /></label></td>
+                    <td class="c"><label class="check"><input type="checkbox" aria-label={`${p.name} 사용`} checked={p.active} disabled={ro} onChange={() => void apply({ kind: 'partActive', partId: p.partId, active: !p.active })} /></label></td>
                     <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 파트 지우기`} disabled={p.usedBy > 0 || p.hasProgress}
                       title={p.usedBy > 0 ? `리소스 ${p.usedBy}종이 거칩니다. 공수에서 이 파트를 제외해야 삭제할 수 있습니다` : p.hasProgress ? '작업 진척 기록이 있습니다' : '지우기'}
                       onClick={() => void apply({ kind: 'deletePart', partId: p.partId })}><IconX /></button>}</td>
@@ -143,31 +144,44 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
           <div class="table-wrap">
             <table class="grid edit setup-res">
-              <thead><tr><th style="width: 132px">분류</th><th style="width: 180px">리소스</th>{activeParts.map(p => <th class="n">{p.name}<div class="small faint">기본 / AI</div></th>)}<th>사용</th><th aria-label="행 작업" /></tr></thead>
+              <colgroup><col style="width: 200px" />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
+              <thead>
+                <tr>
+                  <th rowSpan={2}>리소스</th>
+                  {activeParts.map(p => <th colSpan={2} class="part-th">{p.name}</th>)}
+                  <th rowSpan={2} class="c">사용</th>
+                  <th rowSpan={2} title="다른 분류로 옮길 때 변경합니다">분류 이동</th>
+                  <th rowSpan={2} aria-label="행 작업" />
+                </tr>
+                <tr>{activeParts.map(() => <><th class="n sub-th">기본</th><th class="n sub-th ai-th">AI</th></>)}</tr>
+              </thead>
               <tbody>
                 {byGroup.map(g => (
                   <>
-                    <tr class="group"><td colSpan={activeParts.length + 4}>
-                      {g.groupId && !ro
-                        ? <Field class="field group-name" value={g.name} label={`분류 ${g.name} 이름`} onCommit={t => apply({ kind: 'renameGroup', groupId: g.groupId!, name: t })} />
-                        : g.name}
+                    <tr class="group group-strong"><td colSpan={activeParts.length * 2 + 4}>
+                      <span class="group-head">
+                        {g.groupId && !ro
+                          ? <Field class="field group-name" value={g.name} label={`분류 ${g.name} 이름`} onCommit={t => apply({ kind: 'renameGroup', groupId: g.groupId!, name: t })} />
+                          : <b>{g.name}</b>}
+                        <span class="group-count">{g.rows.length}종</span>
+                      </span>
                     </td></tr>
                     {g.rows.map(r => (
-                      <tr class={`row${r.active ? '' : ' muted-row'}`}>
-                        <td><Field value={r.groupName} label={`${r.name} 분류`} list="setup-groups" disabled={ro} placeholder="분류 없음" onCommit={t => apply({ kind: 'resourceGroup', resourceTypeId: r.resourceTypeId, groupName: t })} /></td>
+                      <tr class={`row in-group${r.active ? '' : ' muted-row'}`}>
                         <td><Field value={r.name} label={`${r.name} 리소스 이름`} disabled={ro} onCommit={t => apply({ kind: 'renameResource', resourceTypeId: r.resourceTypeId, name: t })} /></td>
                         {activeParts.map(p => {
                           const e = r.efforts[p.partId];
                           return (
-                            <td class="n"><span class="effort-pair">
-                              <Field class="qty" numeric value={numText(e?.base ?? null)} placeholder="—" label={`${r.name} ${p.name} 기본 공수`} disabled={ro}
-                                onCommit={t => apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'BASE', days: num(t) })} />
-                              <Field class="qty ai" numeric value={numText(e?.ai ?? null)} placeholder={e ? '=기본' : ''} label={`${r.name} ${p.name} AI 공수`} disabled={ro || !e}
-                                onCommit={t => apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'AI', days: num(t) })} />
-                            </span></td>
+                            <>
+                              <td class="n eff-base"><Field class="field n num-in" numeric value={numText(e?.base ?? null)} placeholder="—" label={`${r.name} ${p.name} 기본 공수`} disabled={ro}
+                                onCommit={t => apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'BASE', days: num(t) })} /></td>
+                              <td class="n eff-ai"><Field class="field n num-in ai" numeric value={numText(e?.ai ?? null)} placeholder={e ? '=기본' : ''} label={`${r.name} ${p.name} AI 공수`} disabled={ro || !e}
+                                onCommit={t => apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'AI', days: num(t) })} /></td>
+                            </>
                           );
                         })}
-                        <td><label class="check"><input type="checkbox" aria-label={`${r.name} 사용`} checked={r.active} disabled={ro} onChange={() => void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: !r.active })} /></label></td>
+                        <td class="c"><label class="check"><input type="checkbox" aria-label={`${r.name} 사용`} checked={r.active} disabled={ro} onChange={() => void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: !r.active })} /></label></td>
+                        <td><Field class="field ghost-field" value={r.groupName} label={`${r.name} 분류`} list="setup-groups" disabled={ro} placeholder="분류 없음" onCommit={t => apply({ kind: 'resourceGroup', resourceTypeId: r.resourceTypeId, groupName: t })} /></td>
                         <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 리소스 지우기`} disabled={r.used}
                           title={r.used ? '물량·유형 템플릿·작업 진척에 사용됩니다. 사용 안 함으로 두거나 그곳에서 먼저 제외하십시오' : '지우기'}
                           onClick={() => void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId })}><IconX /></button>}</td>

@@ -42,7 +42,14 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
   if (!view) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const meta = FIELDS.find(f => f.key === field)!;
   const apply = (e: Edit) => props.onApply(e);
-  const yearOf = (m: string, i: number) => (i === 0 || m.endsWith('-01') ? `${m.slice(0, 4)}년` : '');
+  // 해마다 달 묶음(머리글 한 칸이 그 해의 달을 모두 덮는다)
+  const years: { year: string; n: number; first: boolean }[] = [];
+  for (const m of view.months) {
+    const y = m.slice(0, 4);
+    const last = years[years.length - 1];
+    if (last && last.year === y) last.n += 1; else years.push({ year: y, n: 1, first: years.length === 0 });
+  }
+  const isYearStart = (i: number) => i > 0 && view.months[i].endsWith('-01');
 
   return (
     <div class="page">
@@ -76,15 +83,16 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
           <div class="table-wrap">
             <table class="grid cap-grid" style={{ minWidth: `${104 + view.months.length * 54}px` }}>
               <thead>
-                <tr><th class="sticky-col" />{view.months.map((m, i) => <th class="n year-th">{yearOf(m, i)}</th>)}</tr>
-                <tr><th class="sticky-col">파트</th>{view.months.map(m => <th class="n">{Number(m.slice(5))}월</th>)}</tr>
+                {/* 해 머리글은 그 해의 달을 모두 덮고, 해가 바뀌는 달에 세로 구분선 */}
+                <tr><th class="sticky-col" />{years.map(y => <th colSpan={y.n} class={`year-th${y.first ? '' : ' year-start'}`}>{y.year}년</th>)}</tr>
+                <tr><th class="sticky-col">파트</th>{view.months.map((m, i) => <th class={`n${isYearStart(i) ? ' year-start' : ''}`}>{Number(m.slice(5))}월</th>)}</tr>
               </thead>
               <tbody>
                 {view.parts.map(p => (
                   <tr class="row">
                     <td class="sticky-col"><b>{p.name}</b></td>
                     {p.cells.map((c: CapacityCell | null, i) => (
-                      <td class="n">{c
+                      <td class={`n${isYearStart(i) ? ' year-start' : ''}`}>{c
                         ? <Cell value={c[field]} pct={meta.pct} label={`${p.name} ${view.months[i]} ${meta.label}`} disabled={props.readOnly}
                           onCommit={v => apply({ kind: 'capacity', partId: p.partId, month: view.months[i], field, value: v })} />
                         : <span class="err-text" title="이 달 인력 행이 없습니다">없음</span>}</td>

@@ -48,7 +48,8 @@ export async function compareLegacy(fixture, { keepLegacyWorkdays }) {
   const { rows, report } = legacyToRows(sheets, { fixedHolidays: !keepLegacyWorkdays, keepLegacyWorkdays, legacyCompat: keepLegacyWorkdays });
   const raw = new DatabaseSync(':memory:');
   writeImported(nodeDb(raw), SCHEMA_SQL, rows);
-  const neu = runPlan(readProjectData(raw), { planMode: 'TARGET' });
+  // 옛 계산 방식 흉내에서는 작업 진척도 옛 방식(기준일 무시 · 남은 일 기준 진행률)으로
+  const neu = runPlan(readProjectData(raw), { planMode: 'TARGET', legacyProgress: !!keepLegacyWorkdays });
   raw.close();
 
   // 옛 결과의 작업 가능량은 시트에 적힌 인력 행만 더한 값이다 → 새 쪽도 같은 달만 더해 비교한다

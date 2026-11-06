@@ -281,7 +281,12 @@ export function maxLaunchScale(data: ProjectData, launchId: string, planMode: Pl
     deadline,
     currentOk,
     scale,
-    suggestion: launchVolumes.map(v => ({ resourceTypeId: v.resource_type_id, current: v[field] ?? 0, suggested: Math.floor((v[field] ?? 0) * scale) })),
+    // 이미 끝낸 수량(+ 외주) 밑으로는 줄이라고 하지 않는다(만든 것은 되돌릴 수 없다)
+    suggestion: launchVolumes.map(v => {
+      const current = v[field] ?? 0;
+      const made = Math.max(0, ...data.progress.filter(p => p.update_id === launchId && p.resource_type_id === v.resource_type_id).map(p => p.completed_qty)) + v.outsource_qty;
+      return { resourceTypeId: v.resource_type_id, current, suggested: Math.max(Math.floor(current * scale), Math.min(current, made)) };
+    }),
     runs,
   };
 }

@@ -28,7 +28,7 @@ export function runPlan(data: ProjectData, options: PlanOptions = {}): PlanResul
     return c.headcount * cal.monthWorkdays[mi] * c.utilization * c.productivity + c.outsource_days + c.support_days;
   }));
 
-  const stages = buildStages(data, planMode);
+  const stages = buildStages(data, planMode, options.legacyProgress === true);
   const out = schedule(stages, cal, parts.length, monthlyCapacity);
 
   const dateOf = (day: number | null): string | null => (day === null || day < 0 ? null : cal.days[day]);

@@ -47,7 +47,7 @@
 | [engine/](engine/) | 계산 엔진 (TypeScript, 의존 패키지 없음). 입구 `runPlan` |
 | [tools/lib/pipeline.mjs](tools/lib/pipeline.mjs) | 계산 흐름: 시나리오 얹기 → 검증 → 읽기 → 엔진 |
 | [tools/plan.mjs](tools/plan.mjs) | 계산 결과를 터미널에 보여주는 도구 |
-| [test/engine.test.mjs](test/engine.test.mjs) | 엔진 검사 15개 |
+| [test/engine.test.mjs](test/engine.test.mjs) | 엔진 검사 17개 |
 | [core/](core/) | Node와 브라우저가 같이 쓰는 계산 흐름. `ProjectSession`: 고친 표만 다시 읽기 |
 | [web/lib/wasm-db.ts](web/lib/wasm-db.ts) | 브라우저: SQLite WebAssembly로 `.arp` 열기·내보내기 |
 | [docs/05-browser-bench.md](docs/05-browser-bench.md) | 브라우저 측정 결과와 판단 |
@@ -86,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
-npm test                                  # 검사 116개
+npm test                                  # 검사 118개
 npm run e2e                               # 크롬 시험 121개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 작업 진척 5 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
