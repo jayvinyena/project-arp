@@ -32,7 +32,7 @@ const CHILD_TABLES: [string, string][] = [
 ];
 
 const TARGET_NAME: Record<string, string> = {
-  volumes: '물량', updates: '업데이트', capacity: '인력', progress: '실적', update_types: '유형', type_templates: '템플릿',
+  volumes: '물량', updates: '업데이트', capacity: '인력', progress: '작업 진척', update_types: '유형', type_templates: '템플릿',
   settings: '설정', part_overlaps: '겹침률', effort_mix: 'AI 비율', efforts: '공수', resource_parts: '거치는 파트',
   parts: '파트', resource_types: '리소스', resource_groups: '분류', holidays: '휴일', meta: '프로젝트', effort_profiles: '공수 프로필',
 };

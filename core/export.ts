@@ -73,7 +73,7 @@ export function exportSheets(db: SqlDb, session: ProjectSession, planMode: PlanM
       .map(x => [x.r, x.p, x.prof, x.days, x.rework_rate] as Cell[]),
   ];
 
-  sheets['실적'] = [
+  sheets['작업 진척'] = [
     ['업데이트', '리소스', '파트', '완료 수량', '기준일'],
     ...db.all(`SELECT u.name AS u, r.name AS r, p.name AS p, a.completed_qty, a.as_of FROM progress a
         JOIN updates u ON u.update_id = a.update_id JOIN resource_types r ON r.resource_type_id = a.resource_type_id JOIN parts p ON p.part_id = a.part_id

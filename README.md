@@ -20,7 +20,7 @@
 | 0. 기반: 용어, 데이터 모델, 파일 형식, 검증 규칙, 샘플 | 완료 (2026-11-05) |
 | 1. 계산 엔진 | 완료 (2026-11-05): 엔진, 계산 흐름, 검사 23개, 브라우저 측정 |
 | 2. 런칭 물량 설계 (첫 출시) | 기능 완료 (2026-11-05): 화면·역산·저장 흐름·새 프로젝트 만들기. 실제 사용 확인 대기 |
-| 3. 업데이트 계획 | 기능 완료 (2026-11-05): 타임라인·부하 지도·만들기·상세, 진행 실적, 유형 템플릿, 인력·계획 기간. 실제 사용 확인 대기 |
+| 3. 업데이트 계획 | 기능 완료 (2026-11-05): 타임라인·부하 지도·만들기·상세, 작업 진척(옛 이름 진행 실적), 유형 템플릿, 인력·계획 기간. 실제 사용 확인 대기 |
 | 4. 시뮬레이션 | 기능 완료 (2026-11-05): 시나리오·동작 9가지·나란히 비교·민감도·거꾸로 계산·원본에 반영, 파일 구조 v2 |
 | 4.5 기존 시트 데이터 가져오기 | 기능 완료 (2026-11-05): .xlsx 읽기, 옛 → 새 변환·보고서, 옛 엔진과 대조(같음). 실제 시트로 확인 대기 |
 | 5. 안정화 | 완료 (2026-11-05): 변경 이력·되돌리기, 작업 복구, 최근 파일, 엑셀 내보내기, 오프라인·설치형 앱, 오류 처리, 사용 가이드·배포 문서 |
@@ -87,7 +87,7 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
 npm test                                  # 검사 106개
-npm run e2e                               # 크롬 시험 113개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 진행 실적 5 · 시뮬레이션 8 · 가져오기 13 · 안정화 9 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 11 · 배포 11
+npm run e2e                               # 크롬 시험 115개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 작업 진척 5 · 시뮬레이션 8 · 가져오기 13 · 안정화 9 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)
@@ -117,7 +117,7 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 
 | 파일 | 내용 |
 |---|---|
-| [docs/07-update-plan.md](docs/07-update-plan.md) | 업데이트 계획 · 진행 실적 · 유형 템플릿 · 인력 화면과 로직 |
+| [docs/07-update-plan.md](docs/07-update-plan.md) | 업데이트 계획 · 작업 진척 · 유형 템플릿 · 인력 화면과 로직 |
 | [core/edits.ts](core/edits.ts) · [core/plan.ts](core/plan.ts) | 모든 고치기 20종 · 계획/상세/실적/유형/인력 보기 |
 | [web/app/ui/PlanPage.tsx](web/app/ui/PlanPage.tsx) · [ProgressPage.tsx](web/app/ui/ProgressPage.tsx) · [TemplatesPage.tsx](web/app/ui/TemplatesPage.tsx) · [CapacityPage.tsx](web/app/ui/CapacityPage.tsx) | 화면 |
 | [test/plan.test.mjs](test/plan.test.mjs) · [test/progress.test.mjs](test/progress.test.mjs) · [tools/e2e-plan.mjs](tools/e2e-plan.mjs) · [tools/e2e-progress.mjs](tools/e2e-progress.mjs) | 검사 7+5개 · 크롬 시험 14+5개 |
@@ -173,6 +173,7 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 
 | 파일 | 내용 |
 |---|---|
+| [docs/18-layout-help.md](docs/18-layout-help.md) · [tools/capture-pages.mjs](tools/capture-pages.mjs) · [tools/find-overflow.mjs](tools/find-overflow.mjs) | **화면 배치 점검 · 화면 안내 · 용어(작업 진척)**(2026-11-06 요청) · 메뉴별 캡처 · 좁은 화면 넘침 찾기 |
 | [docs/17-setup-templates-ai.md](docs/17-setup-templates-ai.md) | **만든 뒤 고치기 · 물량 템플릿 · AI 공수**(2026-11-05 요청) |
 | [docs/16-review.md](docs/16-review.md) | **전체 점검**: 독립 점검 3개(계산·데이터·화면)로 찾은 문제와 고친 것 |
 | [docs/15-operating-sheet.md](docs/15-operating-sheet.md) | **운영 시트 준비 가이드**: 읽는 시트·칸, 점검표, 옛 도구와 달라지는 곳, 운영 규모 시험 결과 |

@@ -7,7 +7,7 @@ import { IconX, IconSave, IconAlert, IconCheck } from './icons.tsx';
 
 const LABEL: Record<string, string> = {
   parts: '파트', resource_groups: '리소스 분류', resource_types: '리소스 종류', efforts: '공수', update_types: '업데이트 유형',
-  type_templates: '유형 템플릿 물량', updates: '업데이트', volumes: '물량', progress: '실적', capacity: '인력(파트×달)', holidays: '휴일',
+  type_templates: '유형 템플릿 물량', updates: '업데이트', volumes: '물량', progress: '작업 진척', capacity: '인력(파트×달)', holidays: '휴일',
 };
 
 export function ImportReport(props: { report: Report; findings: Finding[]; onSave: () => void; onClose: () => void; onCheck: () => void }) {

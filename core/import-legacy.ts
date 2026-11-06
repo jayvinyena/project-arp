@@ -388,7 +388,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   if (!compat) {
     const liveRows = updates.filter(u => u.status === 'PLANNED' || u.status === 'IN_PROGRESS');
     const early = liveRows.filter(u => u.start_date && u.start_date.slice(0, 7) < capStart);
-    if (early.length) adjust(`업데이트 ${early.length}개(${early.slice(0, 3).map(u => u.name).join(', ')})가 인력 첫 달(${capStart})보다 먼저 시작해요. 옛 도구는 그 앞 달에도 마지막 달 인원이 있다고 보고 계산해 완료 예정이 더 빨랐어요. 새 도구는 인력이 있는 달부터 계산해요. 이미 한 작업은 진행 실적에 넣어 주세요`);
+    if (early.length) adjust(`업데이트 ${early.length}개(${early.slice(0, 3).map(u => u.name).join(', ')})가 인력 첫 달(${capStart})보다 먼저 시작해요. 옛 도구는 그 앞 달에도 마지막 달 인원이 있다고 보고 계산해 완료 예정이 더 빨랐어요. 새 도구는 인력이 있는 달부터 계산해요. 이미 한 작업은 작업 진척에 넣어 주세요`);
     const late = liveRows.filter(u => u.release_date && u.release_date.slice(0, 7) > capEnd);
     if (late.length) adjust(`업데이트 ${late.length}개(${late.slice(0, 3).map(u => u.name).join(', ')})의 출시가 인력 마지막 달(${capEnd}) 뒤예요. 옛 도구는 마지막 달 인원이 계속된다고 보고 계산했어요. 인력 화면에서 계획 기간을 늘려 주세요`);
     const volUpd = new Set(table(sheets, '11_Update_Volume').map(r => s(r.UPDATE_ID)));
@@ -440,14 +440,14 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   const pSeen = new Set<string>();
   for (const r of table(sheets, '13_Progress_Actual')) {
     const u = s(r.UPDATE_ID); const rt = s(r.RESOURCE_ID); const part = s(r.PART_ID);
-    if (!updIds.has(u) || !rtIds.has(rt) || !partIds.has(part)) { skip(`실적 ${u}|${rt}|${part}: 없는 업데이트·리소스·파트`); continue; }
+    if (!updIds.has(u) || !rtIds.has(rt) || !partIds.has(part)) { skip(`작업 진척 ${u}|${rt}|${part}: 없는 업데이트·리소스·파트`); continue; }
     const qty = Math.round((n(r.COMPLETED_QTY) ?? 0) + (n(r.OUTSOURCE_COMPLETED_QTY) ?? 0) + (n(r.SPEC_OUT_QTY) ?? 0));
     const pk = `${u}|${rt}|${part}`;
     if (pSeen.has(pk)) {
       // 같은 실적 행이 또 나오면 뒤의 값을 쓴다(시트가 시간 순이면 최신 값)
       const i = progress.findIndex(p => `${p.update_id}|${p.resource_type_id}|${p.part_id}` === pk);
       if (i >= 0) progress.splice(i, 1);
-      skip(`실적 ${pk}: 같은 행이 두 번 있어 뒤의 값을 썼어요`);
+      skip(`작업 진척 ${pk}: 같은 행이 두 번 있어 뒤의 값을 썼어요`);
     }
     pSeen.add(pk);
     if (!qty) continue;

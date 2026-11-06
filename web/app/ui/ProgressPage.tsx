@@ -1,5 +1,6 @@
 // 진행 실적: 업데이트 × 리소스 × 파트 완료 수량, 기준일, 진행률
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { ProgressView, ProgressRow } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -66,20 +67,20 @@ export function ProgressPage(props: {
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">진행 실적</div>
+          <PageEyebrow page="progress" />
           <h1>파트별 완료 수량</h1>
           <p class="muted" style="margin-top: 6px">끝낸 수량을 넣으면 남은 일만 다시 계산해서 완료 예정이 바로 바뀌어요.</p>
         </div>
         <div class="inline">
           <label class="form-row" style="gap: 4px">
             <span class="small faint">업데이트</span>
-            <select class="field" aria-label="실적 업데이트" value={updateId} onChange={e => setWanted((e.target as HTMLSelectElement).value)}>
+            <select class="field" aria-label="진척 업데이트" value={updateId} onChange={e => setWanted((e.target as HTMLSelectElement).value)}>
               {view.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (계산 밖)'}</option>)}
             </select>
           </label>
           <label class="form-row" style="gap: 4px">
             <span class="small faint">기준일 · 새로 넣는 값에 남아요</span>
-            <input class="field" type="date" aria-label="실적 기준일" value={asOf} onInput={e => setAsOf((e.target as HTMLInputElement).value || today())} />
+            <input class="field" type="date" aria-label="진척 기준일" value={asOf} onInput={e => setAsOf((e.target as HTMLInputElement).value || today())} />
           </label>
         </div>
       </header>

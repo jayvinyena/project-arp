@@ -1,5 +1,6 @@
 // 시뮬레이션: 시나리오 목록 · 나란히 비교 · 시나리오 고치기(동작) · 민감도·거꾸로 계산 · 원본에 반영
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { ScenarioSummary, SimMeta, CompareView, ScenarioAction, ScenarioOp, Sensitivity } from '../../../core/scenarios.ts';
 import type { MaxScaleResult, HeadcountResult } from '../../../core/launch.ts';
@@ -13,16 +14,16 @@ const TONE: Record<UpdateStatus, string> = { ON_TRACK: 'ok', TIGHT: 'warn', LATE
 const STATUS_TEXT: Record<UpdateStatus, string> = { ON_TRACK: '목표 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '못 끝냄', NO_RELEASE_DATE: '출시일 없음' };
 
 type ActionKind = ScenarioAction['kind'];
-const KINDS: { kind: ActionKind; label: string }[] = [
-  { kind: 'headcount', label: '인원' },
-  { kind: 'outsource', label: '외주' },
-  { kind: 'aiShare', label: 'AI 비율' },
-  { kind: 'volumeScale', label: '물량' },
-  { kind: 'updateDates', label: '날짜' },
-  { kind: 'priority', label: '우선순위' },
-  { kind: 'exclude', label: '빼기' },
-  { kind: 'addUpdate', label: '가상 업데이트' },
-  { kind: 'overlap', label: '겹침률' },
+const KINDS: { kind: ActionKind; label: string; hint: string }[] = [
+  { kind: 'headcount', label: '인원', hint: '파트의 정규 인원을 기간 동안 더하거나 빼요' },
+  { kind: 'outsource', label: '외주', hint: '파트에 달마다 외주 인·일을 더해요' },
+  { kind: 'aiShare', label: 'AI 비율', hint: '파트 작업 중 AI 공수로 계산하는 몫을 바꿔요' },
+  { kind: 'volumeScale', label: '물량', hint: '업데이트의 모든 물량을 같은 비율로 늘리거나 줄여요' },
+  { kind: 'updateDates', label: '날짜', hint: '업데이트의 시작 · 제작 완료 목표 · 출시일을 바꿔요' },
+  { kind: 'priority', label: '우선순위', hint: '업데이트가 인력을 쓰는 순서를 바꿔요' },
+  { kind: 'exclude', label: '빼기', hint: '업데이트를 계산에서 빼요' },
+  { kind: 'addUpdate', label: '가상 업데이트', hint: '유형 템플릿 물량으로 아직 없는 업데이트를 넣어 봐요' },
+  { kind: 'overlap', label: '겹침률', hint: '앞 공정이 끝나기 전에 다음 공정을 얼마나 일찍 시작할지 바꿔요' },
 ];
 
 function Delta(props: { d: number | null }) {
@@ -37,7 +38,7 @@ function Compare(props: { view: CompareView | null; selectedCount: number }) {
     <section class="card">
       <div class="card-head">
         <div><h2>나란히 비교 · {MODE_LABEL[v.planMode]}</h2>
-          <p class="small muted" style="margin-top: 2px">완료 예정과 원본 대비 차이(영업일, − = 당겨짐). 시나리오는 왼쪽에서 3개까지 골라요.</p></div>
+          <p class="small muted" style="margin-top: 2px">완료 예정과 원본 대비 차이(영업일, − = 당겨짐). 위에서 체크한 시나리오 3개까지 함께 봐요.</p></div>
         <span class="small faint">계산 {fmtDays(v.ms)}ms</span>
       </div>
       <div class="card-body" style="padding-top: 8px">
@@ -85,7 +86,7 @@ function Compare(props: { view: CompareView | null; selectedCount: number }) {
             </tbody>
           </table>
         </div>
-        {props.selectedCount === 0 && <p class="small muted" style="margin-top: 10px">왼쪽에서 시나리오를 골라 비교에 넣어 보세요.</p>}
+        {props.selectedCount === 0 && <p class="small muted" style="margin-top: 10px">위에서 시나리오를 체크해 비교에 넣어 보세요.</p>}
       </div>
     </section>
   );
@@ -135,25 +136,29 @@ function ActionForm(props: { meta: SimMeta; onAdd: (a: ScenarioAction) => Promis
   const num = (k: string, d: string, label: string, unit: string) => (
     <><input class="field narrow n" inputMode="decimal" aria-label={label} value={v(k, d)} onInput={set(k)} /><span class="faint">{unit}</span></>
   );
-  const date = (k: string, d: string, label: string) => <label class="mini-date"><span class="small faint">{label}</span><input class="field" type="date" aria-label={label} value={v(k, d)} onInput={set(k)} /></label>;
+  const date = (k: string, d: string, label: string) => <input class="field" type="date" aria-label={label} title={label} value={v(k, d)} onInput={set(k)} />;
+  const hint = KINDS.find(k => k.kind === kind)?.hint ?? '';
 
   return (
     <div class="action-form">
-      <div class="segmented wide scroll" role="radiogroup" aria-label="바꿀 것">
-        {KINDS.map(k => <button type="button" role="radio" aria-checked={kind === k.kind} class={kind === k.kind ? 'on' : ''} onClick={() => { setKind(k.kind); setF({}); }}>{k.label}</button>)}
-      </div>
       <div class="inline action-fields">
+        <label class="kind-pick">
+          <span class="small faint">바꿀 것</span>
+          <select class="field" aria-label="바꿀 것" value={kind} onChange={e => { setKind((e.target as HTMLSelectElement).value as ActionKind); setF({}); }}>
+            {KINDS.map(k => <option value={k.kind}>{k.label}</option>)}
+          </select>
+        </label>
         {kind === 'headcount' && <>{partSel}{months}{num('delta', '1', '더할 인원', '명 (빼려면 −)')}</>}
         {kind === 'outsource' && <>{partSel}{months}{num('days', '20', '더할 외주', '인·일/월')}</>}
         {kind === 'aiShare' && <>{partSel}{num('share', '50', 'AI 비율', '%')}{!meta.hasAI && <span class="small err-text">"AI 사용 시" 공수 프로필이 없어요</span>}</>}
         {kind === 'volumeScale' && <>{updSel}{num('scale', '80', '물량 배율', `% (${MODE_LABEL.MIN}·${MODE_LABEL.TARGET}·${MODE_LABEL.STRETCH} 모두)`)}</>}
-        {kind === 'updateDates' && <>{updSel}{date('start', u?.startDate ?? '', '시작')}{date('freeze', u?.freezeDate ?? '', '제작 완료 목표')}{date('release', u?.releaseDate ?? '', '출시')}</>}
+        {kind === 'updateDates' && <>{updSel}<span class="faint small">시작</span>{date('start', u?.startDate ?? '', '시작')}<span class="faint small">완료 목표</span>{date('freeze', u?.freezeDate ?? '', '제작 완료 목표')}<span class="faint small">출시</span>{date('release', u?.releaseDate ?? '', '출시')}</>}
         {kind === 'priority' && <>{updSel}{num('priority', '0', '우선순위', '(작을수록 먼저, 0 = 맨 앞)')}</>}
         {kind === 'exclude' && <>{updSel}<span class="small muted">이 업데이트를 계산에서 뺍니다</span></>}
         {kind === 'addUpdate' && <>
           <input class="field" aria-label="가상 업데이트 이름" value={v('name', '가상 업데이트')} onInput={set('name')} />
           <select class="field" aria-label="유형" value={v('type', meta.types[0]?.typeId ?? '')} onChange={set('type')}>{meta.types.map(t => <option value={t.typeId}>{t.name}</option>)}</select>
-          {date('start', `${first}-01`, '시작')}{date('freeze', '', '제작 완료 목표')}{date('release', '', '출시')}
+          <span class="faint small">시작</span>{date('start', `${first}-01`, '시작')}<span class="faint small">완료 목표</span>{date('freeze', '', '제작 완료 목표')}<span class="faint small">출시</span>{date('release', '', '출시')}
         </>}
         {kind === 'overlap' && <>
           <select class="field" aria-label="파트 쌍" value={v('pair', '')} onChange={set('pair')}>
@@ -162,8 +167,9 @@ function ActionForm(props: { meta: SimMeta; onAdd: (a: ScenarioAction) => Promis
           </select>
           {num('rate', '30', '겹침률', '% (앞 공정 진행 중 시작)')}
         </>}
-        <button type="button" class="btn sm primary" onClick={async () => { const a = build(); if (a && await props.onAdd(a)) setF({}); }}><IconPlus />더하기</button>
+        <button type="button" class="btn primary" onClick={async () => { const a = build(); if (a && await props.onAdd(a)) setF({}); }}><IconPlus />더하기</button>
       </div>
+      <p class="small faint">{hint}</p>
     </div>
   );
 }
@@ -276,39 +282,40 @@ export function SimulationPage(props: {
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">시뮬레이션</div>
+          <PageEyebrow page="simulation" />
           <h1>무엇을 바꾸면 어떻게 될까</h1>
           <p class="muted" style="margin-top: 6px">시나리오는 원본을 바꾸지 않아요. 마음에 드는 시나리오만 원본에 반영해요.</p>
         </div>
         <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />
       </header>
-      <div class="split">
-        <section class="card">
-          <div class="card-head"><h2>시나리오</h2><span class="small faint">비교 {picked.length}/3</span></div>
-          <div class="card-body" style="padding-top: 10px">
-            <div class="scenario-list">
-              {data.scenarios.length === 0 && <p class="small muted">아직 없어요. 아래에서 만들어 보세요.</p>}
-              {data.scenarios.map(s => (
-                <div class={`scenario-item${selected === s.scenarioId ? ' active' : ''}`}>
-                  <input type="checkbox" aria-label={`${s.name} 비교에 넣기`} checked={picked.includes(s.scenarioId)} onChange={() => toggle(s.scenarioId)} />
-                  <button type="button" class="scenario-name" onClick={() => setSelected(s.scenarioId)}>
-                    <span>{s.name}</span>
-                    <span class="small faint">변경 {s.actions.length}개{s.appliedAt ? ' · 반영됨' : s.stale ? ' · 원본 바뀜' : ''}</span>
-                  </button>
-                </div>
-              ))}
+      <section class="card scenario-bar">
+        <div class="scenario-bar-head">
+          <h2>시나리오</h2>
+          <span class="small faint">체크 = 비교에 넣기({picked.length}/3) · 이름을 누르면 아래에서 고쳐요</span>
+        </div>
+        <div class="scenario-list">
+          {data.scenarios.length === 0 && <p class="small muted">아직 없어요. 오른쪽에서 이름을 넣고 만들어 보세요.</p>}
+          {data.scenarios.map(s => (
+            <div class={`scenario-item${selected === s.scenarioId ? ' active' : ''}${picked.includes(s.scenarioId) ? ' picked' : ''}`}>
+              <input type="checkbox" aria-label={`${s.name} 비교에 넣기`} checked={picked.includes(s.scenarioId)} onChange={() => toggle(s.scenarioId)} />
+              <button type="button" class="scenario-name" onClick={() => setSelected(s.scenarioId)}>
+                <span>{s.name}</span>
+                <span class="small faint">변경 {s.actions.length}개{s.appliedAt ? ' · 반영됨' : s.stale ? ' · 원본 바뀜' : ''}</span>
+              </button>
             </div>
-            {!props.readOnly && (
-              <div class="inline" style="margin-top: 12px">
-                <input class="field" style="flex: 1; min-width: 0" placeholder="새 시나리오 이름" aria-label="새 시나리오 이름" value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)} />
-                <button type="button" class="btn sm" disabled={!newName.trim()} onClick={async () => {
-                  const r = await props.onScenario({ kind: 'create', name: newName });
-                  if (r.ok && r.createdId) { setNewName(''); setSelected(r.createdId); setPicked(p => (p.length >= 3 ? [...p.slice(1), r.createdId!] : [...p, r.createdId!])); }
-                }}><IconPlus />만들기</button>
-              </div>
-            )}
-          </div>
-        </section>
+          ))}
+          {!props.readOnly && (
+            <div class="scenario-new">
+              <input class="field" placeholder="새 시나리오 이름" aria-label="새 시나리오 이름" value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)}
+                onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget.nextElementSibling as HTMLButtonElement | null)?.click(); }} />
+              <button type="button" class="btn sm" disabled={!newName.trim()} onClick={async () => {
+                const r = await props.onScenario({ kind: 'create', name: newName });
+                if (r.ok && r.createdId) { setNewName(''); setSelected(r.createdId); setPicked(p => (p.length >= 3 ? [...p.slice(1), r.createdId!] : [...p, r.createdId!])); }
+              }}><IconPlus />만들기</button>
+            </div>
+          )}
+        </div>
+      </section>
         <div class="stack">
           <Compare view={compare} selectedCount={picked.length} />
           {cur && (
@@ -320,7 +327,7 @@ export function SimulationPage(props: {
                 {!cur.appliedAt && cur.stale && <span class="pill warn">만든 뒤 원본이 바뀜</span>}
               </div>
               <div class="card-body">
-                <div class="action-list">
+                <div class="action-list chips-list">
                   {cur.actions.length === 0 && <p class="small muted">아래에서 바꿀 것을 더해 보세요. 더할 때마다 비교가 다시 계산돼요.</p>}
                   {cur.actions.map(a => (
                     <div class="action-item">
@@ -349,7 +356,6 @@ export function SimulationPage(props: {
           )}
           <Analysis meta={data.meta} scenario={cur && !cur.appliedAt ? cur : null} planMode={props.planMode} version={props.version} />
         </div>
-      </div>
     </div>
   );
 }

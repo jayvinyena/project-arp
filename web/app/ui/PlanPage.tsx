@@ -1,5 +1,6 @@
 // 업데이트 계획: 타임라인 · 파트 부하 지도 · 업데이트 목록 · 만들기 · 상세(고치기)
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { PlanView, PlanRow, UpdateDetail } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -294,7 +295,7 @@ function UpdateDrawer(props: {
               {!d.isLaunch && !props.readOnly && (
                 <div class="danger-zone">
                   {confirmDelete
-                    ? <><span class="small">"{d.name}"과 물량·실적을 지울까요? 변경 이력에는 남아요.</span>
+                    ? <><span class="small">"{d.name}"과 물량·작업 진척을 지울까요? 변경 이력에는 남아요.</span>
                       <button type="button" class="btn sm danger" onClick={async () => { if (await props.onApply({ kind: 'deleteUpdate', updateId: d.updateId })) props.onClose(); }}>지우기</button>
                       <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
                     : <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(true)}>이 업데이트 지우기</button>}
@@ -326,7 +327,7 @@ export function PlanPage(props: {
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">업데이트 계획</div>
+          <PageEyebrow page="plan" />
           <h1>런칭과 업데이트 {live.length}개</h1>
           <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 써요.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개.`}</p>
         </div>

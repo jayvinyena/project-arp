@@ -99,7 +99,7 @@ test('엑셀 내보내기: 시트 9개, 업데이트 전망·파트 부하가 �
   const sheets = exportSheets(db, session, 'TARGET');
   const plan = planView(db, session);
   raw.close();
-  assert.deepEqual(Object.keys(sheets), ['요약', '업데이트 전망', '파트 부하', '물량', '인력', '공수', '실적', '데이터 점검', '변경 이력']);
+  assert.deepEqual(Object.keys(sheets), ['요약', '업데이트 전망', '파트 부하', '물량', '인력', '공수', '작업 진척', '데이터 점검', '변경 이력']);
   const back = await readXlsx(writeXlsx(sheets)); // 저장 방식(브라우저와 같은 경로)
   const outlook = back['업데이트 전망'];
   assert.equal(outlook.length, 1 + plan.rows.length);

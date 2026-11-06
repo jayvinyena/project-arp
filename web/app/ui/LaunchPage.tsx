@@ -1,12 +1,12 @@
 // 런칭 물량 설계 화면: 날짜 · 구간 비교 · 파트 부하 · 역산 · 물량 표
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import type { View } from '../lib/rpc.ts';
 import { rpc } from '../lib/rpc.ts';
 import type { LaunchEdit, MaxScaleResult, HeadcountResult, ModeOutcome } from '../../../core/launch.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
 import { fmtDate, fmtShortDate, fmtDays, fmtPct, fmtHeads, fmtInt } from '../lib/format.ts';
 import { VolumeTable } from './VolumeTable.tsx';
-import { Field } from './SetupPage.tsx';
 import type { Edit } from '../../../core/edits.ts';
 import { IconAlert, IconSpark, IconUsers } from './icons.tsx';
 
@@ -113,18 +113,35 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
   const [busy, setBusy] = useState<'' | 'scale' | 'heads'>('');
   const runScale = async () => { setBusy('scale'); try { setScale({ r: await rpc.maxScale(props.planMode), v: props.version, mode: props.planMode }); } finally { setBusy(''); } };
   const runHeads = async () => { setBusy('heads'); try { setHeads({ r: await rpc.headcount(props.planMode), v: props.version, mode: props.planMode }); } finally { setBusy(''); } };
+  // 물량·날짜·템플릿이 바뀌면 잠시 뒤 두 질문을 다시 계산한다(빈 카드 대신 늘 답이 보이게, 실데이터에서 수십 ms)
+  useEffect(() => {
+    let alive = true;
+    const t = window.setTimeout(async () => {
+      try {
+        setBusy('scale');
+        const r1 = await rpc.maxScale(props.planMode);
+        if (!alive) return;
+        setScale({ r: r1, v: props.version, mode: props.planMode });
+        setBusy('heads');
+        const r2 = await rpc.headcount(props.planMode);
+        if (!alive) return;
+        setHeads({ r: r2, v: props.version, mode: props.planMode });
+      } catch { /* 계산이 막히면 버튼으로 다시 */ } finally { if (alive) setBusy(''); }
+    }, 450);
+    return () => { alive = false; window.clearTimeout(t); };
+  }, [props.version, props.planMode]);
   const stale = (x: { v: number; mode: PlanMode } | null) => !!x && (x.v !== props.version || x.mode !== props.planMode);
   const mode = MODE_LABEL[props.planMode];
 
   const changed = scale?.r.suggestion.filter(s => s.suggested !== s.current).slice(0, 6) ?? [];
   return (
     <section class="card">
-      <div class="card-head"><h2>거꾸로 계산하기</h2><span class="tag">{mode} 기준</span></div>
+      <div class="card-head"><div><h2>거꾸로 계산하기</h2><p class="small muted" style="margin-top: 2px">날짜를 지키려면 물량 · 인원을 얼마나 바꿔야 하는지 자동으로 계산해요</p></div><span class="tag">{mode} 기준</span></div>
       <div class="card-body" style="padding-top: 4px">
         <div class="ask">
           <div class="ask-q">
             <span class="q">{props.deadlineLabel}까지 물량을 최대 얼마나?</span>
-            <button class="btn sm" disabled={busy !== ''} onClick={runScale}><IconSpark />{busy === 'scale' ? '계산 중…' : '계산'}</button>
+            <button class="btn sm ghost" disabled={busy !== ''} onClick={runScale}><IconSpark />{busy === 'scale' ? '계산 중…' : '다시 계산'}</button>
           </div>
           {scale && (
             <div class={`answer${stale(scale) ? ' stale' : ''}`}>
@@ -146,7 +163,7 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
         <div class="ask">
           <div class="ask-q">
             <span class="q">{mode} 물량을 지키려면 몇 명 더?</span>
-            <button class="btn sm" disabled={busy !== ''} onClick={runHeads}><IconUsers />{busy === 'heads' ? '계산 중…' : '계산'}</button>
+            <button class="btn sm ghost" disabled={busy !== ''} onClick={runHeads}><IconUsers />{busy === 'heads' ? '계산 중…' : '다시 계산'}</button>
           </div>
           {heads && (
             <div class={`answer${stale(heads) ? ' stale' : ''}`}>
@@ -197,7 +214,7 @@ export function LaunchPage(props: {
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">런칭 물량 설계</div>
+          <PageEyebrow page="launch" />
           <h1>{launch.name}</h1>
           <p class="muted" style="margin-top: 6px">물량 템플릿 세 가지({MODE_LABEL.MIN} · {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH})를 골라 보며, 아트 작업이 언제 끝나는지와 어느 파트가 막히는지 봐요.</p>
         </div>
@@ -229,14 +246,6 @@ export function LaunchPage(props: {
       {!compare.blocked && compare.modes.length > 0 && (
         <>
           <ModeCards modes={compare.modes} selected={props.planMode} onSelect={props.setPlanMode} deadlineLabel={deadlineLabel} horizonEnd={snapshot.horizon.end} />
-          {props.onApply && !props.readOnly && (
-            <div class="template-bar">
-              <span class="small faint">고른 템플릿 이름</span>
-              <Field class="field template-name" value={MODE_LABEL[props.planMode]} label="템플릿 이름"
-                onCommit={t => props.onApply!({ kind: 'modeName', mode: props.planMode, name: t })} />
-              <span class="small faint">예: 보수안 · 계획안 · 도전안. 이름은 이 프로젝트의 모든 화면과 엑셀에 쓰여요.</span>
-            </div>
-          )}
           <div class="grid-2">
             <PartLoad mode={selected} />
             <Reverse planMode={props.planMode} version={props.version} names={names} resNames={resNames} deadlineLabel={deadlineLabel} />
@@ -256,6 +265,7 @@ export function LaunchPage(props: {
         readOnly={props.readOnly}
         onEdit={props.onEdit}
         onCopy={props.onApply ? (from, to) => props.onApply!({ kind: 'copyQty', updateId: launch.updateId, from, to }) : undefined}
+        onRename={props.onApply ? t => props.onApply!({ kind: 'modeName', mode: props.planMode, name: t }) : undefined}
       />
       <p class="small faint">계산 {fmtDays(compare.ms)}ms · 데이터 버전 {snapshot.dataVersion}</p>
     </div>

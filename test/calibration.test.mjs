@@ -88,7 +88,7 @@ test('실적 엑셀: 양식(지금 값) → 채워서 넣기(한 묶음) · ID �
   const { writeXlsx } = await import('../core/xlsx-write.ts');
   const { readXlsx } = await import('../core/xlsx.ts');
   const { raw, db, session } = open();
-  const tpl = progressTemplate(db)['실적'];
+  const tpl = progressTemplate(db)['작업 진척'];
   assert.deepEqual(tpl[0].slice(0, 3), ['업데이트 ID', '업데이트', '리소스 ID']);
   const charConcept = tpl.find(r => r[0] === 'LAUNCH' && r[2] === 'CHAR_NEW' && r[4] === 'CONCEPT');
   assert.equal(charConcept[7], 3, '지금 완료 수량이 채워져 있다');

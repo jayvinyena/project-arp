@@ -55,7 +55,7 @@ await withBrowser(async (cdp, base) => {
   check('보정은 변경 이력에 한 줄', (await cdp.eval("document.querySelector('.hist-summary').textContent")).includes('공수'));
 
   // 3. 실적 엑셀: 양식 받기 · 넣기
-  await nav(cdp, '진행 실적');
+  await nav(cdp, '작업 진척');
   await cdp.waitUntil("document.querySelector('.progress-grid')");
   await cdp.eval(`(() => {
     window.__dl = null;
@@ -67,7 +67,7 @@ await withBrowser(async (cdp, base) => {
   })()`);
   await clickText(cdp, '양식 받기');
   await cdp.waitUntil('window.__dl', 8000);
-  check('실적 양식(.xlsx) 받기', (await cdp.eval('window.__dl.name')).endsWith('실적 양식.xlsx'));
+  check('실적 양식(.xlsx) 받기', (await cdp.eval('window.__dl.name')).endsWith('작업 진척 양식.xlsx'));
   const xlsx = Buffer.from(writeXlsx({ '실적': [['업데이트', '리소스', '파트', '완료 수량', '실투입 인·일'], ['런칭', '신규 캐릭터', '원화', 9, 40], ['런칭', '없는 것', '원화', 1, null]] })).toString('base64');
   await cdp.eval(`(() => {
     const bytes = Uint8Array.from(atob(${JSON.stringify(xlsx)}), c => c.charCodeAt(0));
@@ -81,7 +81,7 @@ await withBrowser(async (cdp, base) => {
     };
   })()`);
   await clickText(cdp, '엑셀로 넣기');
-  await cdp.waitUntil("document.querySelector('.toast')?.textContent.includes('실적을 넣었어요')", 8000);
+  await cdp.waitUntil("document.querySelector('.toast')?.textContent.includes('작업 진척을 넣었어요')", 8000);
   const t = await toast(cdp);
   check('엑셀로 넣기: 2칸 바뀜 · 건너뛴 행 1개', t.includes('2칸 바뀜') && t.includes('건너뛴 행 1개'), t.slice(0, 60));
   await cdp.waitUntil(`document.querySelector('input[aria-label="신규 캐릭터 원화 완료"]')?.value === '9'`, 5000).catch(() => {});

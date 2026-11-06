@@ -1,4 +1,4 @@
-// 진행 실적 시험(크롬, 화면 없음): 칸 넣기 → 진행률 → 주의 칸 → 다 끝남 → 업데이트 계획에서 완료 예정이 당겨짐
+// 작업 진척 시험(크롬, 화면 없음): 칸 넣기 → 진행률 → 주의 칸 → 다 끝남 → 업데이트 계획에서 완료 예정이 당겨짐
 //   node tools/e2e-progress.mjs [--no-build]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { withBrowser, sleep, ROOT } from './lib/cdp.mjs';
@@ -31,7 +31,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelectorAll('table.grid.list tbody tr').length > 0");
   const before = await cdp.eval(launchCompletion);
 
-  await cdp.eval("[...document.querySelectorAll('.sidebar .nav-item')].find(b => b.textContent.includes('진행 실적')).click()");
+  await cdp.eval("[...document.querySelectorAll('.sidebar .nav-item')].find(b => b.textContent.includes('작업 진척')).click()");
   await cdp.waitUntil("document.querySelector('.progress-grid')");
   const rows = await cdp.eval("document.querySelectorAll('.progress-grid tbody tr.row').length");
   const off = await cdp.eval("document.querySelectorAll('.progress-grid .off-cell').length");

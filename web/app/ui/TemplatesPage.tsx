@@ -1,5 +1,6 @@
 // 유형 템플릿: 업데이트 유형과 유형별 기본 물량(새 업데이트를 만들 때 복사)
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { afterCommit } from './commit.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { rpc } from '../lib/rpc.ts';
@@ -39,34 +40,32 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">유형 템플릿</div>
+          <PageEyebrow page="templates" />
           <h1>업데이트 유형별 기본 물량</h1>
           <p class="muted" style="margin-top: 6px">새 업데이트를 만들 때 이 물량을 복사해요. 템플릿을 고쳐도 이미 만든 업데이트는 바뀌지 않아요.</p>
         </div>
       </header>
-      <div class="split">
-        <section class="card">
-          <div class="card-head"><h2>유형</h2></div>
-          <div class="card-body" style="padding-top: 10px">
-            <nav class="type-list">
-              {editable.map(t => (
-                <button type="button" class={`nav-item${cur?.typeId === t.typeId ? ' active' : ''}`} onClick={() => setSelected(t.typeId)}>
-                  {t.name}<span class="end faint small">{t.rows.length}종</span>
-                </button>
-              ))}
-            </nav>
-            {!props.readOnly && (
-              <div class="inline" style="margin-top: 12px">
-                <input class="field" style="flex: 1; min-width: 0" placeholder="새 유형 이름" aria-label="새 유형 이름" value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)} />
-                <button type="button" class="btn sm" disabled={!newName.trim()} onClick={async () => {
-                  if (await props.onApply({ kind: 'createType', name: newName })) { setNewName(''); }
-                }}><IconPlus />더하기</button>
-              </div>
-            )}
-          </div>
-        </section>
+      <section class="card">
+        <div class="type-bar">
+          <nav class="type-list type-tabs" aria-label="유형">
+            {editable.map(t => (
+              <button type="button" class={`nav-item${cur?.typeId === t.typeId ? ' active' : ''}`} aria-current={cur?.typeId === t.typeId ? 'true' : undefined} onClick={() => setSelected(t.typeId)}>
+                {t.name}<span class="end faint small">{t.rows.length}종</span>
+              </button>
+            ))}
+          </nav>
+          {!props.readOnly && (
+            <div class="inline type-new">
+              <input class="field" placeholder="새 유형 이름" aria-label="새 유형 이름" value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)}
+                onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget.nextElementSibling as HTMLButtonElement | null)?.click(); }} />
+              <button type="button" class="btn sm" disabled={!newName.trim()} onClick={async () => {
+                if (await props.onApply({ kind: 'createType', name: newName })) { setNewName(''); }
+              }}><IconPlus />유형 더하기</button>
+            </div>
+          )}
+        </div>
         {cur ? (
-          <section class="card">
+          <div>
             <div class="card-head">
               <input class="title-input" aria-label="유형 이름" value={cur.name} disabled={props.readOnly}
                 onChange={e => apply({ kind: 'renameType', typeId: cur.typeId, name: (e.target as HTMLInputElement).value })} />
@@ -117,9 +116,9 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
                 </label>
               )}
             </div>
-          </section>
-        ) : <section class="card"><div class="card-body muted">유형을 더해 주세요.</div></section>}
-      </div>
+          </div>
+        ) : <div class="card-body muted">유형을 더해 주세요.</div>}
+      </section>
     </div>
   );
 }

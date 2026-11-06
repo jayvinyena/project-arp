@@ -27,6 +27,12 @@ const clickText = (cdp, text, scope = 'document') => cdp.eval(`(() => { const b 
 const headers = "[...document.querySelectorAll('table.compare thead th')].map(t => t.textContent)";
 const launchCells = "[...[...document.querySelectorAll('table.compare tbody tr')].find(r => r.textContent.startsWith('런칭')).querySelectorAll('td')].map(t => t.textContent)";
 
+/** 동작 종류 고르기(바꿀 것 목록) */
+const pickKind = async (cdp, kind) => {
+  await cdp.eval(`(() => { const s = document.querySelector('.action-form select[aria-label="바꿀 것"]'); s.value = '${kind}'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await sleep(150);
+};
+
 await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&page=simulation` });
   await cdp.waitUntil("document.querySelectorAll('table.compare tbody tr').length > 0", 15000);
@@ -39,7 +45,7 @@ await withBrowser(async (cdp, base) => {
   await typeIn(cdp, 'input[aria-label="새 시나리오 이름"]', 'FX 충원');
   await clickText(cdp, '만들기');
   await cdp.waitUntil(`(${headers}).includes('FX 충원')`, 10000);
-  await clickText(cdp, '인원', "document.querySelector('.action-form')");
+  await pickKind(cdp, 'headcount');
   await cdp.eval(`(() => { const s = document.querySelector('.action-form select[aria-label="파트"]'); s.value = 'FX'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await sleep(100);
   await typeIn(cdp, '.action-form input[aria-label="더할 인원"]', '2');
@@ -54,7 +60,7 @@ await withBrowser(async (cdp, base) => {
   await typeIn(cdp, 'input[aria-label="새 시나리오 이름"]', '확장 물량');
   await clickText(cdp, '만들기');
   await cdp.waitUntil(`(${headers}).includes('확장 물량')`, 10000);
-  await clickText(cdp, '물량', "document.querySelector('.action-form')");
+  await pickKind(cdp, 'volumeScale');
   await typeIn(cdp, '.action-form input[aria-label="물량 배율"]', '150');
   await clickText(cdp, '더하기', "document.querySelector('.action-form')");
   await cdp.waitUntil("[...document.querySelectorAll('.action-item span')].some(s => s.textContent.includes('×150%'))", 10000);

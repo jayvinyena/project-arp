@@ -82,7 +82,7 @@ await withBrowser(async (cdp, base) => {
   await clickText(cdp, '유형 템플릿', "document.querySelector('.sidebar')");
   await cdp.waitUntil("document.querySelector('.type-list')");
   await setInput(cdp, 'input[aria-label="새 유형 이름"]', '이벤트', 'none');
-  await clickText(cdp, '더하기');
+  await clickText(cdp, '유형 더하기');
   await sleep(600);
   const types = await cdp.eval("[...document.querySelectorAll('.type-list .nav-item')].map(b => b.childNodes[0].textContent)");
   check('유형 더하기', types.includes('이벤트'), types.join(', '));

@@ -132,7 +132,7 @@ test('리소스: 만들기(새 분류)·이름·분류 옮기기·공수 넣기(
   undo(lastBatch(db));
   assert.deepEqual(setupView(db).resources.find(x => x.resourceTypeId === id).efforts.MODELING, { base: 4, ai: 3, rework: 0.1 });
   // 실적이 있는 파트는 뺄 수 없다
-  assert.throws(() => edit({ kind: 'effort', resourceTypeId: 'CHAR_NEW', partId: 'CONCEPT', profileId: 'BASE', days: null }), /진행 실적/);
+  assert.throws(() => edit({ kind: 'effort', resourceTypeId: 'CHAR_NEW', partId: 'CONCEPT', profileId: 'BASE', days: null }), /작업 진척/);
   // 쓰이지 않으면 지울 수 있고, 되돌리면 공수까지 돌아온다
   edit({ kind: 'removeResource', updateId: 'LAUNCH', resourceTypeId: id });
   const del = edit({ kind: 'deleteResource', resourceTypeId: id });

@@ -1,5 +1,6 @@
 // 인력: 파트 × 달 인원·가동률·생산성·외주·지원, 기간 채우기, 계획 기간 바꾸기
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { CapacityView, CapacityCell } from '../../../core/plan.ts';
 import type { Edit, CapacityField } from '../../../core/edits.ts';
@@ -47,7 +48,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">인력</div>
+          <PageEyebrow page="capacity" />
           <h1>파트 × 달 인력</h1>
           <p class="muted" style="margin-top: 6px">채용·충원·외주를 달마다 넣어요. 바꾸면 모든 화면의 계산이 바로 바뀌어요.</p>
         </div>
@@ -73,7 +74,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
         </div>
         <div class="card-body">
           <div class="table-wrap">
-            <table class="grid cap-grid">
+            <table class="grid cap-grid" style={{ minWidth: `${104 + view.months.length * 54}px` }}>
               <thead>
                 <tr><th class="sticky-col" />{view.months.map((m, i) => <th class="n year-th">{yearOf(m, i)}</th>)}</tr>
                 <tr><th class="sticky-col">파트</th>{view.months.map(m => <th class="n">{Number(m.slice(5))}월</th>)}</tr>

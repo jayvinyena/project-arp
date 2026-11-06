@@ -1,5 +1,6 @@
 // 공수 보정: 실적(완료 + 실투입)으로 본 실제 공수와 기준 공수를 비교해 보정을 제안하고, 미리 보고, 적용한다
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { CalibrationView, CalibrationPreview } from '../../../core/calibration.ts';
 import { fmtDays, fmtInt, fmtShortDate } from '../lib/format.ts';
@@ -27,17 +28,17 @@ export function CalibrationPage(props: { version: number; readOnly: boolean; onC
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">공수 보정</div>
-          <h1>실적으로 공수 기준 다듬기</h1>
-          <p class="muted" style="margin-top: 6px">진행 실적의 "완료 수량"과 "실투입 인·일"로 실제 공수를 구해 기준과 비교해요. 여유율은 빼고 비교해요.</p>
+          <PageEyebrow page="calibration" />
+          <h1>실제 투입으로 공수 기준 다듬기</h1>
+          <p class="muted" style="margin-top: 6px">작업 진척의 "완료 수량"과 "실투입 인·일"로 실제 공수를 구해 기준과 비교해요. 여유율은 빼고 비교해요.</p>
         </div>
       </header>
 
       {view.rows.length === 0 ? (
         <section class="card"><div class="card-body">
-          <div class="banner warn"><IconAlert /><div><b>아직 비교할 실적이 없어요</b>
-            <p class="small muted">진행 실적에서 완료 수량과 함께 "실투입 인·일"을 넣으면 여기서 보정을 제안해요.</p>
-            <button class="btn sm" style="margin-top: 8px" onClick={props.onGoProgress}>진행 실적으로</button></div></div>
+          <div class="banner warn"><IconAlert /><div><b>아직 비교할 실투입 기록이 없어요</b>
+            <p class="small muted">작업 진척에서 완료 수량과 함께 "실투입 인·일"을 넣으면 여기서 보정을 제안해요.</p>
+            <button class="btn sm" style="margin-top: 8px" onClick={props.onGoProgress}>작업 진척으로</button></div></div>
         </div></section>
       ) : (
         <>

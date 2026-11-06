@@ -520,7 +520,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       if (!old) return { changed: false };
       const used = Number(db.get('SELECT count(*) AS n FROM resource_parts WHERE part_id = ?', [edit.partId])?.n ?? 0);
       if (used) fail(`이 파트를 거치는 리소스가 ${used}종 있어요. 리소스의 공수에서 이 파트를 뺀 뒤 지우거나, "사용 안 함"으로 두세요.`);
-      if (db.get('SELECT 1 AS ok FROM progress WHERE part_id = ?', [edit.partId])) fail('이 파트에 진행 실적이 있어요. "사용 안 함"으로 두세요.');
+      if (db.get('SELECT 1 AS ok FROM progress WHERE part_id = ?', [edit.partId])) fail('이 파트에 작업 진척 기록이 있어요. "사용 안 함"으로 두세요.');
       // 함께 지워지는 인력·겹침률·AI 비율을 남겨 되돌릴 수 있게
       const capacity = db.all('SELECT * FROM capacity WHERE part_id = ?', [edit.partId]);
       const overlaps = db.all('SELECT * FROM part_overlaps WHERE from_part_id = ? OR to_part_id = ?', [edit.partId, edit.partId]);
@@ -592,7 +592,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const old = db.get('SELECT * FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
       if (!old) return { changed: false };
       const used = ['volumes', 'type_templates', 'progress'].filter(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [edit.resourceTypeId]));
-      if (used.length) fail('물량·유형 템플릿·실적에 쓰이는 리소스예요. 그곳에서 뺀 뒤 지우거나 "사용 안 함"으로 두세요.');
+      if (used.length) fail('물량·유형 템플릿·작업 진척에 쓰이는 리소스예요. 그곳에서 뺀 뒤 지우거나 "사용 안 함"으로 두세요.');
       const resourceParts = db.all('SELECT * FROM resource_parts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       db.run('DELETE FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
@@ -610,7 +610,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const cur = db.get('SELECT days FROM efforts WHERE resource_type_id = ? AND part_id = ? AND profile_id = ?', [edit.resourceTypeId, edit.partId, edit.profileId]);
       if (edit.profileId === 'BASE' && edit.days == null) {
         if (!rp) return { changed: false };
-        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 진행 실적이 있어 뺄 수 없어요. 공수를 0으로 두세요.');
+        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 작업 진척 기록이 있어 뺄 수 없어요. 공수를 0으로 두세요.');
         const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
         db.run('DELETE FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
         log(db, ctx, 'DELETE', 'resource_parts', key, null, { ...rp, efforts }, undefined);

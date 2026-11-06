@@ -88,7 +88,18 @@ await withBrowser(async (cdp, base) => {
   const after = await daysOf(cdp, '신규 캐릭터');
   check('AI 활용을 넣으면 신규 캐릭터 필요 공수가 준다', after != null && charDays != null && after < charDays, `${charDays} → ${after}`);
 
-  // 6. 변경 이력에 남는다
+  // 6. 화면 안내: 머리말의 버튼 → 패널 → 함께 쓰는 화면으로 이동 · 메뉴 이름 '작업 진척'
+  await cdp.eval("document.querySelector('.page-head .help-btn').click()");
+  await cdp.waitUntil("document.querySelector('.help-panel')", 5000);
+  const helpTitle = await cdp.eval("document.querySelector('.help-panel h2').textContent");
+  const steps = await cdp.eval("document.querySelectorAll('.help-panel .help-steps li').length");
+  check('화면 안내 패널: 이 화면 이름 · 쓰는 순서', helpTitle === '런칭 물량 설계' && steps >= 3, `${helpTitle} · ${steps}단계`);
+  await cdp.eval("[...document.querySelectorAll('.help-link')].find(b => b.textContent.includes('업데이트 계획')).click()");
+  await cdp.waitUntil("!document.querySelector('.help-panel') && document.querySelector('.sidebar .nav-item.active')?.textContent.includes('업데이트 계획')", 8000).catch(() => {});
+  const navNames = await cdp.eval("[...document.querySelectorAll('.sidebar .nav-item')].map(b => b.textContent).join(',')");
+  check('안내의 화면 링크로 이동 · 메뉴 "작업 진척"', (await cdp.eval("document.querySelector('.sidebar .nav-item.active')?.textContent")).includes('업데이트 계획') && navNames.includes('작업 진척') && !navNames.includes('진행 실적'));
+
+  // 7. 변경 이력에 남는다
   await nav(cdp, '변경 이력');
   await cdp.waitUntil("document.querySelector('.hist-summary')", 8000);
   const hist = await cdp.eval("[...document.querySelectorAll('.hist-summary')].map(x => x.textContent).join(' / ')");

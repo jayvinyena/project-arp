@@ -1,0 +1,312 @@
+// 화면 안내: 주메뉴마다 "이 화면 안내" 버튼 → 오른쪽 패널(무엇을 하는 곳 · 이렇게 써요 · 알아 둘 것 · 용어 · 관련 화면)
+// 버튼은 어느 화면에서든 'arp:help' 이벤트로 열고, 앱이 패널을 그린다. 키보드 "?"로도 연다.
+import { useEffect } from 'preact/hooks';
+import { MODE_LABEL } from '../lib/modes.ts';
+import { IconX, IconHelp } from './icons.tsx';
+
+export type HelpPage = 'launch' | 'plan' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+
+interface HelpDoc {
+  /** 메뉴 이름 */
+  name: string;
+  /** 한 줄 설명(메뉴에 올리면 보임) */
+  short: string;
+  what: string;
+  steps: string[];
+  tips: string[];
+  terms?: [string, string][];
+  related: { page: HelpPage; why: string }[];
+}
+
+const T = () => `${MODE_LABEL.MIN} · ${MODE_LABEL.TARGET} · ${MODE_LABEL.STRETCH}`;
+
+/** 템플릿 이름이 프로젝트마다 달라서 열 때마다 만든다 */
+export function helpDoc(page: HelpPage): HelpDoc {
+  switch (page) {
+    case 'launch': return {
+      name: '런칭 물량 설계',
+      short: '런칭에 넣을 아트 물량을 정하고, 언제 끝나는지 바로 봐요',
+      what: `런칭 업데이트 하나에 들어갈 리소스별 수량을 정하고, 지금 인력으로 아트 작업이 언제 끝나는지와 어느 파트가 막히는지 바로 계산해요. 물량은 템플릿 세 개(${T()})로 나눠 두고 서로 비교해요.`,
+      steps: [
+        '위쪽 날짜에서 작업 시작 · 제작 완료 목표 · 출시일을 맞춰요.',
+        '템플릿 카드를 눌러 고른 뒤, 아래 물량 표에 그 템플릿의 수량을 넣어요. 숫자를 바꾸면 바로 다시 계산돼요.',
+        '템플릿 카드마다 완료 예정과 판정(목표 안 · 빠듯 · 늦음)을 비교해요.',
+        '파트 부하에서 꽉 찬 파트를 찾고, "거꾸로 계산하기"로 물량을 얼마나 늘릴 수 있는지, 몇 명이 더 필요한지 확인해요.',
+      ],
+      tips: [
+        '"다른 템플릿에도 똑같이"는 지금 템플릿의 수량을 나머지 두 템플릿에 복사해요. 변경 이력에서 되돌릴 수 있어요.',
+        '템플릿 이름은 프로젝트마다 바꿀 수 있어요(예: 보수안 · 계획안 · 도전안). 모든 화면과 엑셀에 같은 이름이 쓰여요.',
+        '수량 칸이 비면 계산이 멈춰요. 넣지 않을 리소스는 0을 넣어요.',
+      ],
+      terms: [
+        ['물량 템플릿', '같은 런칭에 대한 수량 묶음 세 개. 줄인 안 · 기준 안 · 늘린 안을 나란히 두고 비교해요.'],
+        ['인·일', '한 사람이 하루에 하는 일의 양. 공수와 작업 가능량의 단위예요.'],
+        ['파트 부하', '런칭 기간 동안 그 파트가 할 수 있는 일 대비 필요한 일. 100%를 넘으면 기간 안에 못 끝내요.'],
+        ['병목', '완료 날짜를 정하는 파트. 이 파트를 늘려야 전체가 당겨져요.'],
+      ],
+      related: [
+        { page: 'plan', why: '런칭 뒤 업데이트와 인력을 함께 나눠 쓸 때' },
+        { page: 'setup', why: '리소스 · 1개당 공수를 고칠 때' },
+        { page: 'capacity', why: '달마다 인원을 바꿀 때' },
+      ],
+    };
+    case 'plan': return {
+      name: '업데이트 계획',
+      short: '런칭과 이후 업데이트가 같은 인력을 나눠 쓸 때 각각 언제 끝나는지 봐요',
+      what: '런칭과 이후 업데이트(시즌 · 미니 등)를 한 타임라인에 놓고, 같은 인력을 우선순위대로 나눠 쓸 때 각각 언제 끝나는지 계산해요.',
+      steps: [
+        '"업데이트 만들기"에서 유형(시즌 · 미니 등)을 고르면 유형 템플릿의 물량이 복사돼요.',
+        '목록의 화살표로 우선순위를 바꿔요. 위에 있을수록 인력을 먼저 써요.',
+        '타임라인의 막대(작업 기간) · 세로선(제작 완료 목표) · 마름모(출시)로 일정을 비교하고, 파트 부하 지도에서 꽉 찬 달을 찾아요.',
+        '업데이트 이름을 누르면 오른쪽 패널에서 날짜 · 물량 · 유형을 고쳐요.',
+      ],
+      tips: [
+        `막대 아래의 가는 선은 ${MODE_LABEL.MIN} ~ ${MODE_LABEL.STRETCH}일 때의 완료 예정 범위예요.`,
+        '판정: 목표 안(여유 있음) · 빠듯(여유가 적음) · 늦음(목표일을 넘김).',
+        '부하 지도 칸에 마우스를 올리면 그 달의 배정 · 작업 가능량 숫자가 보여요.',
+      ],
+      terms: [
+        ['우선순위', '인력을 먼저 쓰는 순서. 앞 업데이트가 쓰고 남은 만큼을 뒤 업데이트가 써요.'],
+        ['제작 완료 목표', '아트 작업을 끝내야 하는 날(프리즈). 출시일보다 앞에 둬요.'],
+      ],
+      related: [
+        { page: 'templates', why: '유형별 기본 물량을 바꿀 때' },
+        { page: 'simulation', why: '우선순위 · 인원을 바꿔 보고 싶을 때(원본은 그대로)' },
+        { page: 'advisor', why: '늦는 업데이트를 맞출 방법을 찾을 때' },
+      ],
+    };
+    case 'progress': return {
+      name: '작업 진척',
+      short: '끝낸 수량을 넣으면 남은 일만 다시 계산해요',
+      what: '리소스마다 파트별로 끝낸 수량을 넣는 곳이에요. 끝낸 만큼은 빼고 남은 일만 다시 계산해서 완료 예정이 바로 바뀌어요. 실제로 쓴 인·일도 함께 넣으면 공수 보정에 쓰여요.',
+      steps: [
+        '오른쪽 위에서 업데이트와 기준일을 골라요. 기준일은 새로 넣는 값에 함께 남아요.',
+        '"완료 수량" 표에서 파트 칸마다 끝낸 개수를 넣어요.',
+        '실제로 쓴 인·일을 알면 "실투입 인·일"로 바꿔 넣어요.',
+        '여럿이 나눠 넣을 땐 "양식 받기"로 엑셀을 받아 채운 뒤 "엑셀로 넣기"를 눌러요.',
+      ],
+      tips: [
+        '빗금 칸은 그 리소스가 거치지 않는 파트예요.',
+        '주황 테두리 칸은 확인할 값이에요(목표보다 많음, 앞 공정보다 많음 등). 올리면 이유가 보이고, 계산은 그대로 해요.',
+        '0이나 빈칸은 "아직 끝낸 것 없음"이에요.',
+      ],
+      terms: [
+        ['완료 수량', '그 파트 공정을 끝낸 리소스 개수.'],
+        ['실투입 인·일', '그 수량을 만드는 데 실제로 쓴 사람·일. 기준 공수와 비교해 보정을 제안해요.'],
+        ['진행률', '끝낸 일 ÷ 전체 일(기본 공수 기준).'],
+      ],
+      related: [
+        { page: 'calibration', why: '실투입으로 1개당 공수를 다듬을 때' },
+        { page: 'plan', why: '진척을 넣은 뒤 완료 예정이 어떻게 바뀌었는지 볼 때' },
+      ],
+    };
+    case 'simulation': return {
+      name: '시뮬레이션',
+      short: '원본을 건드리지 않고 "이렇게 바꾸면?"을 비교해요',
+      what: '원본을 바꾸지 않고 "인원을 늘리면? 물량을 줄이면? AI를 더 쓰면?"을 시나리오로 만들어 원본과 나란히 비교해요. 마음에 드는 시나리오만 원본에 반영해요.',
+      steps: [
+        '시나리오 이름을 넣고 "만들기"를 눌러요.',
+        '"바꿀 것"에서 종류(인원 · 외주 · AI 비율 · 물량 · 날짜 · 우선순위 · 빼기 · 가상 업데이트 · 겹침률)를 고르고 값을 넣어 "더하기". 여러 개를 쌓을 수 있어요.',
+        '나란히 비교에서 업데이트별 완료 예정 차이(− = 당겨짐)와 파트 부하율 변화를 봐요. 체크한 시나리오 3개까지 함께 비교해요.',
+        '마음에 들면 "원본에 반영". 변경 이력에 남아 되돌릴 수 있어요.',
+      ],
+      tips: [
+        '"만든 뒤 원본이 바뀜"은 시나리오를 만든 뒤 원본을 고쳤다는 뜻이에요. 반영하기 전에 비교를 다시 확인해요.',
+        '분석 카드는 업데이트 하나를 골라 파트별 1명 효과, 최대 물량, 필요한 인원을 계산해요.',
+      ],
+      terms: [
+        ['겹침률', '앞 공정이 얼마나 끝났을 때 다음 공정을 시작하는지. 높을수록 동시에 진행해요.'],
+        ['가상 업데이트', '아직 계획에 없는 업데이트를 넣어 보는 것. 반영하면 실제 업데이트가 돼요.'],
+      ],
+      related: [
+        { page: 'advisor', why: '마감을 맞출 시나리오를 자동으로 만들 때' },
+        { page: 'history', why: '반영한 것을 되돌릴 때' },
+      ],
+    };
+    case 'advisor': return {
+      name: '마감 맞추기',
+      short: '늦는 업데이트를 맞출 가장 작은 변경을 찾아 줘요',
+      what: '늦는 업데이트가 마감을 지키도록, 허용한 수단(인원 · 외주 · 물량 줄이기 · 우선순위)을 조금씩 써 보며 가장 적게 바꾸는 방법을 찾아 줘요. 다른 업데이트를 늦추면서 맞추지는 않아요.',
+      steps: [
+        '맞출 날(제작 완료 목표일 또는 출시일)을 골라요.',
+        '써도 되는 수단만 켜고, 상한(파트마다 최대 인원, 달마다 외주 등)을 정해요. 바꾸면 바로 다시 계산해요.',
+        '제안 단계와 업데이트별 완료 예정 변화를 확인해요.',
+        '"시나리오로 만들기"를 누르면 시뮬레이션에서 비교한 뒤 원본에 반영할 수 있어요.',
+      ],
+      tips: [
+        `물량 줄이기는 선택 리소스부터, 그다음 모든 리소스를 ${MODE_LABEL.MIN} 물량으로 줄여요.`,
+        '다 써도 못 맞추면, 할 수 있는 만큼 당긴 결과와 남은 늦음 · 이유를 알려 줘요.',
+      ],
+      related: [
+        { page: 'simulation', why: '제안을 시나리오로 비교 · 반영할 때' },
+        { page: 'capacity', why: '제안대로 실제 인원을 넣을 때' },
+      ],
+    };
+    case 'setup': return {
+      name: '프로젝트·파트·리소스',
+      short: '프로젝트 설정 · 파트 · 리소스 · 1개당 공수를 고쳐요',
+      what: '새 프로젝트를 만들 때 넣은 기준 정보를 고치는 곳이에요. 프로젝트 설정, 파트(공정)와 기본 인력, 리소스와 1개당 공수(AI를 쓸 때 공수 포함)를 다뤄요.',
+      steps: [
+        '프로젝트: 이름 · 여유율 · 근무 요일 · 휴일을 고쳐요.',
+        '파트: 순서가 곧 공정 순서예요. 기본 인원 · 가동률은 계획 기간 모든 달에 한 번에 들어가고, AI 활용 %도 여기서 정해요.',
+        '리소스: 분류 · 이름과 파트마다 기본 / AI 공수(인·일/개)를 넣어요. 기본을 비우면 그 파트를 거치지 않아요.',
+        '새 파트 · 리소스는 각 표 아래 입력 줄에서 더해요.',
+      ],
+      tips: [
+        '쓰는 곳이 있는 파트 · 리소스는 지울 수 없어요. "사용" 체크를 끄면 계산에서 빠져요.',
+        '계산에 쓰는 공수 = 기본 × (1 − AI 활용) + AI 공수 × AI 활용.',
+        '달마다 다른 인원은 "인력" 화면에서 고쳐요.',
+      ],
+      terms: [
+        ['여유율', '공수에 더하는 여유(리뷰 · 수정 등). 10%면 공수 × 1.1로 계산해요.'],
+        ['가동률', '근무일 중 실제 제작에 쓰는 비율(회의 · 교육 등 제외).'],
+        ['AI 활용', '그 파트 작업 중 AI 공수로 계산하는 몫. 0%면 기본 공수만 써요.'],
+      ],
+      related: [
+        { page: 'capacity', why: '달마다 인원 · 외주를 넣을 때' },
+        { page: 'templates', why: '업데이트 유형별 기본 물량을 정할 때' },
+        { page: 'calibration', why: '실제 진척으로 공수를 다듬을 때' },
+      ],
+    };
+    case 'templates': return {
+      name: '유형 템플릿',
+      short: '업데이트 유형마다 기본 물량을 정해 둬요',
+      what: '업데이트 유형(시즌 · 미니 등)마다 기본 물량을 정해 두는 곳이에요. 새 업데이트를 만들 때 이 물량이 복사돼요.',
+      steps: [
+        '위 유형 탭에서 유형을 골라요. 없으면 오른쪽 끝에서 새 유형을 더해요.',
+        `리소스마다 ${T()} 수량을 넣어요.`,
+        '"리소스 더하기"로 이 유형에 넣을 리소스를 늘려요.',
+      ],
+      tips: [
+        '템플릿을 고쳐도 이미 만든 업데이트는 바뀌지 않아요.',
+        '이 유형을 쓰는 업데이트가 있으면 유형을 지울 수 없어요.',
+      ],
+      related: [
+        { page: 'plan', why: '이 유형으로 업데이트를 만들 때' },
+        { page: 'setup', why: '리소스를 새로 만들 때' },
+      ],
+    };
+    case 'capacity': return {
+      name: '인력',
+      short: '파트 × 달로 인원 · 가동률 · 외주를 넣어요',
+      what: '파트 × 달로 인원 · 가동률 · 외주 · 지원 · 생산성을 넣어 작업 가능량을 정해요. 모든 계산의 "할 수 있는 일" 쪽이에요.',
+      steps: [
+        '오른쪽 위에서 계획 기간을 정해요. 늘린 달은 바로 앞 달 값을 복사해요(외주 · 지원은 0).',
+        '항목 탭(인원 · 가동률 · 외주 · 지원 · 생산성)을 골라 칸을 고쳐요.',
+        '여러 달을 같은 값으로 넣을 땐 "한 번에 채우기"를 써요.',
+      ],
+      tips: [
+        '작업 가능량(인·일) = 근무일 × 인원 × 가동률 × 생산성 + 외주 + 지원.',
+        '0.5명은 반달 또는 반일 근무예요. 신규 인원은 생산성을 1보다 작게 둬요.',
+      ],
+      related: [
+        { page: 'setup', why: '모든 달의 기본 인원 · 가동률을 한 번에 바꿀 때' },
+        { page: 'plan', why: '바꾼 인력으로 일정이 어떻게 되는지 볼 때' },
+      ],
+    };
+    case 'calibration': return {
+      name: '공수 보정',
+      short: '실제로 쓴 인·일로 1개당 공수 기준을 다듬어요',
+      what: '작업 진척에 넣은 완료 수량과 실투입 인·일로 실제 1개당 공수를 구해 기준과 비교하고, 차이가 큰 곳의 보정을 제안해요.',
+      steps: [
+        '작업 진척에서 완료 수량과 함께 "실투입 인·일"을 넣어요.',
+        '여기서 파트별 실제 ÷ 기준 비율과 리소스별 제안을 봐요.',
+        '반영할 줄을 골라 보정해요. 변경 이력에서 되돌릴 수 있어요.',
+      ],
+      tips: [
+        '여유율은 빼고 비교해요.',
+        '완료 수량이 적으면 우연이 커요. 몇 개 더 끝난 뒤 보정하는 편이 안전해요.',
+      ],
+      related: [
+        { page: 'progress', why: '완료 수량 · 실투입을 넣을 때' },
+        { page: 'setup', why: '공수를 직접 고칠 때' },
+      ],
+    };
+    case 'history': return {
+      name: '변경 이력',
+      short: '누가 언제 무엇을 바꿨는지 보고 되돌려요',
+      what: '고친 것이 한 묶음씩 남아요. 누가 언제 무엇을 바꿨는지 보고, 필요하면 되돌려요.',
+      steps: [
+        '줄을 누르면 바뀐 칸(이전 → 이후)이 펼쳐져요.',
+        '"되돌리기"를 누르면 이전 값으로 돌아가요. 되돌린 것도 이력에 남아요.',
+      ],
+      tips: [
+        '그 뒤에 같은 칸을 다른 사람이 또 고쳤으면 한 번 더 확인한 뒤 "그래도 되돌리기"를 눌러요.',
+        '되돌리면 계산이 막히는 경우(필수 값이 빠지는 등)에는 되돌리지 않아요.',
+      ],
+      related: [{ page: 'check', why: '되돌린 뒤 데이터를 점검할 때' }],
+    };
+    case 'check': return {
+      name: '데이터 점검',
+      short: '계산 전에 데이터가 맞는지 규칙으로 검사해요',
+      what: '계산 전에 데이터가 맞는지 규칙으로 검사한 결과예요. 오류가 하나라도 있으면 계산하지 않고, 주의는 계산하되 표시만 해요.',
+      steps: [
+        '오류부터 고쳐요. 제목과 위치를 보고 해당 화면에서 고쳐요.',
+        '주의는 의도한 것인지 확인해요. 의도했다면 그대로 둬도 돼요.',
+      ],
+      tips: ['왼쪽 메뉴의 숫자는 오류(빨강) 또는 주의(주황) 개수예요.'],
+      related: [
+        { page: 'setup', why: '파트 · 리소스 · 공수를 고칠 때' },
+        { page: 'launch', why: '물량 빈칸을 채울 때' },
+      ],
+    };
+  }
+}
+
+/** 화면 머리의 메뉴 이름 + "이 화면 안내" 버튼 */
+export function PageEyebrow(props: { page: HelpPage }) {
+  return (
+    <div class="eyebrow-row">
+      <span class="eyebrow">{helpDoc(props.page).name}</span>
+      <button type="button" class="help-btn" onClick={() => window.dispatchEvent(new CustomEvent('arp:help', { detail: props.page }))}
+        title="이 화면 안내 (?)"><IconHelp />이 화면 안내</button>
+    </div>
+  );
+}
+
+export function HelpPanel(props: { page: HelpPage; onClose: () => void; onGo: (p: HelpPage) => void }) {
+  const d = helpDoc(props.page);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') props.onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [props.onClose]);
+  return (
+    <div class="overlay" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <aside class="drawer card help-panel" role="dialog" aria-label={`${d.name} 안내`}>
+        <div class="dialog-head">
+          <div><div class="eyebrow" style="margin-bottom: 2px">화면 안내</div><h2 style="font-size: 18px">{d.name}</h2></div>
+          <button type="button" class="btn ghost icon-btn" aria-label="안내 닫기" onClick={props.onClose}><IconX /></button>
+        </div>
+        <div class="drawer-body">
+          <p class="help-lead">{d.what}</p>
+          <section>
+            <h3 class="help-h">이렇게 써요</h3>
+            <ol class="help-steps">{d.steps.map(s => <li>{s}</li>)}</ol>
+          </section>
+          <section>
+            <h3 class="help-h">알아 둘 것</h3>
+            <ul class="help-tips">{d.tips.map(s => <li>{s}</li>)}</ul>
+          </section>
+          {d.terms && (
+            <section>
+              <h3 class="help-h">용어</h3>
+              <dl class="help-terms">{d.terms.map(([t, v]) => <div><dt>{t}</dt><dd>{v}</dd></div>)}</dl>
+            </section>
+          )}
+          <section>
+            <h3 class="help-h">함께 쓰는 화면</h3>
+            <div class="help-related">
+              {d.related.map(r => (
+                <button type="button" class="help-link" onClick={() => props.onGo(r.page)}>
+                  <b>{helpDoc(r.page).name}</b><span class="small muted">{r.why}</span><span class="arrow" aria-hidden="true">→</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          <p class="small faint">어느 화면에서든 키보드 <kbd>?</kbd>로 이 안내를 열 수 있어요.</p>
+        </div>
+      </aside>
+    </div>
+  );
+}

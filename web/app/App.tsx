@@ -1,5 +1,6 @@
 // 앱 틀: 시작 화면, 옆 메뉴, 파일 열기·저장(자동 저장, 편집 중 표시, 저장 전 충돌 확인)
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import type { JSX } from 'preact';
 import { rpc, DEVICE } from './lib/rpc.ts';
 import type { View } from './lib/rpc.ts';
 import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveInPlace, pickXlsx, fetchBytes } from './lib/files.ts';
@@ -9,6 +10,8 @@ import { CalibrationPage } from './ui/CalibrationPage.tsx';
 import { AdvisorPage } from './ui/AdvisorPage.tsx';
 import { SetupPage } from './ui/SetupPage.tsx';
 import { setModeNames } from './lib/modes.ts';
+import { HelpPanel, PageEyebrow, helpDoc } from './ui/Help.tsx';
+import type { HelpPage } from './ui/Help.tsx';
 import type { ScenarioAction } from '../../core/scenarios.ts';
 import type { Notice, Seen } from '../../core/notice.ts';
 import { idb, rememberRecent, ensurePermission } from './lib/idb.ts';
@@ -32,7 +35,7 @@ import type { NewProjectInput } from '../../core/new-project.ts';
 import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
-type Page = 'launch' | 'plan' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+type Page = HelpPage;
 interface FileState { name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean }
 
 const LOCK_FRESH_MS = 30 * 60 * 1000;
@@ -51,6 +54,8 @@ export function App() {
   const [version, setVersion] = useState(0);
   const [planMode, setPlanMode] = useState<PlanMode>('TARGET');
   const [page, setPage] = useState<Page>((new URLSearchParams(location.search).get('page') as Page) || 'launch');
+  const pageRef = useRef(page);
+  pageRef.current = page;
   const [save, setSave] = useState<{ state: SaveState; at?: number; message?: string }>({ state: 'saved' });
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,6 +66,7 @@ export function App() {
   const [backup, setBackup] = useState<{ name: string; bytes: ArrayBuffer; from: number } | null>(null);
   const snapshotTimer = useRef<number | undefined>(undefined);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [help, setHelp] = useState<Page | null>(null);
   const fileRef = useRef<FileState | null>(null);
   fileRef.current = file;
   const saveTimer = useRef<number | undefined>(undefined);
@@ -190,6 +196,22 @@ export function App() {
     const onError = (e: Event) => showToast(`문제가 생겼어요: ${(e as CustomEvent<string>).detail}`);
     window.addEventListener('arp:error', onError);
     return () => window.removeEventListener('arp:error', onError);
+  }, []);
+
+  // 화면 안내: 각 화면의 "이 화면 안내" 버튼('arp:help') · 키보드 ?(입력 칸 밖에서)
+  useEffect(() => {
+    const onHelp = (e: Event) => setHelp((e as CustomEvent<Page>).detail);
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+      if (!document.querySelector('.app')) return;
+      e.preventDefault();
+      setHelp(h => (h ? null : pageRef.current));
+    };
+    window.addEventListener('arp:help', onHelp);
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('arp:help', onHelp); window.removeEventListener('keydown', onKey); };
   }, []);
 
   // Ctrl+S
@@ -410,10 +432,10 @@ export function App() {
     await idb.set(key, { at: new Date().toISOString(), updates: r.now } satisfies Seen);
   };
 
-  // 실적 엑셀
+  // 작업 진척 엑셀
   const onTemplate = async () => {
     const { bytes } = await rpc.progressTemplate();
-    download(bytes, `${(view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_')} 실적 양식.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    download(bytes, `${(view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_')} 작업 진척 양식.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   };
   const onImportProgress = async () => {
     const picked = await pickXlsx();
@@ -421,7 +443,7 @@ export function App() {
     try {
       const r = await rpc.importProgress(picked.bytes, me);
       if (r.changedCells) markChanged(true);
-      showToast(`실적을 넣었어요 · ${r.changedCells}칸 바뀜${r.unchanged ? `, ${r.unchanged}칸 그대로` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
+      showToast(`작업 진척을 넣었어요 · ${r.changedCells}칸 바뀜${r.unchanged ? `, ${r.unchanged}칸 그대로` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
     } catch (error) {
       showToast(`넣지 못했어요: ${(error as Error).message}`);
     }
@@ -639,6 +661,10 @@ export function App() {
     ...(view.snapshot.launch ? [[view.snapshot.launch.updateId, view.snapshot.launch.name]] : []),
   ]);
 
+  const navItem = (p: Page, icon: JSX.Element) => (
+    <button class={`nav-item${page === p ? ' active' : ''}`} title={helpDoc(p).short} aria-current={page === p ? 'page' : undefined} onClick={() => setPage(p)}>{icon}{helpDoc(p).name}</button>
+  );
+
   return (
     <div class="app">
       <aside class="sidebar">
@@ -650,18 +676,18 @@ export function App() {
         </div>
         <nav class="nav" aria-label="메뉴">
           <div class="nav-label">계획</div>
-          <button class={`nav-item${page === 'launch' ? ' active' : ''}`} onClick={() => setPage('launch')}><IconLaunch />런칭 물량 설계</button>
-          <button class={`nav-item${page === 'plan' ? ' active' : ''}`} onClick={() => setPage('plan')}><IconCalendar />업데이트 계획</button>
-          <button class={`nav-item${page === 'progress' ? ' active' : ''}`} onClick={() => setPage('progress')}><IconProgress />진행 실적</button>
-          <button class={`nav-item${page === 'simulation' ? ' active' : ''}`} onClick={() => setPage('simulation')}><IconSliders />시뮬레이션</button>
-          <button class={`nav-item${page === 'advisor' ? ' active' : ''}`} onClick={() => setPage('advisor')}><IconTarget />마감 맞추기</button>
+          {navItem('launch', <IconLaunch />)}
+          {navItem('plan', <IconCalendar />)}
+          {navItem('progress', <IconProgress />)}
+          {navItem('simulation', <IconSliders />)}
+          {navItem('advisor', <IconTarget />)}
           <div class="nav-label" style="margin-top: 12px">기준 정보</div>
-          <button class={`nav-item${page === 'setup' ? ' active' : ''}`} onClick={() => setPage('setup')}><IconSettings />프로젝트·파트·리소스</button>
-          <button class={`nav-item${page === 'templates' ? ' active' : ''}`} onClick={() => setPage('templates')}><IconLayers />유형 템플릿</button>
-          <button class={`nav-item${page === 'capacity' ? ' active' : ''}`} onClick={() => setPage('capacity')}><IconUsers />인력</button>
-          <button class={`nav-item${page === 'calibration' ? ' active' : ''}`} onClick={() => setPage('calibration')}><IconTune />공수 보정</button>
-          <button class={`nav-item${page === 'history' ? ' active' : ''}`} onClick={() => setPage('history')}><IconHistory />변경 이력</button>
-          <button class={`nav-item${page === 'check' ? ' active' : ''}`} onClick={() => setPage('check')}>
+          {navItem('setup', <IconSettings />)}
+          {navItem('templates', <IconLayers />)}
+          {navItem('capacity', <IconUsers />)}
+          {navItem('calibration', <IconTune />)}
+          {navItem('history', <IconHistory />)}
+          <button class={`nav-item${page === 'check' ? ' active' : ''}`} title={helpDoc('check').short} aria-current={page === 'check' ? 'page' : undefined} onClick={() => setPage('check')}>
             <IconCheck />데이터 점검
             {(errors > 0 || warns > 0) && <span class={`end pill ${errors ? 'bad' : 'warn'}`}>{errors || warns}</span>}
           </button>
@@ -737,6 +763,7 @@ export function App() {
           onCheck={() => { setImported(null); setPage('check'); }}
           onSave={async () => { if (await writeNow()) setImported(null); }} />
       )}
+      {help && <HelpPanel page={help} onClose={() => setHelp(null)} onGo={p => { setHelp(null); setPage(p); }} />}
       {toast && <div class="toast" role="status">{toast}</div>}
     </div>
   );
@@ -746,7 +773,7 @@ function ChecksPage(props: { view: View }) {
   const findings = props.view.compare.findings;
   return (
     <div class="page">
-      <header class="page-head"><div><div class="eyebrow">데이터 점검</div><h1>고칠 곳 {findings.length}개</h1>
+      <header class="page-head"><div><PageEyebrow page="check" /><h1>고칠 곳 {findings.length}개</h1>
         <p class="muted" style="margin-top: 6px">오류가 있으면 계산하지 않아요. 주의는 계산하되 표시만 해요.</p></div></header>
       <section class="card"><div class="card-body">
         {findings.length === 0 && <p class="muted">문제가 없어요.</p>}

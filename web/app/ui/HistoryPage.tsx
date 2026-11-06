@@ -1,5 +1,6 @@
 // 변경 이력: 한 번 고친 것마다 한 줄, 펼치면 칸별 이전 → 이후, 되돌리기
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { HistoryBatch } from '../../../core/history.ts';
 import { IconX } from './icons.tsx';
@@ -18,7 +19,7 @@ export function HistoryPage(props: { version: number; readOnly: boolean; onUndo:
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">변경 이력</div>
+          <PageEyebrow page="history" />
           <h1>누가 언제 무엇을 바꿨나</h1>
           <p class="muted" style="margin-top: 6px">한 번 고친 것마다 한 줄이에요. 되돌리면 이전 값으로 바꾸고, 되돌린 것도 이력에 남아요.</p>
         </div>

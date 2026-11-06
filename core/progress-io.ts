@@ -20,7 +20,7 @@ export function progressTemplate(db: SqlDb): Record<string, Cell[][]> {
       LEFT JOIN progress a ON a.update_id = v.update_id AND a.resource_type_id = v.resource_type_id AND a.part_id = rp.part_id
       ORDER BY u.priority, u.sort_order, r.sort_order, p.sort_order`);
   return {
-    '실적': [HEAD, ...rows.map(x => [x.update_id, x.uname, x.resource_type_id, x.rname, x.part_id, x.pname, x.target_qty, x.completed_qty, x.spent_days, x.as_of] as Cell[])],
+    '작업 진척': [HEAD, ...rows.map(x => [x.update_id, x.uname, x.resource_type_id, x.rname, x.part_id, x.pname, x.target_qty, x.completed_qty, x.spent_days, x.as_of] as Cell[])],
     '안내': [
       ['안내'],
       ['"완료 수량"과 "실투입 인·일" 칸만 고쳐 주세요. 비워 둔 칸은 바꾸지 않아요.'],
@@ -71,11 +71,11 @@ const date = (v: ReadCell): string | null => {
   return new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 달력에 없는 날은 버린다
 };
 
-/** 엑셀 실적을 넣는다. 한 묶음(ctx.batchId). 맞지 않는 행은 건너뛰고 이유를 남긴다 */
+/** 엑셀 작업 진척을 넣는다. 한 묶음(ctx.batchId). 맞지 않는 행은 건너뛰고 이유를 남긴다 */
 export function importProgress(db: SqlDb, session: ProjectSession, sheets: Sheets, ctx: { editor: string; batchId: string }, today: string): ProgressImportReport {
-  const name = Object.keys(sheets).find(n => n.trim() === '실적') ?? Object.keys(sheets)[0];
+  const name = Object.keys(sheets).find(n => n.trim() === '작업 진척' || n.trim() === '실적') ?? Object.keys(sheets)[0];
   const table = name ? sheets[name] : [];
-  if (!table || table.length < 2) throw new Error('실적 표가 비었어요. "양식 받기"로 받은 파일에 채워 주세요.');
+  if (!table || table.length < 2) throw new Error('작업 진척 표가 비었어요. "양식 받기"로 받은 파일에 채워 주세요.');
   const col = columns(table[0]);
   if ((col.uid == null && col.uname == null) || (col.rid == null && col.rname == null) || (col.pid == null && col.pname == null)) {
     throw new Error('업데이트·리소스·파트 칸을 찾지 못했어요. 머리글에 "업데이트", "리소스", "파트"가 있어야 해요.');

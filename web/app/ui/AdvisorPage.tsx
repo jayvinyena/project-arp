@@ -1,5 +1,6 @@
 // 마감 맞추기: 모든 업데이트가 마감을 지키도록 인원·외주·물량·우선순위를 어떻게 바꿀지 제안하고, 시나리오로 만든다
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { AdvisorResult, AdvisorOptions, Outcome } from '../../../core/advisor.ts';
 import type { PlanMode } from '../../../engine/types.ts';
@@ -67,7 +68,7 @@ export function AdvisorPage(props: {
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">마감 맞추기</div>
+          <PageEyebrow page="advisor" />
           <h1>모든 업데이트가 마감을 지키려면</h1>
           <p class="muted" style="margin-top: 6px">늦는 업데이트부터 허용한 수단을 조금씩 써 보고, 적게 바꾸면서 많이 당기는 쪽을 골라요. 다른 업데이트를 늦추면서 맞추지는 않아요.</p>
         </div>

@@ -1,6 +1,7 @@
 // 프로젝트·파트·리소스: 새 프로젝트 마법사에서 넣은 것(기본 정보·파트·인원·가동률·리소스·공수)을 만든 뒤에 고친다.
 // AI: 리소스 × 파트마다 "기본(AI 없이)"과 "AI 사용 시" 공수, 파트마다 AI 활용 비율 → 공수 = 기본 × (1 − 비율) + AI × 비율
 import { useState, useEffect } from 'preact/hooks';
+import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { SetupView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -48,7 +49,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
     <div class="page">
       <header class="page-head">
         <div>
-          <div class="eyebrow">기준 정보</div>
+          <PageEyebrow page="setup" />
           <h1>프로젝트 · 파트 · 리소스</h1>
           <p class="muted" style="margin-top: 6px">새 프로젝트를 만들 때 넣은 것을 여기서 고쳐요. 고치면 바로 다시 계산되고, 변경 이력에서 되돌릴 수 있어요.</p>
         </div>
@@ -98,7 +99,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap">
             <table class="grid edit setup-parts">
-              <thead><tr><th style="width: 72px">순서</th><th>이름</th><th class="n">기본 인원</th><th class="n">기본 가동률</th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용</th><th>사용</th><th aria-label="행 작업" /></tr></thead>
+              <thead><tr><th style="width: 72px">순서</th><th style="width: 240px">이름</th><th class="n">기본 인원</th><th class="n">기본 가동률</th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용</th><th class="n">거치는 리소스</th><th style="width: 56px">사용</th><th style="width: 44px" aria-label="행 작업" /></tr></thead>
               <tbody>
                 {v.parts.map((p, i) => (
                   <tr class={`row${p.active ? '' : ' muted-row'}`}>
@@ -113,9 +114,10 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                       onCommit={t => (num(t) == null || num(t)! < 0 || num(t)! > 100 ? false : fillAll(p.partId, 'utilization', num(t)! / 100))} /><span class="faint">%</span></span></td>
                     <td class="n"><span class="inline nowrap"><Field class="field narrow n" numeric value={pctText(p.aiShare)} label={`${p.name} AI 활용 비율`} disabled={ro || !p.active}
                       onCommit={t => apply({ kind: 'aiShare', partId: p.partId, share: (num(t) ?? 0) / 100 })} /><span class="faint">%</span></span></td>
+                    <td class="n num faint">{p.usedBy}종</td>
                     <td><label class="check"><input type="checkbox" aria-label={`${p.name} 사용`} checked={p.active} disabled={ro} onChange={() => void apply({ kind: 'partActive', partId: p.partId, active: !p.active })} /></label></td>
                     <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 파트 지우기`} disabled={p.usedBy > 0 || p.hasProgress}
-                      title={p.usedBy > 0 ? `리소스 ${p.usedBy}종이 거쳐요. 공수에서 이 파트를 빼야 지울 수 있어요` : p.hasProgress ? '진행 실적이 있어요' : '지우기'}
+                      title={p.usedBy > 0 ? `리소스 ${p.usedBy}종이 거쳐요. 공수에서 이 파트를 빼야 지울 수 있어요` : p.hasProgress ? '작업 진척 기록이 있어요' : '지우기'}
                       onClick={() => void apply({ kind: 'deletePart', partId: p.partId })}><IconX /></button>}</td>
                   </tr>
                 ))}
@@ -141,7 +143,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
           <div class="table-wrap">
             <table class="grid edit setup-res">
-              <thead><tr><th>분류</th><th>리소스</th>{activeParts.map(p => <th class="n">{p.name}<div class="small faint">기본 / AI</div></th>)}<th>사용</th><th aria-label="행 작업" /></tr></thead>
+              <thead><tr><th style="width: 132px">분류</th><th style="width: 180px">리소스</th>{activeParts.map(p => <th class="n">{p.name}<div class="small faint">기본 / AI</div></th>)}<th>사용</th><th aria-label="행 작업" /></tr></thead>
               <tbody>
                 {byGroup.map(g => (
                   <>
@@ -167,7 +169,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                         })}
                         <td><label class="check"><input type="checkbox" aria-label={`${r.name} 사용`} checked={r.active} disabled={ro} onChange={() => void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: !r.active })} /></label></td>
                         <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 리소스 지우기`} disabled={r.used}
-                          title={r.used ? '물량·유형 템플릿·실적에 쓰여요. 사용 안 함으로 두거나 그곳에서 먼저 빼 주세요' : '지우기'}
+                          title={r.used ? '물량·유형 템플릿·작업 진척에 쓰여요. 사용 안 함으로 두거나 그곳에서 먼저 빼 주세요' : '지우기'}
                           onClick={() => void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId })}><IconX /></button>}</td>
                       </tr>
                     ))}

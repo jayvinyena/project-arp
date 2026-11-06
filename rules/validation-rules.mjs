@@ -53,7 +53,7 @@ export const AREAS = {
   E: '리소스 · 공수',
   U: '업데이트',
   V: '물량',
-  A: '실적',
+  A: '작업 진척',
   C: '인력',
   T: '유형 템플릿',
   X: '시나리오',
@@ -246,23 +246,23 @@ export const RULES = [
     sql: q(`SELECT update_id || '|' || resource_type_id || '|' || part_id AS key, printf('완료 %d', completed_qty) AS detail FROM progress WHERE completed_qty < 0`),
   },
   {
-    code: 'A02', level: 'WARN', title: '완료 수량이 확장 물량보다 많거나 물량에 없다',
-    fix: '물량을 늘리거나 실적을 고친다.',
+    code: 'A02', level: 'WARN', title: '완료 수량이 세 번째 템플릿 물량보다 많거나 물량에 없다',
+    fix: '물량을 늘리거나 작업 진척을 고친다.',
     sql: q(`SELECT a.update_id || '|' || a.resource_type_id || '|' || a.part_id AS key,
-        CASE WHEN v.update_id IS NULL THEN '물량에 없는 리소스의 실적입니다' ELSE printf('완료 %d > 확장 %d', a.completed_qty, v.stretch_qty) END AS detail
+        CASE WHEN v.update_id IS NULL THEN '물량에 없는 리소스의 작업 진척입니다' ELSE printf('완료 %d > 템플릿3 %d', a.completed_qty, v.stretch_qty) END AS detail
       FROM progress a JOIN live_updates u ON u.update_id = a.update_id
       LEFT JOIN volumes v ON v.update_id = a.update_id AND v.resource_type_id = a.resource_type_id
       WHERE v.update_id IS NULL OR (v.stretch_qty IS NOT NULL AND a.completed_qty > v.stretch_qty)`),
   },
   {
-    code: 'A03', level: 'WARN', title: '거치지 않는 파트의 실적',
+    code: 'A03', level: 'WARN', title: '거치지 않는 파트의 작업 진척',
     fix: '파트를 고치거나, 그 파트를 거치는 파트로 추가한다.',
     sql: q(`SELECT a.update_id || '|' || a.resource_type_id || '|' || a.part_id AS key, '이 리소스가 거치지 않는 파트입니다' AS detail
       FROM progress a WHERE NOT EXISTS (SELECT 1 FROM resource_parts rp WHERE rp.resource_type_id = a.resource_type_id AND rp.part_id = a.part_id)`),
   },
   {
     code: 'A04', level: 'WARN', title: '뒤 공정이 앞 공정보다 많이 끝났다',
-    fix: '앞 공정 실적이 빠졌는지 확인한다.',
+    fix: '앞 공정 진척이 빠졌는지 확인한다.',
     sql: q(`SELECT b.update_id || '|' || b.resource_type_id || '|' || b.part_id AS key,
         printf('%s 완료 %d > 앞 공정 %s 완료 %d', pb.name, b.completed_qty, pa.name, coalesce(a.completed_qty, 0)) AS detail
       FROM progress b

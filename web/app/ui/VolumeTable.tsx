@@ -1,6 +1,7 @@
 // 물량 표: 분류별 묶음, 칸 안에서 바로 고치기(Enter·칸 벗어나면 반영, Esc 되돌리기).
 // 물량 템플릿(최소안·기본안·최대안 등, 이름은 프로젝트마다) 중 고른 하나의 수량만 크게 보고 입력하고, 나머지 둘은 흐리게 함께 보여 준다.
 import { useState, useEffect } from 'preact/hooks';
+import { Field } from './SetupPage.tsx';
 import type { LaunchEdit, LaunchRow } from '../../../core/launch.ts';
 
 export type VolumeEdit = Exclude<LaunchEdit, { kind: 'date' }>;
@@ -64,6 +65,8 @@ export function VolumeTable(props: {
   onEdit: (e: VolumeEdit) => unknown;
   /** 다른 템플릿의 수량을 지금 템플릿으로 가져오기(없으면 버튼을 숨긴다) */
   onCopy?: (from: 'min_qty' | 'target_qty' | 'stretch_qty', to: 'min_qty' | 'target_qty' | 'stretch_qty') => unknown;
+  /** 지금 템플릿 이름 바꾸기(있으면 제목에서 바로 고친다) */
+  onRename?: (name: string) => unknown;
 }) {
   const { byResource, totalDays, readOnly, onEdit } = props;
   const launchId = props.updateId;
@@ -90,8 +93,12 @@ export function VolumeTable(props: {
     <section class={props.bare ? 'bare' : 'card'} aria-label="물량">
       <div class="card-head">
         <div>
-          <h2>물량</h2>
-          <p class="small muted" style="margin-top: 2px">리소스 {props.rows.length}종 · <b>{modeLabel}</b> 수량을 보고 고쳐요. 숫자를 고치면 바로 다시 계산해요</p>
+          <h2 class="vol-title">물량 ·{' '}
+            {props.onRename && !readOnly
+              ? <Field class="field inline-title" value={modeLabel} label="템플릿 이름" onCommit={t => props.onRename!(t)} />
+              : modeLabel}
+          </h2>
+          <p class="small muted" style="margin-top: 2px">리소스 {props.rows.length}종 · 숫자를 고치면 바로 다시 계산해요{props.onRename && !readOnly ? ' · 템플릿 이름은 제목을 눌러 바꿔요(예: 보수안 · 계획안 · 도전안)' : ''}</p>
         </div>
         <div class="inline">
         {!readOnly && props.onCopy && (
