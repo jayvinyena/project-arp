@@ -78,8 +78,8 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
               </div>
             </div>
             <div class="card-body" style="padding-top: 8px">
-              <div class="table-wrap">
-                <table class="grid vol tpl-table">
+              <div class="table-wrap ref-wrap">
+                <table class="grid vol ref tpl-table">
                   <colgroup><col /><col class="tpl-qty-col" /><col class="tpl-qty-col" /><col class="tpl-qty-col" /><col class="act-col" /></colgroup>
                   <thead><tr><th>리소스</th><th class="n">{MODE_LABEL.MIN}</th><th class="n">{MODE_LABEL.TARGET}</th><th class="n">{MODE_LABEL.STRETCH}</th><th aria-label="행 작업" /></tr></thead>
                   <tbody>

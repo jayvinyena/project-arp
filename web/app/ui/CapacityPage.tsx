@@ -80,8 +80,8 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
           <span class="small muted">{meta.help} · 단위 {meta.unit}</span>
         </div>
         <div class="card-body">
-          <div class="table-wrap">
-            <table class="grid cap-grid" style={{ minWidth: `${104 + view.months.length * 54}px` }}>
+          <div class="table-wrap ref-wrap">
+            <table class="grid ref cap-grid" style={{ minWidth: `${104 + view.months.length * 54}px` }}>
               <thead>
                 {/* 해 머리글은 그 해의 달을 모두 덮고, 해가 바뀌는 달에 세로 구분선 */}
                 <tr><th class="sticky-col" />{years.map(y => <th colSpan={y.n} class={`year-th${y.first ? '' : ' year-start'}`}>{y.year}년</th>)}</tr>

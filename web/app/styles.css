@@ -835,3 +835,55 @@ table.grid.setup-parts th.n, table.grid.setup-parts td.n.num { padding-right: 16
   table.grid.tpl-table tr.total td:first-child { grid-column: 1 / -1; font-size: 11px; color: var(--text-3); }
 }
 
+/* ───────── 기준 정보 표(파트 · 리소스 · 유형 템플릿 · 인력): 격자형 ─────────
+   숫자가 이어지거나 열 너비가 달라도 칸이 구분되게: 바깥 테두리, 열 사이 세로선, 머리글 띠,
+   입력 칸은 테두리 없이 칸을 채우고(올리거나 고칠 때만 테두리), 숫자 끝 = 머리글 끝(칸 여백 4 + 테두리 1 + 안쪽 8 = 13) */
+.table-wrap.ref-wrap { border: 1px solid var(--line-strong); border-radius: 10px; }
+table.grid.ref th, table.grid.ref td { border-right: 1px solid var(--line); }
+table.grid.ref th:last-child, table.grid.ref td:last-child { border-right: 0; }
+table.grid.ref thead th { background: var(--surface-2); color: var(--text-2); border-bottom: 1px solid var(--line-strong); }
+table.grid.ref th.n, table.grid.ref td.n { padding-right: 13px; }
+table.grid.ref td.n:has(> input) { padding: 3px 4px; }
+table.grid.ref td.n > input.field, table.grid.ref td.n > input.qty {
+  width: 100%; min-width: 0; height: 32px; padding: 0 8px 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent;
+  text-align: right; font-variant-numeric: tabular-nums; box-shadow: none;
+}
+table.grid.ref td.n > input:not(:disabled):hover { background: var(--hover); border-color: var(--line-strong); }
+table.grid.ref td.n > input:focus { background: var(--surface); border-color: var(--accent); box-shadow: var(--ring); }
+table.grid.ref td.n > input:disabled { color: var(--text-3); }
+table.grid.ref td.n > input::placeholder { color: var(--text-3); font-weight: 400; }
+table.grid.ref tbody tr.row:hover td { background: color-mix(in srgb, var(--accent-soft) 25%, var(--surface)); }
+table.grid.ref tr.total td { border-top: 1px solid var(--line-strong); }
+table.grid.tpl-table.ref tr.total td.n { padding-right: 13px; }
+table.grid.cap-grid.ref th.n { padding-right: 13px; }
+table.grid.cap-grid.ref td { padding: 3px 4px; }
+table.grid.cap-grid.ref .sticky-col { padding-left: 12px; }
+table.grid.cap-grid.ref thead .sticky-col { background: var(--surface-2); }
+table.grid.cap-grid.ref th.year-th { border-bottom: 1px solid var(--line); }
+/* 리소스 공수: 파트 묶음 사이는 진한 선, AI 열은 옅은 색 바탕 */
+table.grid.setup-res.ref th.part-th, table.grid.setup-res.ref td.eff-ai, table.grid.setup-res.ref th.ai-th { border-right-color: var(--line-strong); }
+table.grid.setup-res.ref td.eff-base, table.grid.setup-res.ref th.part-th + th.part-th { box-shadow: none; }
+table.grid.setup-res.ref td.eff-ai, table.grid.setup-res.ref th.ai-th { background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface)); }
+table.grid.setup-res.ref td.eff-ai > input { color: var(--accent-ink); border-style: solid; }
+table.grid.setup-res.ref td.eff-base, table.grid.setup-res.ref td.eff-ai { padding: 3px 4px; }
+table.grid.setup-res.ref th.sub-th { padding-right: 13px; }
+/* 분류 머리 줄은 한 칸(세로선 없음) */
+table.grid.ref tr.group td { border-right: 0; }
+/* 이름 칸(글자 입력)도 칸을 채우고 테두리 없이: 격자 안에 상자가 겹쳐 보이지 않게 */
+table.grid.ref td:not(.n):has(> input.field:not(.group-name)) { padding: 3px 4px; }
+table.grid.ref tr.row.in-group td:first-child:has(> input.field) { padding-left: 18px; }
+table.grid.ref td:not(.n) > input.field:not(.group-name) { width: 100%; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; box-shadow: none; }
+table.grid.ref td:not(.n) > input.field:not(.group-name):not(:disabled):hover { background: var(--hover); border-color: var(--line-strong); }
+table.grid.ref td:not(.n) > input.field:not(.group-name):focus { background: var(--surface); border-color: var(--accent); box-shadow: var(--ring); }
+table.grid.ref td:not(.n) > input.field.ghost-field { color: var(--text-2); font-size: 12.5px; }
+@media (max-width: 640px) {
+  /* 휴대폰 카드 모양(유형 템플릿): 격자선 없이, 숫자는 이름표 아래 왼쪽 정렬 */
+  .table-wrap.ref-wrap:has(> table.grid.vol) { border: 0; border-radius: 0; }
+  table.grid.vol.ref td, table.grid.vol.ref th { border-right: 0; }
+  table.grid.vol.ref td.n:has(> input) { padding: 0; }
+  table.grid.vol.ref td.n > input.qty { text-align: left; padding: 0 6px 0 0; }
+  table.grid.vol.ref td.n > input.qty:hover, table.grid.vol.ref td.n > input.qty:focus { padding: 0 6px; }
+  table.grid.vol.ref tr.total td { border-top: 0; background: transparent; }
+  table.grid.vol.ref tr.total { border-top: 1px solid var(--line-strong); }
+}
+

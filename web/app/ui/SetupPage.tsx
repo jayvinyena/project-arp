@@ -97,8 +97,8 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">순서 = 공정 순서입니다. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용됩니다. 달마다 다르게 하려면 "인력"에서 수정합니다.</p></div>
         </div>
         <div class="card-body" style="padding-top: 8px">
-          <div class="table-wrap">
-            <table class="grid edit setup-parts">
+          <div class="table-wrap ref-wrap">
+            <table class="grid edit ref setup-parts">
               <colgroup><col style="width: 80px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 120px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
               <thead><tr><th>순서</th><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
               <tbody>
@@ -142,8 +142,8 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         </div>
         <div class="card-body" style="padding-top: 8px">
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
-          <div class="table-wrap">
-            <table class="grid edit setup-res">
+          <div class="table-wrap ref-wrap">
+            <table class="grid edit ref setup-res">
               <colgroup><col style="width: 200px" />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
               <thead>
                 <tr>
