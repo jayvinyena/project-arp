@@ -19,7 +19,27 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${base}/app/index.html` });
   await cdp.waitUntil("document.querySelector('.welcome-card')");
   const btn = await cdp.eval("[...document.querySelectorAll('.welcome-card button')].map(b => b.textContent).join(' | ')");
-  check('시작 화면에 가져오기 버튼', btn.includes('기존 시트(.xlsx) 가져오기'), btn);
+  check('시작 화면에 가져오기 버튼', btn.includes('엑셀로 가져오기'), btn);
+
+  // 엑셀로 가져오기 창: 단계 3개 · 규격 요약 표(시트 10개, 필수 6개) · 양식 받기
+  await cdp.eval("[...document.querySelectorAll('.welcome-card button')].find(b => b.textContent === '엑셀로 가져오기').click()");
+  await cdp.waitUntil("document.querySelector('.import-guide')", 5000);
+  const spec = await cdp.eval("({ steps: document.querySelectorAll('.import-step').length, rows: document.querySelectorAll('.spec-table tbody tr').length, req: document.querySelectorAll('.spec-table .pill.accent').length, foot: !!document.querySelector('.import-foot .btn.primary') })");
+  check('가져오기 창: 단계 3개(파일 선택은 아래 고정) · 시트 10개(필수 6개)', spec.steps === 2 && spec.foot && spec.rows === 10 && spec.req === 6, JSON.stringify(spec));
+  await cdp.eval(`(() => {
+    window.__dl = null;
+    const orig = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download) { const name = this.download; fetch(this.href).then(r => r.arrayBuffer()).then(b => { window.__dl = { name, size: b.byteLength }; }); return; }
+      return orig.call(this);
+    };
+  })()`);
+  await cdp.eval("[...document.querySelectorAll('.import-guide button')].find(b => b.textContent.includes('예시 양식 받기')).click()");
+  await cdp.waitUntil('window.__dl', 8000);
+  const dl = await cdp.eval('window.__dl');
+  check('예시 양식(.xlsx) 받기', dl.name === 'ARP 가져오기 양식(예시).xlsx' && dl.size > 3000, JSON.stringify(dl));
+  await shot(cdp, 'import-guide');
+  await shot(cdp, 'import-guide-390', 390);
 
   await cdp.send('Page.navigate', { url: `${base}/app/index.html?importSample=legacy-sample` });
   await cdp.waitUntil("document.querySelector('.dialog[aria-label=\"가져오기 보고서\"]')", 15000);

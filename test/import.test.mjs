@@ -79,7 +79,7 @@ test('가져오기: 날짜 일련번호·빈 출시일(목표 월 말일)·모�
 
 test('가져오기: 옛 도구 시트가 아니면 빠진 시트를 알려 준다', async () => {
   const read = await readXlsx(writeXlsx({ 'Sheet1': [['a', 'b']] }));
-  assert.throws(() => legacyToRows(read), /빠졌습니다: 01_Part_Master/);
+  assert.throws(() => legacyToRows(read), /필수 시트가 없습니다: 파트\(01_Part_Master\)/);
 });
 
 const LEGACY_ENGINE = fileURLToPath(new URL('../../arp/tests/harness/gas-runtime.js', import.meta.url));

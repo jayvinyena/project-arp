@@ -5,6 +5,7 @@ import type { Cell, Sheets } from './xlsx.ts';
 import { serialToDate } from './xlsx.ts';
 import { migrate } from './migrate.ts';
 import { fixedKoreanHolidays } from './new-project.ts';
+import { normalizeSheets, isTemplateBook, missingSheetNames } from './import-spec.ts';
 
 export interface ImportOptions {
   projectName?: string;
@@ -135,7 +136,10 @@ const STATUS: Record<string, string> = {
 };
 
 /** 옛 시트 → 새 표 행 + 보고서 */
-export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { rows: Rows; report: ImportReport } {
+export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows: Rows; report: ImportReport } {
+  // 한글 양식(시트·머리글 한글, ※ 설명 줄)은 옛 구조로 바꿔 읽는다. 옛 도구 시트는 그대로
+  const fromTemplate = isTemplateBook(input);
+  const sheets = normalizeSheets(input);
   const report: ImportReport = { counts: {}, adjustments: [], skipped: [], ignoredSheets: [], missingSheets: [], horizon: null };
   const adjust = (m: string) => report.adjustments.push(m);
   const skip = (m: string) => report.skipped.push(m);
@@ -145,7 +149,8 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   }
   report.missingSheets = REQUIRED.filter(n2 => !sheets[n2]);
   if (report.missingSheets.length) {
-    throw Object.assign(new Error(`옛 도구의 시트가 아니거나 빠졌습니다: ${report.missingSheets.join(', ')}`), { report });
+    const names = missingSheetNames(report.missingSheets);
+    throw Object.assign(new Error(`가져오기 양식의 필수 시트가 없습니다: ${names.map((k, i) => `${k}(${report.missingSheets[i]})`).join(', ')}. "엑셀로 가져오기" 창에서 양식을 받아 채우십시오`), { report });
   }
 
   // ───────── 설정 ─────────
@@ -219,7 +224,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   // 새 구조는 숨은 기본값이 없으므로 그 값을 설정에 적는다
   const LEGACY_BUILTIN_OVERLAP = 0.2;
   const defaultOverlap = n(config.get('STAGE_OVERLAP_RATE_DEFAULT') ?? null);
-  if (defaultOverlap == null) adjust(`기본 겹침률 설정이 없어 옛 도구가 쓰던 값 ${LEGACY_BUILTIN_OVERLAP * 100}%를 입력했습니다`);
+  if (defaultOverlap == null && !fromTemplate) adjust(`기본 겹침률 설정이 없어 옛 도구가 쓰던 값 ${LEGACY_BUILTIN_OVERLAP * 100}%를 입력했습니다`);
   const overlaps: Record<string, unknown>[] = [];
   for (const [k, v] of config) {
     const m = /^STAGE_OVERLAP_RATE:(.+)>(.+)$/.exec(k);
@@ -312,7 +317,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     if (repeated) adjust(`대조용: 인력 행이 없는 ${repeated}칸(파트 × 달)을 옛 도구처럼 그 파트의 마지막 인력 행으로 채웠습니다`);
   }
   if (corrected) adjust(`옛 월 근무일 수에 맞추려고 인력 ${corrected}행의 생산성을 보정했습니다(대조용 설정)`);
-  else if (!options.keepLegacyWorkdays) adjust('월 근무일 수는 옛 BUSINESS_DAYS 대신 근무 달력(월–금' + (holidays.length ? ', 고정 공휴일 제외' : '') + ')으로 계산합니다. 작업 가능량이 옛 값과 조금 다를 수 있습니다');
+  else if (!options.keepLegacyWorkdays && !fromTemplate) adjust('월 근무일 수는 옛 BUSINESS_DAYS 대신 근무 달력(월–금' + (holidays.length ? ', 고정 공휴일 제외' : '') + ')으로 계산합니다. 작업 가능량이 옛 값과 조금 다를 수 있습니다');
   const missingCap = parts.filter(p => p.active).flatMap(p => span.filter(m => !seen.has(`${p.part_id}|${m}`)).map(m => `${p.name} ${m}`));
   if (missingCap.length) adjust(`인력 행이 없는 달 ${missingCap.length}개(예: ${missingCap.slice(0, 3).join(', ')}): 데이터 점검(C01)에서 채우십시오`);
 
@@ -382,7 +387,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
     Number(!live(a)) - Number(!live(b)) || a.level - b.level
     || (a.row.release_date ?? '9999') .localeCompare(b.row.release_date ?? '9999') || a.row.sort_order - b.row.sort_order);
   ordered.forEach((x, i) => { x.row.priority = i + 1; });
-  if (ups.length) adjust('우선순위 등급(HIGH/MEDIUM/LOW)을 숫자 순위로 변경했습니다: 등급 → 출시일 → 표시 순서');
+  if (ups.length && !fromTemplate) adjust('우선순위 등급(HIGH/MEDIUM/LOW)을 숫자 순위로 변경했습니다: 등급 → 출시일 → 표시 순서');
   const updates = ups.map(x => x.row);
   const updIds = new Set(updates.map(u => u.update_id));
   if (!compat) {
@@ -433,7 +438,7 @@ export function legacyToRows(sheets: Sheets, options: ImportOptions = {}): { row
   if (folded) adjust(`물량 ${folded}행: 추가·이월·취소 수량을 템플릿 세 개에 합쳤습니다(새 구조에는 그 칸이 없습니다)`);
   if (minFilled) adjust(`최저가 비었거나 0인 물량 ${minFilled}행: 옛 도구처럼 목표와 같게 입력했습니다`);
   if (stretchFilled) adjust(`최대안이 빈 물량 ${stretchFilled}행: 기본안과 같게 입력했습니다`);
-  adjust('필수 여부: SHOULD·COULD 등은 선택, 그 밖(MUST·빈칸·UNCLASSIFIED)은 필수로 가져왔습니다');
+  if (!fromTemplate) adjust('필수 여부: SHOULD·COULD 등은 선택, 그 밖(MUST·빈칸·UNCLASSIFIED)은 필수로 가져왔습니다');
 
   // ───────── 실적: 완료 + 외주 완료 + 규격 제외 = 완료 수량 ─────────
   const progress: Record<string, unknown>[] = [];

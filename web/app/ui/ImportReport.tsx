@@ -19,7 +19,7 @@ export function ImportReport(props: { report: Report; findings: Finding[]; onSav
     <div class="overlay">
       <div class="card dialog wide" role="dialog" aria-label="가져오기 보고서">
         <div class="dialog-head">
-          <div><h2>옛 시트에서 가져왔습니다</h2><p class="small muted" style="margin-top: 2px">계획 기간 {r.horizon?.start} ~ {r.horizon?.end} · 아직 저장하지 않았습니다</p></div>
+          <div><h2>엑셀에서 가져왔습니다</h2><p class="small muted" style="margin-top: 2px">계획 기간 {r.horizon?.start} ~ {r.horizon?.end} · 아직 저장하지 않았습니다</p></div>
           <button type="button" class="btn ghost icon-btn" aria-label="닫기" onClick={props.onClose}><IconX /></button>
         </div>
         <div class="drawer-body" style="max-height: min(70vh, 640px)">

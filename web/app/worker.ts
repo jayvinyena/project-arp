@@ -17,6 +17,7 @@ import { legacyToRows, writeImported } from '../../core/import-legacy.ts';
 import { historyView, undoBatch } from '../../core/history.ts';
 import { exportSheets } from '../../core/export.ts';
 import { writeXlsx } from '../../core/xlsx-write.ts';
+import { templateBook } from '../../core/import-spec.ts';
 import { calibrationView, calibrationPreview } from '../../core/calibration.ts';
 import { progressTemplate, importProgress } from '../../core/progress-io.ts';
 import { outlookNow, noticeSince } from '../../core/notice.ts';
@@ -180,6 +181,12 @@ const handlers: Record<string, (payload: any) => unknown> = {
   // ───────── 6단계: 실적 엑셀 · 공수 보정 · 변화 알림 ─────────
   progressTemplate() {
     return { bytes: writeXlsx(progressTemplate(need().sql)).buffer };
+  },
+
+  /** 가져오기 양식(빈 양식 · 예시 양식). 프로젝트를 열지 않아도 된다 */
+  importTemplate(p: { example: boolean }) {
+    const { sheets, freezeRows } = templateBook({ example: p.example });
+    return { bytes: writeXlsx(sheets, { freezeRows }).buffer };
   },
 
   async importProgress(p: { bytes: ArrayBuffer; editor: string }) {

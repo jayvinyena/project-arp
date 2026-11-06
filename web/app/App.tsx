@@ -5,6 +5,7 @@ import { rpc, DEVICE } from './lib/rpc.ts';
 import type { View } from './lib/rpc.ts';
 import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveInPlace, pickXlsx, fetchBytes } from './lib/files.ts';
 import { ImportReport } from './ui/ImportReport.tsx';
+import { ImportGuide } from './ui/ImportGuide.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
 import { CalibrationPage } from './ui/CalibrationPage.tsx';
 import { AdvisorPage } from './ui/AdvisorPage.tsx';
@@ -61,6 +62,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(new URLSearchParams(location.search).has('new'));
   const [imported, setImported] = useState<ImportReportData | null>(null);
+  const [importing, setImporting] = useState(new URLSearchParams(location.search).has('importGuide'));
   const [recovery, setRecovery] = useState<Recovery | null>(null);
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [backup, setBackup] = useState<{ name: string; bytes: ArrayBuffer; from: number } | null>(null);
@@ -475,8 +477,8 @@ export function App() {
   };
 
   // ───────── 옛 시트 가져오기 ─────────
-  const importLegacy = async (picked: { name: string; bytes: ArrayBuffer } | null) => {
-    if (!picked) return;
+  const importLegacy = async (picked: { name: string; bytes: ArrayBuffer } | null): Promise<boolean> => {
+    if (!picked) return false;
     setBusy(true);
     try {
       const base = picked.name.replace(/\.xlsx$/i, '').trim() || '가져온 프로젝트';
@@ -488,8 +490,10 @@ export function App() {
       setPage('launch');
       setSave({ state: 'dirty' });
       setImported(v.report);
+      return true;
     } catch (error) {
       showToast(`가져오지 못했습니다: ${(error as Error).message}`);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -634,9 +638,19 @@ export function App() {
           <div class="actions">
             <button class="btn primary lg" disabled={busy} onClick={async () => { const f = await pickFile(); if (f) await open(f, false); }}><IconFolder />프로젝트 파일 열기</button>
             <button class="btn lg" disabled={busy} onClick={() => setCreating(true)}>새 프로젝트 만들기</button>
-            <button class="btn lg" disabled={busy} onClick={async () => importLegacy(await pickXlsx())}>기존 시트(.xlsx) 가져오기</button>
+            <button class="btn lg" disabled={busy} onClick={() => setImporting(true)}>엑셀로 가져오기</button>
             <button class="btn ghost lg" disabled={busy} onClick={async () => open(await fetchSample('normal'), true)}>예시 프로젝트로 둘러보기</button>
           </div>
+          {importing && (
+            <ImportGuide busy={busy} onClose={() => setImporting(false)}
+              onTemplate={async example => {
+                try {
+                  const { bytes } = await rpc.importTemplate(example);
+                  download(bytes, example ? 'ARP 가져오기 양식(예시).xlsx' : 'ARP 가져오기 양식.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                } catch (error) { showToast(`양식을 만들지 못했습니다: ${(error as Error).message}`); }
+              }}
+              onPick={async () => { const f = await pickXlsx(); if (f) { setImporting(false); if (!(await importLegacy(f))) setImporting(true); } }} />
+          )}
           <p class="small faint">{canSaveInPlace ? '크롬·엣지에서는 수정한 내용이 연 파일에 바로 저장됩니다.' : '이 브라우저에서는 저장할 때 파일을 내려받습니다. 크롬·엣지를 사용하면 연 파일에 바로 저장됩니다.'}</p>
         </div>
         {toast && <div class="toast" role="status">{toast}</div>}
