@@ -55,10 +55,15 @@ await withBrowser(async (cdp, base) => {
       return orig.call(this);
     };
   })()`);
-  await cdp.eval("[...document.querySelectorAll('.sidebar button')].find(b => b.textContent.includes('엑셀로 내보내기')).click()");
+  await cdp.eval("[...document.querySelectorAll('.sidebar button')].find(b => b.textContent.includes('보고용 엑셀 내보내기')).click()");
   await cdp.waitUntil('window.__dl', 10000);
   const dl = await cdp.eval('window.__dl');
-  check('엑셀로 내보내기: .xlsx(압축 서명 PK)', dl.name.endsWith('.xlsx') && dl.magic === 'PK' && dl.size > 5000, `${dl.name} · ${dl.size}바이트`);
+  check('보고용 엑셀 내보내기: .xlsx(압축 서명 PK)', dl.name.endsWith('.xlsx') && dl.magic === 'PK' && dl.size > 5000, `${dl.name} · ${dl.size}바이트`);
+  await cdp.eval('window.__dl = null');
+  await cdp.eval("[...document.querySelectorAll('.sidebar button')].find(b => b.textContent.includes('편집용 엑셀 내보내기')).click()");
+  await cdp.waitUntil('window.__dl', 10000);
+  const dl2 = await cdp.eval('window.__dl');
+  check('편집용 엑셀 내보내기: 가져오기 양식(.xlsx)', dl2.name.includes('편집용') && dl2.magic === 'PK' && dl2.size > 5000, `${dl2.name} · ${dl2.size}바이트`);
 
   // 3. 작업 복구: 고친 뒤 저장하지 않고 창을 다시 열면 되살리기
   await setQty(cdp, '배경 맵 기본안', '7');

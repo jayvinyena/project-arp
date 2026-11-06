@@ -82,6 +82,7 @@ export const rpc = {
   exportXlsx: (planMode: PlanMode) => call<{ bytes: ArrayBuffer }>('exportXlsx', { planMode }),
   snapshot: () => call<{ bytes: ArrayBuffer }>('snapshot'),
   progressTemplate: () => call<{ bytes: ArrayBuffer }>('progressTemplate'),
+  exportTemplate: () => call<{ bytes: ArrayBuffer }>('exportTemplate'),
   importTemplate: (example: boolean) => call<{ bytes: ArrayBuffer }>('importTemplate', { example }),
   importProgress: (bytes: ArrayBuffer, editor: string) => call<ProgressImportReport>('importProgress', { bytes, editor }, [bytes]),
   calibration: () => call<CalibrationView>('calibration'),

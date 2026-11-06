@@ -41,7 +41,7 @@ type Row = Record<string, Cell>;
 type Rows = Record<string, Record<string, unknown>[]>;
 
 const REQUIRED = ['01_Part_Master', '02_Resource_Master', '03_Effort_Standard', '10_Update_Master', '11_Update_Volume', '12_Capacity_Monthly'];
-const KNOWN = ['00_Config', ...REQUIRED, '05_Update_Type', '06_Update_Volume_Template', '13_Progress_Actual'];
+const KNOWN = ['00_Config', ...REQUIRED, '05_Update_Type', '06_Update_Volume_Template', '13_Progress_Actual', 'HOLIDAYS'];
 const NOT_IMPORTED: Record<string, string> = {
   '04_Pipeline_Template': '공정 순서는 파트 순서 + 겹침률로 변경되었습니다(인계 방식·묶음·대기일은 쓰지 않습니다)',
   '20_Scenario_Master': '옛 시나리오는 가져오지 않습니다. 시뮬레이션에서 다시 만드십시오',
@@ -211,12 +211,24 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
     if (ai != null && ai > 0) { efforts.push({ resource_type_id: rt, part_id: part, profile_id: 'AI', days: ai }); aiCount += 1; }
   }
   if (noBase) adjust(`기본 공수가 빈 리소스·파트 ${noBase}개: 데이터 점검(E03)에서 채우십시오`);
-  const profiles = [{ profile_id: 'BASE', name: '기본', sort_order: 1 }, ...(aiCount ? [{ profile_id: 'AI', name: 'AI 사용 시', sort_order: 2 }] : [])];
+  // 파트별 AI 활용 비율(양식의 설정 "AI 활용:파트ID")
+  const aiShares = new Map<string, number>();
+  for (const [k, v] of config) {
+    const m = /^AI_SHARE:(.+)$/.exec(k);
+    const x = n(v);
+    if (m && partIds.has(m[1]) && x != null && x > 0) aiShares.set(m[1], Math.min(1, x));
+  }
+  const profiles = [{ profile_id: 'BASE', name: '기본', sort_order: 1 }, ...(aiCount || aiShares.size ? [{ profile_id: 'AI', name: 'AI 사용 시', sort_order: 2 }] : [])];
   const effortMix: Record<string, unknown>[] = [];
   const profileCfg = s(config.get('EFFORT_PROFILE') ?? null).toUpperCase();
   if (aiCount && (profileCfg === 'AI' || profileCfg === 'AI_ASSISTED')) {
     for (const p of parts) effortMix.push({ part_id: p.part_id, profile_id: 'AI', share: 1 });
     adjust('옛 설정 EFFORT_PROFILE = AI → 모든 파트를 AI 공수 100%로 섞었습니다');
+  } else {
+    for (const [part, share] of aiShares) {
+      if (share < 1) effortMix.push({ part_id: part, profile_id: 'BASE', share: 1 - share });
+      effortMix.push({ part_id: part, profile_id: 'AI', share });
+    }
   }
 
   // ───────── 겹침률 ─────────
@@ -252,6 +264,12 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
     const ends = [capEnd, releases[releases.length - 1], monthsBetween(start, '9999-12').slice(0, forecast).pop()].filter((x): x is string => !!x).sort();
     end = ends[ends.length - 1];
   }
+  // 양식의 설정 "계획 시작 달 · 계획 끝 달"이 있으면 그 기간(내보낸 양식을 다시 가져올 때 기간이 그대로)
+  if (!compat) {
+    const ps = month(config.get('PLAN_START_MONTH') ?? null);
+    const pe = month(config.get('PLAN_END_MONTH') ?? null);
+    if (ps && pe && ps <= pe) { start = ps; end = pe; }
+  }
   let span = monthsBetween(start, end);
   if (span.length > 60) {
     end = span[59];
@@ -259,7 +277,11 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
     span = monthsBetween(start, end);
   }
   report.horizon = { start, end };
-  const holidays = options.fixedHolidays === false ? [] : fixedKoreanHolidays(start, end);
+  // 휴일: 양식의 "휴일" 시트에 행이 있으면 그것만, 없으면 날짜가 고정된 공휴일
+  const holidayRows = uniqueBy(table(sheets, 'HOLIDAYS').map(r => ({ date: date(r.DATE), name: s(r.NAME) || '휴일', kind: s(r.KIND) === 'COMPANY' ? 'COMPANY' : 'PUBLIC' }))
+    .filter((h): h is { date: string; name: string; kind: string } => !!h.date), h => h.date, k => skip(`휴일 ${k}: 같은 날이 두 번 있어 뒤의 행을 건너뜀`));
+  const autoHolidays = options.fixedHolidays !== false && !(config.has('AUTO_HOLIDAYS') && !bool(config.get('AUTO_HOLIDAYS') ?? null));
+  const holidays = holidayRows.length ? holidayRows : autoHolidays ? fixedKoreanHolidays(start, end) : [];
   const holidaySet = new Set(holidays.map(h => h.date));
   const capacity: Record<string, unknown>[] = [];
   const seen = new Set<string>();
@@ -326,7 +348,8 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
   const updateTypes = typeRows.map((r, i) => {
     const id = s(r.UPDATE_TYPE_ID);
     const name = s(r.UPDATE_TYPE_NAME) || id;
-    return { update_type_id: id, name, is_launch: id.toUpperCase() === 'LAUNCH' || name.includes('런칭') ? 1 : 0, sort_order: int(r.SORT_ORDER) ?? i + 1, active: on(r, 'ACTIVE') ? 1 : 0 };
+    const launch = s(r.IS_LAUNCH) ? bool(r.IS_LAUNCH) : id.toUpperCase() === 'LAUNCH' || name.includes('런칭');
+    return { update_type_id: id, name, is_launch: launch ? 1 : 0, sort_order: int(r.SORT_ORDER) ?? i + 1, active: on(r, 'ACTIVE') ? 1 : 0 };
   });
   const typeIds = new Set(updateTypes.map(t => t.update_type_id));
   const templates: Record<string, unknown>[] = [];
@@ -341,7 +364,7 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
     const tTarget = int(r.TARGET_QTY);
     let tMin = int(r.MIN_QTY);
     let tStretch = int(r.STRETCH_QTY);
-    if (tTarget != null && (tMin == null || tMin === 0) && tMin !== tTarget) { tMin = tTarget; templateFilled += 1; }
+    if (tTarget != null && (tMin == null || (tMin === 0 && !fromTemplate)) && tMin !== tTarget) { tMin = tTarget; templateFilled += 1; }
     if (tTarget != null && tStretch == null) { tStretch = tTarget; templateFilled += 1; }
     templates.push({ update_type_id: t, resource_type_id: rt, min_qty: tMin, target_qty: tTarget, stretch_qty: tStretch });
   }
@@ -421,7 +444,7 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
     let min = fold(n(r.MIN_QTY));
     let stretch = fold(n(r.STRETCH_QTY));
     if (target == null) target = 0;
-    if (min == null || n(r.MIN_QTY) === 0) { if (min !== target) minFilled += 1; min = target; }
+    if (min == null || (n(r.MIN_QTY) === 0 && !fromTemplate)) { if (min !== target) minFilled += 1; min = target; }
     if (stretch == null) { stretch = target; stretchFilled += 1; }
     const lvl = s(r.REQUIRED_LEVEL).toUpperCase();
     volumes.push({
@@ -464,14 +487,16 @@ export function legacyToRows(input: Sheets, options: ImportOptions = {}): { rows
   const now = options.now ?? new Date().toISOString();
   const rows: Rows = {
     meta: [
-      { key: 'project_name', value: options.projectName?.trim() || '가져온 프로젝트' },
+      { key: 'project_name', value: s(config.get('PROJECT_NAME') ?? null) || options.projectName?.trim() || '가져온 프로젝트' },
+      ...(['MIN', 'TARGET', 'STRETCH'] as const).filter(m => s(config.get(`MODE_NAME_${m}`) ?? null)).map(m => ({ key: `mode_name_${m}`, value: s(config.get(`MODE_NAME_${m}`) ?? null).slice(0, 20) })),
       { key: 'created_at', value: now },
       { key: 'data_version', value: '1' },
       { key: 'saved_by_app', value: options.appVersion ?? 'arp-next' },
       { key: 'imported_from', value: 'legacy-google-sheet' },
     ],
     settings: [{
-      id: 1, horizon_start_month: start, horizon_end_month: end, work_weekdays: '1111100',
+      id: 1, horizon_start_month: start, horizon_end_month: end,
+      work_weekdays: /^[01]{7}$/.test(s(config.get('WORK_WEEKDAYS') ?? null)) && s(config.get('WORK_WEEKDAYS') ?? null).includes('1') ? s(config.get('WORK_WEEKDAYS') ?? null) : '1111100',
       buffer_rate: cfgNum('DEFAULT_BUFFER_RATE', 0), default_overlap_rate: defaultOverlap ?? LEGACY_BUILTIN_OVERLAP,
       load_warn_rate: cfgNum('CAPACITY_YELLOW_THRESHOLD', 0.8), load_over_rate: cfgNum('CAPACITY_ORANGE_THRESHOLD', 1), load_critical_rate: cfgNum('CAPACITY_RED_THRESHOLD', 1.2),
       late_warn_workdays: 10, default_plan_mode: ['MIN', 'TARGET', 'STRETCH'].includes(s(config.get('DEFAULT_PLAN_MODE') ?? null)) ? s(config.get('DEFAULT_PLAN_MODE') ?? null) : 'TARGET',

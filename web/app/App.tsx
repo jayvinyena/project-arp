@@ -420,6 +420,17 @@ export function App() {
     }
   };
 
+  const exportTemplate = async () => {
+    try {
+      const { bytes } = await rpc.exportTemplate();
+      const base = (view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_');
+      download(bytes, `${base} 편집용 ${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      showToast('편집용 엑셀을 내려받았습니다. 수정한 뒤 시작 화면 "엑셀로 가져오기"로 가져오면 새 프로젝트 파일이 됩니다.');
+    } catch (error) {
+      showToast(`내보내지 못했습니다: ${(error as Error).message}`);
+    }
+  };
+
   // ───────── 변화 알림: 내가 지난번에 본 뒤 바뀐 것 ─────────
   // 편집자별로 따로 둔다(한 컴퓨터를 여럿이 쓸 때도 각자 지난번 본 것과 비교)
   const seenKey = (v: View | null) => (v ? `seen:${me}:${v.meta.project_name ?? ''}|${v.meta.created_at ?? ''}` : '');
@@ -714,7 +725,8 @@ export function App() {
             {file.handle && !file.readOnly && (save.state === 'conflict' || save.state === 'error') && <button class="btn sm" onClick={() => void saveAsNew()}>다른 이름으로</button>}
             <button class="btn sm ghost" onClick={() => void close()}>닫기</button>
           </div>
-          <button class="btn sm ghost" style="justify-content: flex-start" onClick={() => void exportXlsx()}><IconDownload />엑셀로 내보내기</button>
+          <button class="btn sm ghost" style="justify-content: flex-start" title="업데이트 전망 · 파트 부하 등 보고용 표(다시 가져올 수 없음)" onClick={() => void exportXlsx()}><IconDownload />보고용 엑셀 내보내기</button>
+          <button class="btn sm ghost" style="justify-content: flex-start" title="가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져올 수 있음" onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>
           <div class="small faint editor">편집자 {me}</div>
         </div>
       </aside>

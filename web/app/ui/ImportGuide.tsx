@@ -32,7 +32,7 @@ export function ImportGuide(props: {
             <span class="step-badge">1</span>
             <div class="import-step-body">
               <h3>양식 받기</h3>
-              <p class="small muted">첫 시트 "안내"에 칸마다 형식과 설명이 있습니다. 예시 양식은 작은 예시 프로젝트가 채워져 있어 값을 바꿔 그대로 가져올 수 있습니다.</p>
+              <p class="small muted">첫 시트 "안내"에 칸마다 형식과 설명이 있습니다. 예시 양식은 작은 예시 프로젝트가 채워져 있어 값을 바꿔 그대로 가져올 수 있습니다. 이미 있는 프로젝트는 앱 왼쪽 아래 "편집용 엑셀 내보내기"로 같은 양식을 받습니다.</p>
               <div class="inline" style="margin-top: 10px">
                 <button type="button" class="btn" disabled={!!getting} onClick={() => void get(false)}><IconDownload />{getting === 'blank' ? '만드는 중…' : '빈 양식 받기'}</button>
                 <button type="button" class="btn" disabled={!!getting} onClick={() => void get(true)}><IconDownload />{getting === 'example' ? '만드는 중…' : '예시 양식 받기'}</button>

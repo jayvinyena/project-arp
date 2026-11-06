@@ -25,7 +25,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("[...document.querySelectorAll('.welcome-card button')].find(b => b.textContent === '엑셀로 가져오기').click()");
   await cdp.waitUntil("document.querySelector('.import-guide')", 5000);
   const spec = await cdp.eval("({ steps: document.querySelectorAll('.import-step').length, rows: document.querySelectorAll('.spec-table tbody tr').length, req: document.querySelectorAll('.spec-table .pill.accent').length, foot: !!document.querySelector('.import-foot .btn.primary') })");
-  check('가져오기 창: 단계 3개(파일 선택은 아래 고정) · 시트 10개(필수 6개)', spec.steps === 2 && spec.foot && spec.rows === 10 && spec.req === 6, JSON.stringify(spec));
+  check('가져오기 창: 단계 3개(파일 선택은 아래 고정) · 시트 11개(필수 6개)', spec.steps === 2 && spec.foot && spec.rows === 11 && spec.req === 6, JSON.stringify(spec));
   await cdp.eval(`(() => {
     window.__dl = null;
     const orig = HTMLAnchorElement.prototype.click;

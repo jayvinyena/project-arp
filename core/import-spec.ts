@@ -33,7 +33,7 @@ export const IMPORT_SPEC: SpecSheet[] = [
   {
     key: '00_Config', ko: '설정', required: false, desc: '프로젝트 공통 값. 비우면 기본값(여유율 0%, 겹침률 20%, 가동률 80%)을 사용합니다.',
     columns: [
-      { key: 'CONFIG_KEY', ko: '항목', required: true, format: '아래 항목 이름', desc: '여유율 · 기본 겹침률 · 기본 가동률 · 기본 생산성 · 겹침률:앞파트ID>뒤파트ID' },
+      { key: 'CONFIG_KEY', ko: '항목', required: true, format: '아래 항목 이름', desc: '프로젝트 이름 · 여유율 · 기본 겹침률 · 기본 가동률 · 기본 생산성 · 근무 요일 · 계획 시작 달 · 계획 끝 달 · 겹침률:앞파트ID>뒤파트ID · AI 활용:파트ID · 템플릿1·2·3 이름' },
       { key: 'CONFIG_VALUE', ko: '값', required: true, format: '숫자(비율은 0.1 또는 10%)', desc: '항목의 값' },
     ],
   },
@@ -71,6 +71,7 @@ export const IMPORT_SPEC: SpecSheet[] = [
     columns: [
       { key: 'UPDATE_TYPE_ID', ko: '유형 ID', required: true, format: ID, desc: '예: LAUNCH, SEASON' },
       { key: 'UPDATE_TYPE_NAME', ko: '유형 이름', required: true, format: '글자', desc: '' },
+      { key: 'IS_LAUNCH', ko: '런칭 여부', format: 'Y / N', desc: '비우면 ID가 LAUNCH이거나 이름에 "런칭"이 있을 때 런칭', flag: true },
       { key: 'SORT_ORDER', ko: '순서', format: '정수', desc: '' },
       { key: 'ACTIVE', ko: '사용', format: 'Y / N', desc: '비우거나 칸이 없으면 사용', flag: true },
     ],
@@ -108,6 +109,7 @@ export const IMPORT_SPEC: SpecSheet[] = [
       { key: 'TARGET_QTY', ko: '기본안', required: true, format: '정수', desc: '' },
       { key: 'STRETCH_QTY', ko: '최대안', format: '정수', desc: '비우면 기본안과 같음' },
       { key: 'OUTSOURCE_QTY', ko: '외주 수량', format: '정수', desc: '외주로 만드는 개수(공수 계산에서 뺌)' },
+      { key: 'PRIORITY', ko: '순위', format: '정수(1 = 먼저)', desc: '업데이트 안에서 먼저 만들 순서. 비우면 2' },
       { key: 'REQUIRED_LEVEL', ko: '필수 여부', format: '필수 / 선택', desc: '선택 리소스는 마감 맞추기에서 먼저 줄임' },
       { key: 'DIFFICULTY_FACTOR', ko: '난이도', format: '배수(1 = 보통)', desc: '공수에 곱함' },
       { key: 'REUSE_RATE', ko: '재사용률', format: '비율(0.2 또는 20%)', desc: '기존 리소스를 고쳐 쓰는 몫', pct: true },
@@ -128,6 +130,14 @@ export const IMPORT_SPEC: SpecSheet[] = [
     ],
   },
   {
+    key: 'HOLIDAYS', ko: '휴일', required: false, desc: '근무하지 않는 날. 이 시트에 행이 있으면 이 휴일만 쓰고, 없으면 날짜가 고정된 공휴일을 자동으로 넣습니다(설정 "공휴일 자동 넣기" = N이면 넣지 않음).',
+    columns: [
+      { key: 'DATE', ko: '날짜', required: true, format: '날짜', desc: '' },
+      { key: 'NAME', ko: '이름', required: true, format: '글자', desc: '예: 창립기념일' },
+      { key: 'KIND', ko: '구분', format: '공휴일 / 회사 휴무일', desc: '비우면 공휴일' },
+    ],
+  },
+  {
     key: '13_Progress_Actual', ko: '작업 진척', required: false, desc: '이미 끝낸 수량. 끝낸 만큼 빼고 남은 일만 계산합니다.',
     columns: [
       { key: 'UPDATE_ID', ko: '업데이트 ID', required: true, format: '업데이트 시트의 ID', desc: '' },
@@ -141,6 +151,8 @@ export const IMPORT_SPEC: SpecSheet[] = [
 ];
 
 const CONFIG_KO: Record<string, string> = {
+  '프로젝트 이름': 'PROJECT_NAME', '근무 요일': 'WORK_WEEKDAYS', '계획 시작 달': 'PLAN_START_MONTH', '계획 끝 달': 'PLAN_END_MONTH', '공휴일 자동 넣기': 'AUTO_HOLIDAYS',
+  '템플릿1 이름': 'MODE_NAME_MIN', '템플릿2 이름': 'MODE_NAME_TARGET', '템플릿3 이름': 'MODE_NAME_STRETCH',
   '여유율': 'DEFAULT_BUFFER_RATE', '기본 겹침률': 'STAGE_OVERLAP_RATE_DEFAULT', '겹침률': 'STAGE_OVERLAP_RATE_DEFAULT',
   '기본 가동률': 'DEFAULT_UTILIZATION_RATE', '기본 생산성': 'DEFAULT_PRODUCTIVITY_FACTOR',
 };
@@ -157,6 +169,16 @@ function pct(v: Cell): Cell {
   if (!Number.isFinite(x)) return v;
   return t.endsWith('%') || x > 1 ? x / 100 : x;
 }
+
+/** "월화수목금" · "월,화,수" · "1111100" → 월~일 7자리 0/1 */
+export function weekdayBits(v: Cell): Cell {
+  const t = String(v ?? '').trim();
+  if (/^[01]{7}$/.test(t)) return t;
+  const days = '월화수목금토일';
+  const bits = [...days].map(d => (t.includes(d) ? '1' : '0')).join('');
+  return bits.includes('1') ? bits : v;
+}
+export const weekdayText = (bits: string) => [...'월화수목금토일'].filter((_, i) => bits[i] === '1').join('');
 
 /**
  * 한글 양식 → 옛 도구 구조. 옛 시트(영문)는 그대로 둔다(칸 값도 바꾸지 않는다: 옛 계산과 대조가 같아야 한다).
@@ -185,6 +207,7 @@ export function normalizeSheets(sheets: Sheets): Sheets {
       if (c.col.flag) { const t = String(v ?? '').trim(); return FLAG_KO[t.toUpperCase()] ?? FLAG_KO[t] ?? v; }
       if (c.key === 'PRIORITY') return PRIORITY_KO[String(v ?? '').trim()] ?? v;
       if (c.key === 'REQUIRED_LEVEL') return String(v ?? '').trim() === '선택' ? 'SHOULD' : v;
+      if (c.key === 'KIND' && spec.key === 'HOLIDAYS') return /회사/.test(String(v ?? '')) ? 'COMPANY' : 'PUBLIC';
       return v;
     }));
     // 설정: 한글 항목 이름 · 겹침률:A>B
@@ -194,9 +217,11 @@ export function normalizeSheets(sheets: Sheets): Sheets {
       for (const r of fixed) {
         const raw = String(r[ki] ?? '').trim();
         const pair = /^겹침률\s*[:：]\s*(.+?)\s*>\s*(.+)$/.exec(raw);
-        const key = pair ? `STAGE_OVERLAP_RATE:${pair[1]}>${pair[2]}` : CONFIG_KO[raw] ?? raw;
+        const ai = /^AI\s*활용\s*[:：]\s*(.+)$/i.exec(raw);
+        const key = pair ? `STAGE_OVERLAP_RATE:${pair[1]}>${pair[2]}` : ai ? `AI_SHARE:${ai[1].trim()}` : CONFIG_KO[raw] ?? raw;
         r[ki] = key;
-        if (vi >= 0 && (PCT_CONFIG.has(key) || pair)) r[vi] = pct(r[vi]);
+        if (vi >= 0 && (PCT_CONFIG.has(key) || pair || ai)) r[vi] = pct(r[vi]);
+        if (vi >= 0 && key === 'WORK_WEEKDAYS') r[vi] = weekdayBits(r[vi]);
       }
     }
     // 리소스: "분류" 칸 → 옛 구조의 GROUP 행 + 부모 ID
@@ -261,7 +286,7 @@ function exampleRows(now: Date): Record<string, Cell[][]> {
   const months = Array.from({ length: 15 }, (_, i) => ym(now, i + 1));
   const heads: Record<string, number> = { ART: 3, MODEL: 4, ANIM: 2 };
   return {
-    '00_Config': [['여유율', '10%'], ['기본 겹침률', '20%'], ['기본 가동률', '80%']],
+    '00_Config': [['프로젝트 이름', '예시 프로젝트'], ['여유율', '10%'], ['기본 겹침률', '20%'], ['기본 가동률', '80%'], ['근무 요일', '월화수목금'], ['AI 활용:ART', '50%']],
     '01_Part_Master': [['ART', '원화', 1, 'Y'], ['MODEL', '모델링', 2, 'Y'], ['ANIM', '애니메이션', 3, 'Y']],
     '02_Resource_Master': [['CHAR_NEW', '신규 캐릭터', '캐릭터', 1, 'Y'], ['COSTUME', '코스튬', '캐릭터', 2, 'Y'], ['BG_MAP', '배경 맵', '배경', 3, 'Y'], ['ICON', '아이콘', 'UI', 4, 'Y']],
     '03_Effort_Standard': [
@@ -270,16 +295,16 @@ function exampleRows(now: Date): Record<string, Cell[][]> {
       ['BG_MAP', 'ART', 8, 5, null], ['BG_MAP', 'MODEL', 15, 12, null],
       ['ICON', 'ART', 0.5, 0.3, null],
     ],
-    '05_Update_Type': [['LAUNCH', '런칭', 1, 'Y'], ['SEASON', '시즌', 2, 'Y']],
+    '05_Update_Type': [['LAUNCH', '런칭', 'Y', 1, 'Y'], ['SEASON', '시즌', 'N', 2, 'Y']],
     '06_Update_Volume_Template': [['SEASON', 'CHAR_NEW', 2, 3, 4], ['SEASON', 'COSTUME', 4, 6, 8], ['SEASON', 'BG_MAP', 1, 1, 2], ['SEASON', 'ICON', 10, 20, 30]],
     '10_Update_Master': [
       ['LAUNCH', '런칭', 'LAUNCH', day(now, 1, 1), day(now, 7, 'last'), day(now, 8, 'last'), '높음', '계획', null],
       ['S1', '시즌 1', 'SEASON', day(now, 6, 1), day(now, 10, 15), day(now, 10, 'last'), '보통', '계획', '런칭 다음 시즌'],
     ],
     '11_Update_Volume': [
-      ['LAUNCH', 'CHAR_NEW', 8, 10, 12, 0, '필수', 1, null, null], ['LAUNCH', 'COSTUME', 10, 15, 20, 0, '필수', 1, null, null],
-      ['LAUNCH', 'BG_MAP', 3, 4, 5, 0, '필수', 1, null, null], ['LAUNCH', 'ICON', 60, 80, 100, 20, '선택', 1, '20%', '기존 아이콘 일부 재사용'],
-      ['S1', 'CHAR_NEW', 2, 3, 4, 0, '필수', 1, null, null], ['S1', 'COSTUME', 4, 6, 8, 0, '필수', 1, null, null],
+      ['LAUNCH', 'CHAR_NEW', 8, 10, 12, 0, 1, '필수', 1, null, null], ['LAUNCH', 'COSTUME', 10, 15, 20, 0, 1, '필수', 1, null, null],
+      ['LAUNCH', 'BG_MAP', 3, 4, 5, 0, 1, '필수', 1, null, null], ['LAUNCH', 'ICON', 60, 80, 100, 20, 2, '선택', 1, '20%', '기존 아이콘 일부 재사용'],
+      ['S1', 'CHAR_NEW', 2, 3, 4, 0, 1, '필수', 1, null, null], ['S1', 'COSTUME', 4, 6, 8, 0, 1, '필수', 1, null, null],
     ],
     '12_Capacity_Monthly': months.flatMap(m => Object.entries(heads).map(([p, h]) => [m, p, p === 'MODEL' && m >= months[4] ? h + 1 : h, '80%', 1, 0, 0, null] as Cell[])),
     '13_Progress_Actual': [['LAUNCH', 'CHAR_NEW', 'ART', 2, 9, day(now, 1, 20)]],
@@ -287,14 +312,19 @@ function exampleRows(now: Date): Record<string, Cell[][]> {
 }
 
 /** 양식 파일 시트(안내 + 데이터 시트). example = 예시 데이터를 채운다 */
-export function templateBook(options: { example?: boolean; now?: Date } = {}): { sheets: Book; freezeRows: Record<string, number> } {
+export function templateBook(options: {
+  example?: boolean; now?: Date;
+  /** 지금 프로젝트를 내보낼 때: 시트 키(01_Part_Master …) → 규격 칸 순서의 행 */
+  data?: Record<string, Cell[][]>; source?: string;
+} = {}): { sheets: Book; freezeRows: Record<string, number> } {
   const now = options.now ?? new Date();
-  const ex = options.example ? exampleRows(now) : {};
+  const ex = options.data ?? (options.example ? exampleRows(now) : {});
   const sheets: Book = {};
   const freezeRows: Record<string, number> = { '안내': 0 };
   const guide: (Cell | StyledCell)[][] = [
     [{ v: 'ARP 가져오기 양식', s: 'title' }],
-    [options.example ? '예시 데이터가 들어 있는 양식입니다. 값을 바꿔 그대로 가져올 수 있습니다.' : '빈 양식입니다. 시트마다 3행부터 데이터를 입력합니다.'],
+    [options.data ? `프로젝트 "${options.source ?? ''}"에서 내보낸 양식입니다(${now.toISOString().slice(0, 10)}). 엑셀에서 수정한 뒤 다시 가져오면 새 프로젝트 파일이 됩니다. 시나리오 · 변경 이력은 들어 있지 않습니다.`
+      : options.example ? '예시 데이터가 들어 있는 양식입니다. 값을 바꿔 그대로 가져올 수 있습니다.' : '빈 양식입니다. 시트마다 3행부터 데이터를 입력합니다.'],
     [],
     [{ v: '사용 방법', s: 'sub' }],
     ['1. 필수 시트(파트 · 리소스 · 공수 · 업데이트 · 물량 · 인력)를 채웁니다. 선택 시트는 비워 둬도 됩니다.'],
@@ -318,7 +348,7 @@ export function templateBook(options: { example?: boolean; now?: Date } = {}): {
   for (const sp of IMPORT_SPEC) {
     const head: StyledCell[] = sp.columns.map(c => ({ v: c.required ? `${c.ko} *` : c.ko, s: c.required ? 'req' : 'opt' }));
     const note: StyledCell[] = sp.columns.map((c, i) => ({ v: `${i === 0 ? '※ ' : ''}${[c.format, c.desc].filter(Boolean).join(' · ')}`, s: 'note' }));
-    const rows: Cell[][] = (ex[sp.key] ?? (sp.key === '00_Config' ? [['여유율', '0%'], ['기본 겹침률', '20%'], ['기본 가동률', '80%']] : []));
+    const rows: Cell[][] = (ex[sp.key] ?? (sp.key === '00_Config' && !options.data ? [['프로젝트 이름', ''], ['여유율', '0%'], ['기본 겹침률', '20%'], ['기본 가동률', '80%'], ['근무 요일', '월화수목금']] : []));
     sheets[sp.ko] = [head, note, ...rows];
     freezeRows[sp.ko] = 2;
   }

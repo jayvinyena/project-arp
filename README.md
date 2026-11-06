@@ -86,8 +86,8 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
-npm test                                  # 검사 110개
-npm run e2e                               # 크롬 시험 117개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 작업 진척 5 · 시뮬레이션 8 · 가져오기 15 · 안정화 9 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
+npm test                                  # 검사 115개
+npm run e2e                               # 크롬 시험 118개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 작업 진척 5 · 시뮬레이션 8 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)
@@ -173,7 +173,7 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 
 | 파일 | 내용 |
 |---|---|
-| [docs/19-import-template.md](docs/19-import-template.md) · [core/import-spec.ts](core/import-spec.ts) | **엑셀 가져오기 양식**(2026-11-06 요청): 규격 한 곳 정의 → 양식 파일 · 한글 머리글 읽기 · 가져오기 창 규격 표 |
+| [docs/19-import-template.md](docs/19-import-template.md) · [core/import-spec.ts](core/import-spec.ts) | **엑셀 가져오기 양식 · 편집용 엑셀 내보내기**(2026-11-06 요청): 규격 한 곳 정의 → 양식 파일 · 한글 머리글 읽기 · 가져오기 창 규격 표 · 지금 프로젝트를 양식으로(왕복) |
 | [docs/18-layout-help.md](docs/18-layout-help.md) · [tools/capture-pages.mjs](tools/capture-pages.mjs) · [tools/find-overflow.mjs](tools/find-overflow.mjs) | **화면 배치 점검 · 화면 안내 · 용어(작업 진척)**(2026-11-06 요청) · 메뉴별 캡처 · 좁은 화면 넘침 찾기 |
 | [docs/17-setup-templates-ai.md](docs/17-setup-templates-ai.md) | **만든 뒤 고치기 · 물량 템플릿 · AI 공수**(2026-11-05 요청) |
 | [docs/16-review.md](docs/16-review.md) | **전체 점검**: 독립 점검 3개(계산·데이터·화면)로 찾은 문제와 고친 것 |
