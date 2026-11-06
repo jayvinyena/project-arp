@@ -255,3 +255,49 @@ test('가상 업데이트: 사용 안 함 리소스는 템플릿에 있어도 �
   raw.close();
   assert.deepEqual(vols, ['COSTUME', 'ICON']);
 });
+
+test('바꿀 수 있는 것 전부: 가동률·생산성·임시 지원·AI 공수·재작업률·여유율·리소스 수량 — 방향이 맞고, 원본은 그대로, 원본에 반영도 된다', () => {
+  const { raw, db, session } = open('normal');
+  const parts = ['CONCEPT', 'MODELING', 'ANIMATION', 'FX'];
+  const make = (name, actions) => { const id = applyScenarioOp(db, { kind: 'create', name }).createdId; for (const a of actions) add(db, id, a); return id; };
+  const range = { fromMonth: '2026-11', toMonth: '2027-12' };
+  const up = {
+    util: make('가동률 100%', parts.map(p => ({ kind: 'utilization', partId: p, ...range, rate: 1 }))),
+    prod: make('생산성 1.5배', parts.map(p => ({ kind: 'productivity', partId: p, ...range, factor: 1.5 }))),
+    support: make('임시 지원', parts.map(p => ({ kind: 'support', partId: p, ...range, days: 30 }))),
+    ai: make('AI', parts.flatMap(p => [{ kind: 'aiShare', partId: p, share: 0.8 }, { kind: 'aiEffort', partId: p, saving: 0.5 }])),
+  };
+  const down = {
+    rework: make('재작업', parts.map(p => ({ kind: 'rework', partId: p, rate: 0.5 }))),
+    buffer: make('여유율', [{ kind: 'buffer', rate: 0.4 }]),
+    qty: make('수량', [{ kind: 'volumeQty', updateId: 'LAUNCH', resourceTypeId: db.get("SELECT resource_type_id FROM volumes WHERE update_id = 'LAUNCH' LIMIT 1").resource_type_id, mode: 'TARGET', qty: 400 }]),
+  };
+  const before = db.all('SELECT * FROM capacity ORDER BY part_id, month');
+  const ids = [...Object.values(up), ...Object.values(down)];
+  const v = compareScenarios(db, session, ids, 'TARGET');
+  assert.ok(v.columns.every(c => !c.blocked), v.columns.filter(c => c.blocked).map(c => c.name).join(','));
+  const load = i => v.parts.reduce((s, p) => s + p.loads[i], 0);
+  Object.keys(up).forEach((k, j) => {
+    assert.ok(launchOf(v, j + 1).delta <= 0, `${k}: 늦어지지 않는다`);
+    assert.ok(load(j + 1) < load(0), `${k}: 부하율이 준다`);
+  });
+  Object.keys(down).forEach((k, j) => {
+    const i = Object.keys(up).length + j + 1;
+    assert.ok((launchOf(v, i).delta ?? 99) >= 0, `${k}: 당겨지지 않는다`);
+    assert.ok(load(i) > load(0) || launchOf(v, i).delta > 0, `${k}: 부하율이 늘거나 늦어진다`);
+  });
+  assert.deepEqual(db.all('SELECT * FROM capacity ORDER BY part_id, month'), before, '원본은 그대로');
+  // 이름표
+  const labels = listScenarios(db).flatMap(s => s.actions.map(a => a.label));
+  for (const t of ['가동률 100%', '생산성 ×1.5', '임시 지원 +30', 'AI 공수 50% 절감', '재작업률 50%', '여유율 40%', '기본안 400개']) assert.ok(labels.some(l => l.includes(t)), t);
+  // 원본에 반영: AI 공수가 옮겨진다
+  applyScenarioToBase(db, session, up.ai, ctx);
+  const ai = db.get("SELECT b.days AS base, a.days AS ai FROM efforts b JOIN efforts a ON a.resource_type_id = b.resource_type_id AND a.part_id = b.part_id AND a.profile_id = 'AI' WHERE b.profile_id = 'BASE' AND b.part_id = 'FX' LIMIT 1");
+  assert.ok(Math.abs(ai.ai - ai.base * 0.5) < 1e-3, JSON.stringify(ai));
+  assert.equal(db.get("SELECT share FROM effort_mix WHERE part_id = 'FX' AND profile_id = 'AI'").share, 0.8);
+  // 잘못된 값은 거절
+  const bad = make('잘못', []);
+  assert.throws(() => add(db, bad, { kind: 'utilization', partId: 'FX', ...range, rate: 1.5 }), /가동률/);
+  assert.throws(() => add(db, bad, { kind: 'volumeQty', updateId: 'LAUNCH', resourceTypeId: 'NOPE', mode: 'MIN', qty: 1 }), /없는 리소스/);
+  raw.close();
+});

@@ -10,7 +10,14 @@ import { readModeNames } from './modes.ts';
 export type ScenarioAction =
   | { kind: 'headcount'; partId: string; fromMonth: string; toMonth: string; delta: number }
   | { kind: 'outsource'; partId: string; fromMonth: string; toMonth: string; days: number }
+  | { kind: 'utilization'; partId: string; fromMonth: string; toMonth: string; rate: number }
+  | { kind: 'productivity'; partId: string; fromMonth: string; toMonth: string; factor: number }
+  | { kind: 'support'; partId: string; fromMonth: string; toMonth: string; days: number }
   | { kind: 'aiShare'; partId: string; share: number }
+  | { kind: 'aiEffort'; partId: string; saving: number }
+  | { kind: 'rework'; partId: string; rate: number }
+  | { kind: 'buffer'; rate: number }
+  | { kind: 'volumeQty'; updateId: string; resourceTypeId: string; mode: PlanMode; qty: number }
   | { kind: 'volumeScale'; updateId: string; scale: number }
   | { kind: 'volumeToMin'; updateId: string; onlyOptional: boolean }
   | { kind: 'updateDates'; updateId: string; startDate?: string | null; freezeDate?: string | null; releaseDate?: string | null }
@@ -69,9 +76,10 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
 
   switch (a.kind) {
     case 'headcount':
-    case 'outsource': {
+    case 'outsource':
+    case 'support': {
       const name = partName(a.partId);
-      const field = a.kind === 'headcount' ? 'headcount' : 'outsource_days';
+      const field = a.kind === 'headcount' ? 'headcount' : a.kind === 'outsource' ? 'outsource_days' : 'support_days';
       const add = a.kind === 'headcount' ? a.delta : a.days;
       if (!Number.isFinite(add) || add === 0) fail('0이 아닌 숫자를 입력하십시오.');
       const changes: Change[] = [];
@@ -83,8 +91,68 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
       if (!changes.length) fail('그 기간에 인력 행이 없습니다.');
       const sign = add > 0 ? '+' : '';
       return {
-        label: a.kind === 'headcount' ? `${name} 인원 ${sign}${fmtN(add)}명 (${range(a.fromMonth, a.toMonth)})` : `${name} 외주 ${sign}${fmtN(add)}인·일/월 (${range(a.fromMonth, a.toMonth)})`,
+        label: a.kind === 'headcount' ? `${name} 인원 ${sign}${fmtN(add)}명 (${range(a.fromMonth, a.toMonth)})`
+          : `${name} ${a.kind === 'outsource' ? '외주' : '임시 지원'} ${sign}${fmtN(add)}인·일/월 (${range(a.fromMonth, a.toMonth)})`,
         changes,
+      };
+    }
+    case 'utilization':
+    case 'productivity': {
+      // 절댓값으로 바꾼다(가동률 80% → 90%처럼 사람이 생각하는 방식)
+      const name = partName(a.partId);
+      const value = a.kind === 'utilization' ? a.rate : a.factor;
+      if (a.kind === 'utilization' && !(value > 0 && value <= 1)) fail('가동률은 1–100%입니다.');
+      if (a.kind === 'productivity' && !(value >= 0.1 && value <= 5)) fail('생산성은 0.1–5배입니다.');
+      const field = a.kind === 'utilization' ? 'utilization' : 'productivity';
+      const changes: Change[] = [];
+      for (const m of months(a.fromMonth, a.toMonth)) {
+        if (!db.get('SELECT 1 AS ok FROM capacity WHERE part_id = ? AND month = ?', [a.partId, m])) continue;
+        changes.push({ op: 'SET', target: 'capacity', target_key: `${a.partId}|${m}`, field, value });
+      }
+      if (!changes.length) fail('그 기간에 인력 행이 없습니다.');
+      return {
+        label: a.kind === 'utilization' ? `${name} 가동률 ${Math.round(value * 100)}% (${range(a.fromMonth, a.toMonth)})` : `${name} 생산성 ×${fmtN(value)} (${range(a.fromMonth, a.toMonth)})`,
+        changes,
+      };
+    }
+    case 'aiEffort': {
+      // AI 사용 시 공수 = 기본 공수 × (1 − 절감). 이 파트를 거치는 모든 리소스
+      const name = partName(a.partId);
+      if (!(a.saving >= 0 && a.saving < 1)) fail('절감은 0–99%입니다.');
+      if (!db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'")) fail('"AI 사용 시" 공수 프로필이 없습니다.');
+      const rows = db.all(`SELECT rp.resource_type_id, e.days FROM resource_parts rp
+          JOIN efforts e ON e.resource_type_id = rp.resource_type_id AND e.part_id = rp.part_id AND e.profile_id = 'BASE'
+          WHERE rp.part_id = ? AND e.days IS NOT NULL`, [a.partId]);
+      if (!rows.length) fail('그 파트에 기본 공수가 있는 리소스가 없습니다.');
+      const changes: Change[] = rows.map(r => ({
+        op: 'INSERT' as const, target: 'efforts' as const, target_key: `${r.resource_type_id}|${a.partId}|AI`, field: null,
+        value: { resource_type_id: r.resource_type_id, part_id: a.partId, profile_id: 'AI', days: Math.round(Number(r.days) * (1 - a.saving) * 10000) / 10000 },
+      }));
+      return { label: `${name} AI 공수 ${Math.round(a.saving * 100)}% 절감 (리소스 ${rows.length}종)`, changes };
+    }
+    case 'rework': {
+      const name = partName(a.partId);
+      if (!(a.rate >= 0 && a.rate <= 2)) fail('재작업률은 0–200%입니다.');
+      const rows = db.all('SELECT resource_type_id FROM resource_parts WHERE part_id = ?', [a.partId]);
+      if (!rows.length) fail('그 파트를 거치는 리소스가 없습니다.');
+      return {
+        label: `${name} 재작업률 ${Math.round(a.rate * 100)}% (리소스 ${rows.length}종)`,
+        changes: rows.map(r => ({ op: 'SET' as const, target: 'resource_parts' as const, target_key: `${r.resource_type_id}|${a.partId}`, field: 'rework_rate', value: a.rate })),
+      };
+    }
+    case 'buffer': {
+      if (!(a.rate >= 0 && a.rate < 1)) fail('여유율은 0–99%입니다.');
+      return { label: `여유율 ${Math.round(a.rate * 100)}%`, changes: [{ op: 'SET', target: 'settings', target_key: 'settings', field: 'buffer_rate', value: a.rate }] };
+    }
+    case 'volumeQty': {
+      const name = updateName(a.updateId);
+      if (!Number.isInteger(a.qty) || a.qty < 0) fail('수량은 0 이상의 정수입니다.');
+      const res = db.get('SELECT t.name FROM volumes v JOIN resource_types t ON t.resource_type_id = v.resource_type_id WHERE v.update_id = ? AND v.resource_type_id = ?', [a.updateId, a.resourceTypeId]);
+      if (!res) fail('그 업데이트에 없는 리소스입니다.');
+      const field = a.mode === 'MIN' ? 'min_qty' : a.mode === 'STRETCH' ? 'stretch_qty' : 'target_qty';
+      return {
+        label: `${name} ${String(res!.name)} ${readModeNames(db)[a.mode]} ${a.qty}개`,
+        changes: [{ op: 'SET', target: 'volumes', target_key: `${a.updateId}|${a.resourceTypeId}`, field, value: a.qty }],
       };
     }
     case 'aiShare': {
@@ -479,7 +547,11 @@ export function applyScenarioToBase(db: SqlDb, session: ProjectSession, scenario
 // ───────── 화면용 목록 ─────────
 
 export interface SimMeta {
-  parts: { partId: string; name: string }[];
+  /** 지금 값(입력 칸의 처음 값): 계획 기간 평균 가동률·생산성, AI 비율, AI 공수 절감(기본 대비), 평균 재작업률 */
+  parts: { partId: string; name: string; utilization: number | null; productivity: number | null; aiShare: number; aiSaving: number | null; rework: number }[];
+  /** 계산 대상 업데이트의 리소스별 수량 */
+  volumes: { updateId: string; resourceTypeId: string; name: string; min: number | null; target: number | null; stretch: number | null }[];
+  buffer: number;
   updates: { updateId: string; name: string; live: boolean; startDate: string | null; freezeDate: string | null; releaseDate: string | null; priority: number }[];
   months: string[];
   types: { typeId: string; name: string }[];
@@ -489,7 +561,25 @@ export interface SimMeta {
 export function simMeta(db: SqlDb): SimMeta {
   const s = db.get('SELECT horizon_start_month AS a, horizon_end_month AS b FROM settings WHERE id = 1') ?? {};
   return {
-    parts: db.all('SELECT part_id, name FROM parts WHERE active = 1 ORDER BY sort_order').map(p => ({ partId: String(p.part_id), name: String(p.name) })),
+    parts: db.all(`SELECT p.part_id, p.name,
+        (SELECT avg(utilization) FROM capacity c WHERE c.part_id = p.part_id) AS util,
+        (SELECT avg(productivity) FROM capacity c WHERE c.part_id = p.part_id) AS prod,
+        (SELECT share FROM effort_mix m WHERE m.part_id = p.part_id AND m.profile_id = 'AI') AS ai,
+        (SELECT 1 - sum(a.days) / sum(b.days) FROM efforts b JOIN efforts a ON a.resource_type_id = b.resource_type_id AND a.part_id = b.part_id AND a.profile_id = 'AI'
+          WHERE b.part_id = p.part_id AND b.profile_id = 'BASE' AND b.days > 0) AS saving,
+        (SELECT avg(rework_rate) FROM resource_parts r WHERE r.part_id = p.part_id) AS rework
+      FROM parts p WHERE p.active = 1 ORDER BY p.sort_order`).map(p => ({
+      partId: String(p.part_id), name: String(p.name),
+      utilization: p.util == null ? null : Number(p.util), productivity: p.prod == null ? null : Number(p.prod),
+      aiShare: Number(p.ai ?? 0), aiSaving: p.saving == null ? null : Number(p.saving), rework: Number(p.rework ?? 0),
+    })),
+    volumes: db.all(`SELECT v.update_id, v.resource_type_id, t.name, v.min_qty, v.target_qty, v.stretch_qty FROM volumes v
+        JOIN updates u ON u.update_id = v.update_id JOIN resource_types t ON t.resource_type_id = v.resource_type_id
+        WHERE u.status IN ('PLANNED', 'IN_PROGRESS') ORDER BY u.priority, t.sort_order`).map(v => ({
+      updateId: String(v.update_id), resourceTypeId: String(v.resource_type_id), name: String(v.name),
+      min: v.min_qty == null ? null : Number(v.min_qty), target: v.target_qty == null ? null : Number(v.target_qty), stretch: v.stretch_qty == null ? null : Number(v.stretch_qty),
+    })),
+    buffer: Number(db.get('SELECT buffer_rate AS b FROM settings WHERE id = 1')?.b ?? 0),
     updates: db.all("SELECT * FROM updates ORDER BY CASE WHEN status IN ('PLANNED', 'IN_PROGRESS') THEN 0 ELSE 1 END, priority, sort_order").map(u => ({
       updateId: String(u.update_id), name: String(u.name), live: u.status === 'PLANNED' || u.status === 'IN_PROGRESS',
       startDate: u.start_date == null ? null : String(u.start_date), freezeDate: u.freeze_date == null ? null : String(u.freeze_date),

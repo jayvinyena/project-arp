@@ -41,7 +41,7 @@ export function ImportReport(props: { report: Report; findings: Finding[]; onSav
               <h3 class="sub">건너뛴 행 ({r.skipped.length})</h3>
               {showSkipped
                 ? <ul class="report-list">{r.skipped.map(a => <li>{a}</li>)}</ul>
-                : <button type="button" class="btn sm ghost" onClick={() => setShowSkipped(true)}>{r.skipped.length}개 보기</button>}
+                : <button type="button" class="btn sm" onClick={() => setShowSkipped(true)}>{r.skipped.length}개 보기</button>}
             </section>
           )}
           {r.ignoredSheets.length > 0 && (

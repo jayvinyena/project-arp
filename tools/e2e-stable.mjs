@@ -81,7 +81,7 @@ await withBrowser(async (cdp, base) => {
   // 4. 최근 파일: 핸들로 연 파일은 시작 화면에 남고, 누르면 다시 열린다
   await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&nosw` });
   await cdp.waitUntil("document.querySelector('.save-state')?.textContent.includes('저장됨')", 10000);
-  await cdp.eval("[...document.querySelectorAll('.sidebar button')].find(b => b.textContent.trim() === '닫기').click()");
+  await cdp.eval("[...document.querySelectorAll('.sidebar button')].find(b => b.textContent.trim() === '파일 닫기').click()");
   await cdp.waitUntil("document.querySelector('.recent-item')", 8000);
   const recent = await cdp.eval("document.querySelector('.recent-item span')?.textContent");
   check('최근 파일 목록', recent === 'normal.arp', recent);

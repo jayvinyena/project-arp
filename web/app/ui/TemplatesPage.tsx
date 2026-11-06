@@ -72,7 +72,7 @@ export function TemplatesPage(props: { version: number; readOnly: boolean; onApp
               <div class="inline">
                 <span class="small faint">이 유형의 업데이트 {cur.usedBy}개</span>
                 {!props.readOnly && (
-                  <button type="button" class="btn sm ghost" disabled={cur.usedBy > 0} title={cur.usedBy > 0 ? '이 유형을 사용하는 업데이트가 있어 삭제할 수 없습니다' : ''}
+                  <button type="button" class="btn sm" disabled={cur.usedBy > 0} title={cur.usedBy > 0 ? '이 유형을 사용하는 업데이트가 있어 삭제할 수 없습니다' : ''}
                     onClick={() => apply({ kind: 'deleteType', typeId: cur.typeId })}>유형 지우기</button>
                 )}
               </div>

@@ -723,7 +723,7 @@ export function App() {
           <div style="display: flex; gap: 6px">
             <button class="btn sm" disabled={file.readOnly || save.state === 'saving'} onClick={() => void writeNow()} title="저장 (Ctrl+S)"><IconSave />{file.handle ? '저장' : '다른 이름으로 저장'}</button>
             {file.handle && !file.readOnly && (save.state === 'conflict' || save.state === 'error') && <button class="btn sm" onClick={() => void saveAsNew()}>다른 이름으로</button>}
-            <button class="btn sm ghost" onClick={() => void close()}>닫기</button>
+            <button class="btn sm" title="이 파일을 닫고 시작 화면으로 돌아갑니다" onClick={() => void close()}>파일 닫기</button>
           </div>
           <button class="btn sm ghost" style="justify-content: flex-start" title="업데이트 전망 · 파트 부하 등 보고용 표(다시 가져올 수 없음)" onClick={() => void exportXlsx()}><IconDownload />보고용 엑셀 내보내기</button>
           <button class="btn sm ghost" style="justify-content: flex-start" title="가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져올 수 있음" onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>

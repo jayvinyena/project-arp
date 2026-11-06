@@ -299,7 +299,7 @@ function UpdateDrawer(props: {
                     ? <><span class="small">"{d.name}"과 물량·작업 진척을 삭제하시겠습니까? 변경 이력에는 남습니다.</span>
                       <button type="button" class="btn sm danger" onClick={async () => { if (await props.onApply({ kind: 'deleteUpdate', updateId: d.updateId })) props.onClose(); }}>지우기</button>
                       <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
-                    : <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(true)}>이 업데이트 지우기</button>}
+                    : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>이 업데이트 지우기</button>}
                 </div>
               )}
             </div>
@@ -308,6 +308,14 @@ function UpdateDrawer(props: {
       </aside>
     </div>
   );
+}
+
+/** 제목: 런칭이 있으면 "런칭과 업데이트 N개"(N = 런칭 제외), 업데이트가 없으면 "런칭", 런칭이 없으면 "업데이트 N개" */
+export function planTitle(rows: { isLaunch: boolean }[]): string {
+  const hasLaunch = rows.some(r => r.isLaunch);
+  const n = rows.filter(r => !r.isLaunch).length;
+  if (hasLaunch) return n ? `런칭과 업데이트 ${n}개` : '런칭';
+  return `업데이트 ${n}개`;
 }
 
 export function PlanPage(props: {
@@ -329,7 +337,8 @@ export function PlanPage(props: {
       <header class="page-head">
         <div>
           <PageEyebrow page="plan" />
-          <h1>런칭과 업데이트 {live.length}개</h1>
+          {/* 개수는 런칭을 뺀 업데이트만 센다(런칭 + 시즌 3개 = "런칭과 업데이트 3개") */}
+          <h1>{planTitle(live)}</h1>
           <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 사용합니다.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개.`}</p>
         </div>
         <div class="inline">

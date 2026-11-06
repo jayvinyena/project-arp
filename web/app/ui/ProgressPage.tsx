@@ -5,7 +5,7 @@ import { rpc } from '../lib/rpc.ts';
 import type { ProgressView, ProgressRow } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
 import { fmtInt, fmtPct, fmtDate } from '../lib/format.ts';
-import { IconCheck } from './icons.tsx';
+import { IconCheck, IconDownload } from './icons.tsx';
 import { afterCommit } from './commit.ts';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -93,6 +93,7 @@ export function ProgressPage(props: {
           <div class="small muted num">{fmtInt(view.summary.doneDays)} / {fmtInt(view.summary.totalDays)} 인·일{view.latestAsOf ? ` · 마지막 기준일 ${fmtDate(view.latestAsOf)}` : ''}</div>
         </section>
         <section class="card progress-parts">
+          <div class="small faint">파트별 진행 · 기본 공수 기준</div>
           {view.summary.byPart.filter(p => p.totalDays > 0).map(p => {
             const r = p.doneDays / p.totalDays;
             return (
@@ -119,7 +120,7 @@ export function ProgressPage(props: {
               <button type="button" role="radio" aria-checked={field === 'done'} class={field === 'done' ? 'on' : ''} onClick={() => setField('done')}>완료 수량</button>
               <button type="button" role="radio" aria-checked={field === 'spent'} class={field === 'spent' ? 'on' : ''} onClick={() => setField('spent')}>실투입 인·일</button>
             </div>
-            <button type="button" class="btn sm ghost" onClick={() => void props.onTemplate()}>양식 받기</button>
+            <button type="button" class="btn sm" title="여럿이 나눠 입력할 진척 엑셀 양식을 받습니다" onClick={() => void props.onTemplate()}><IconDownload />양식 받기</button>
             {!props.readOnly && <button type="button" class="btn sm" onClick={() => void props.onImport()}>엑셀로 넣기</button>}
           </div>
         </div>
@@ -157,7 +158,7 @@ export function ProgressPage(props: {
                         </td>
                         <td class="n">
                           {!props.readOnly && r.doneRate < 1 && (
-                            <button type="button" class="btn sm ghost" title="거치는 모든 파트를 목표만큼 완료로" onClick={() => apply({ kind: 'completeRow', updateId, resourceTypeId: r.resourceTypeId, asOf })}>다 끝남</button>
+                            <button type="button" class="btn sm" title="거치는 모든 파트를 목표만큼 완료로" onClick={() => apply({ kind: 'completeRow', updateId, resourceTypeId: r.resourceTypeId, asOf })}>다 끝남</button>
                           )}
                         </td>
                       </tr>

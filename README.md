@@ -86,8 +86,8 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
-npm test                                  # 검사 115개
-npm run e2e                               # 크롬 시험 118개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 작업 진척 5 · 시뮬레이션 8 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
+npm test                                  # 검사 116개
+npm run e2e                               # 크롬 시험 121개(동시 3개, 30초 안팎): 저장 9 · 새 프로젝트 9 · 업데이트 계획 14 · 작업 진척 5 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)
@@ -129,7 +129,7 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 | [docs/08-simulation.md](docs/08-simulation.md) | 시뮬레이션 화면, 동작 9가지, 원본에 반영, 파일 구조 v2, 속도 |
 | [core/scenarios.ts](core/scenarios.ts) · [core/migrate.ts](core/migrate.ts) | 시나리오 로직 · 구조 전환 |
 | [web/app/ui/SimulationPage.tsx](web/app/ui/SimulationPage.tsx) | 화면 |
-| [test/scenarios.test.mjs](test/scenarios.test.mjs) · [tools/e2e-sim.mjs](tools/e2e-sim.mjs) | 검사 8개 · 크롬 시험 8개 |
+| [test/scenarios.test.mjs](test/scenarios.test.mjs) · [tools/e2e-sim.mjs](tools/e2e-sim.mjs) | 검사 14개 · 크롬 시험 11개 |
 
 ## 4.5단계 산출물
 

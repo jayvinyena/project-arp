@@ -149,7 +149,7 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
         <div class="ask">
           <div class="ask-q">
             <span class="q">{props.deadlineLabel}까지 물량을 최대 얼마나?</span>
-            <button class="btn sm ghost" disabled={busy !== ''} onClick={runScale}><IconSpark />다시 계산</button>
+            <button class="btn sm" disabled={busy !== ''} onClick={runScale}><IconSpark />다시 계산</button>
           </div>
           {!scale && <div class="answer reserve-scale placeholder">{status('scale', scale)}</div>}
           {scale && (
@@ -172,7 +172,7 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
         <div class="ask">
           <div class="ask-q">
             <span class="q">{mode} 물량을 지키려면 몇 명 더?</span>
-            <button class="btn sm ghost" disabled={busy !== ''} onClick={runHeads}><IconUsers />다시 계산</button>
+            <button class="btn sm" disabled={busy !== ''} onClick={runHeads}><IconUsers />다시 계산</button>
           </div>
           {!heads && <div class="answer reserve-heads placeholder">{status('heads', heads)}</div>}
           {heads && (

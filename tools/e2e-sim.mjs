@@ -27,9 +27,9 @@ const clickText = (cdp, text, scope = 'document') => cdp.eval(`(() => { const b 
 const headers = "[...document.querySelectorAll('table.compare thead th')].map(t => t.textContent)";
 const launchCells = "[...[...document.querySelectorAll('table.compare tbody tr')].find(r => r.textContent.startsWith('런칭')).querySelectorAll('td')].map(t => t.textContent)";
 
-/** 동작 종류 고르기(바꿀 것 목록) */
+/** 동작 종류 고르기(바꿀 것 칩) */
 const pickKind = async (cdp, kind) => {
-  await cdp.eval(`(() => { const s = document.querySelector('.action-form select[aria-label="바꿀 것"]'); s.value = '${kind}'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await cdp.eval(`document.querySelector('.action-form .kind-chip[data-kind="${kind}"]').click()`);
   await sleep(150);
 };
 
@@ -69,6 +69,30 @@ await withBrowser(async (cdp, base) => {
   check('원본 + 시나리오 3개를 나란히', h3.length === 5 && h3.includes('확장 물량'), h3.join(' | '));
   const c3 = await cdp.eval(launchCells);
   check('물량을 늘리면 런칭이 늦어진다(+ 차이)', /\+\d+일/.test(c3[c3.length - 1]), c3[c3.length - 1]);
+
+  // 바꿀 것: 네 무리(인력·효율·물량·일정)에 모든 종류가 보인다 · 가동률 · AI 공수 절감 · 리소스 수량 · 결과 미리보기
+  const groups = await cdp.eval("[...document.querySelectorAll('.kind-group')].map(g => g.querySelector('.kind-group-name').textContent + ':' + g.querySelectorAll('.kind-chip').length).join(' ')");
+  check('바꿀 것 17종이 네 무리로 보인다', groups === '인력:5 효율:5 물량:3 일정:4', groups);
+  await pickKind(cdp, 'utilization');
+  await cdp.eval(`(() => { const s = document.querySelector('.action-form select[aria-label="파트"]'); s.value = 'FX'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await sleep(100);
+  await typeIn(cdp, '.action-form input[aria-label="가동률"]', '100');
+  await clickText(cdp, '더하기', "document.querySelector('.action-form')");
+  await cdp.waitUntil("[...document.querySelectorAll('.action-item span')].some(s => s.textContent.startsWith('FX 가동률 100%'))", 10000);
+  await pickKind(cdp, 'aiEffort');
+  const aiNow = await cdp.eval("document.querySelector('.action-form .now-val')?.textContent ?? ''");
+  await typeIn(cdp, '.action-form input[aria-label="AI 공수 절감"]', '60');
+  await clickText(cdp, '더하기', "document.querySelector('.action-form')");
+  await cdp.waitUntil("[...document.querySelectorAll('.action-item span')].some(s => /AI 공수 60% 절감/.test(s.textContent))", 10000);
+  await pickKind(cdp, 'volumeQty');
+  await typeIn(cdp, '.action-form input[aria-label="수량"]', '30');
+  await clickText(cdp, '더하기', "document.querySelector('.action-form')");
+  await cdp.waitUntil("[...document.querySelectorAll('.action-item span')].some(s => / 30개$/.test(s.textContent))", 10000);
+  check('가동률 · AI 공수 절감 · 리소스 수량을 더한다(지금 값 표시)', aiNow.startsWith('지금'), aiNow);
+  await sleep(600);
+  const preview = await cdp.eval("document.querySelector('.sim-preview')?.textContent ?? ''");
+  const chipsN = await cdp.eval("document.querySelectorAll('.sim-preview .preview-chip').length");
+  check('바꿀 것 아래 결과 미리보기(원본 대비, 업데이트 4개)', chipsN === 4 && /런칭(\d+월\d+일|기간밖)/.test(preview.replace(/\s/g, '')), preview.slice(0, 80));
 
   // 분석
   await cdp.waitUntil("document.querySelectorAll('.sens-row').length === 4", 10000);

@@ -761,3 +761,34 @@ table.grid.spec-table td:first-child { white-space: nowrap; }
 @media (max-width: 640px) { .import-foot { flex-wrap: wrap; } .import-foot .btn { width: 100%; } }
 /* 템플릿 이름 칸은 글자 길이만큼(연필이 이름 바로 옆에) */
 @supports (field-sizing: content) { .field.inline-title { width: auto; field-sizing: content; min-width: 3em; max-width: 16em; } }
+
+/* ───────── 시뮬레이션: 단계 제목 · 바꿀 것(무리별 칩) · 결과 미리보기 · 비교할 시나리오 ───────── */
+.step-title { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.step-title .step-badge { flex: none; width: 24px; height: 24px; font-size: 12px; margin-top: 1px; }
+.sub-h { margin: 0 0 8px; font-size: 13px; font-weight: 650; color: var(--text-2); }
+.warn-text { font-size: 12px; color: var(--warn); font-weight: 550; }
+.scenario-item.scenario-name { flex: 0 1 auto; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.scenario-item.scenario-name.active { background: var(--accent-soft); color: var(--accent-ink); }
+.sim-edit { display: flex; flex-direction: column; gap: 14px; }
+.sim-preview { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line-strong); min-height: 64px; }
+.preview-chips { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.preview-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.preview-chip .num { font-variant-numeric: tabular-nums; }
+.action-form { gap: 10px; }
+.action-form-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.kind-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 18px; }
+.kind-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kind-group-name { font-size: 11.5px; font-weight: 650; color: var(--text-3); letter-spacing: .02em; }
+.kind-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.kind-chip { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.kind-chip:hover { border-color: var(--line-strong); color: var(--text); }
+.kind-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.kind-chip:focus-visible { outline: none; box-shadow: var(--ring); }
+.kind-hint { margin: 0; color: var(--text-2); min-height: 20px; }
+.now-val { font-size: 12px; color: var(--text-3); padding: 0 4px; white-space: nowrap; }
+.compare-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pick-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.pick-chip input { width: 15px; height: 15px; accent-color: var(--accent); }
+.pick-chip.on { background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.answer.reserve-mini { min-height: 96px; }
+

@@ -47,7 +47,7 @@ export function HistoryPage(props: { version: number; readOnly: boolean; onUndo:
                       }}>{confirm.force ? '그래도 되돌리기' : '되돌리기'}</button>
                       <button type="button" class="btn ghost icon-btn" aria-label="그만두기" onClick={() => setConfirm(null)}><IconX /></button>
                     </span>
-                    : <button type="button" class="btn sm ghost" onClick={() => setConfirm({ id: b.batchId, force: false })}>되돌리기…</button>
+                    : <button type="button" class="btn sm" onClick={() => setConfirm({ id: b.batchId, force: false })}>되돌리기…</button>
                 )}
               </div>
               {open === b.batchId && (
