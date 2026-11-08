@@ -92,6 +92,21 @@
 - 숫자 끝 = 머리글 끝은 그대로(칸 여백 4 + 테두리 1 + 안쪽 8 = 머리글 13, 측정 0–1px). 어두운 화면도 같은 색 토큰을 쓴다.
 - 휴대폰 폭(유형 템플릿 카드 모양)은 격자선 없이 이름표 아래 숫자를 왼쪽 정렬한다.
 
+## 9. 리소스 공수 표: 머리글 2단 (2026-11-06 추가 요청)
+
+웹에서 머리글이 두 단으로 나뉜 표(묶음 머리글 → 칸 머리글)의 사례를 찾아 다시 설계했다.
+
+| 참고 | 가져온 것 |
+|---|---|
+| [W3C 불규칙 머리글](https://www.w3.org/WAI/tutorials/tables/irregular/) | 묶음 머리글은 colspan으로 아래 칸들을 덮고, 묶이지 않은 머리글(리소스 · 사용 · 분류 이동)은 두 단을 덮는다 |
+| [Maersk 디자인 시스템 표](https://designsystem.maersk.com/components/table/) | 세로선은 무거우니 꼭 필요한 곳만, 머리글 정렬 = 데이터 정렬(숫자 오른쪽), 가로로 넘치면 첫 열 고정 |
+| [booktabs](https://ctan.math.washington.edu/tex-archive/macros/latex/contrib/booktabs/booktabs.pdf) | 묶음 이름 아래 짧은 밑줄(cmidrule), 양 끝을 띄워 이웃 묶음과 이어지지 않게 |
+| [MUI X](https://mui.com/x/react-data-grid/column-groups) · [AG Grid](https://www.ag-grid.com/javascript-data-grid/column-groups/) 열 묶음 | 묶음 머리글을 별도 줄 · 별도 스타일로 다룬다 |
+
+- 세로선은 **파트 묶음 사이에만**(진한 선). 같은 파트의 기본 · AI 사이에는 선이 없고 AI 열을 옅은 색 바탕으로 구분한다.
+- 파트 이름은 굵게 가운데, 그 아래 양 끝을 띄운 밑줄. 아래 단의 "기본 · AI"는 작게, 숫자와 같은 오른쪽 정렬.
+- 리소스 이름 열은 가로로 밀어도 고정. 빈 공수는 "—", 빈 AI 공수는 "=기본".
+
 ## 검사
 
 - `npm test` 106개 통과(문구 바뀐 검사 3개 고침)

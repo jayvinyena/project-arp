@@ -887,3 +887,21 @@ table.grid.ref td:not(.n) > input.field.ghost-field { color: var(--text-2); font
   table.grid.vol.ref tr.total { border-top: 1px solid var(--line-strong); }
 }
 
+/* ───────── 리소스 공수 표: 머리글 2단(파트 묶음 → 기본 · AI) ─────────
+   참고: W3C 불규칙 머리글(colspan 묶음 머리글 + 아래 칸 머리글), Maersk 디자인 시스템(세로선은 무겁다 · 머리글 정렬 = 데이터 정렬 · 첫 열 고정),
+   booktabs 묶음 밑줄(cmidrule: 묶음 아래 짧은 선, 이웃 묶음과 띄움).
+   → 세로선은 파트 묶음 사이에만, 기본 · AI 사이는 선 없이 AI 열 옅은 바탕으로, 파트 이름 아래 양 끝을 띄운 밑줄 */
+table.grid.setup-res.ref th, table.grid.setup-res.ref td { border-right: 0; }
+table.grid.setup-res.ref th.ai-th, table.grid.setup-res.ref td.eff-ai,
+table.grid.setup-res.ref th.part-th,
+table.grid.setup-res.ref thead tr:first-child th:first-child, table.grid.setup-res.ref tbody tr.row td:first-child { border-right: 1px solid var(--line-strong); }
+table.grid.setup-res.ref th.part-th { position: sticky; text-align: center; color: var(--text); font-weight: 700; font-size: 12.5px; border-bottom: 0; padding: 9px 12px 7px; }
+table.grid.setup-res.ref th.part-th::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; border-radius: 1px; background: var(--text-3); opacity: .55; }
+table.grid.setup-res.ref th.sub-th { font-size: 11.5px; font-weight: 600; color: var(--text-3); padding-top: 7px; padding-bottom: 8px; }
+table.grid.setup-res.ref th.sub-th.ai-th { color: var(--accent-ink); }
+table.grid.setup-res.ref thead tr:first-child th[rowspan] { vertical-align: bottom; padding-bottom: 8px; }
+/* 가로로 밀어도 리소스 이름이 보이게 첫 열 고정 */
+table.grid.setup-res.ref thead tr:first-child th:first-child, table.grid.setup-res.ref tbody tr.row td:first-child { position: sticky; left: 0; z-index: 2; background: var(--surface); }
+table.grid.setup-res.ref thead tr:first-child th:first-child { z-index: 3; background: var(--surface-2); }
+table.grid.setup-res.ref tbody tr.row:hover td:first-child { background: color-mix(in srgb, var(--accent-soft) 25%, var(--surface)); }
+
