@@ -37,9 +37,9 @@ export function assetBook(db: SqlDb, updateId: string | null = null): { sheets: 
         id, String(a.uname), String(a.gname), String(a.rname), String(a.name), (a.code as string) ?? null, (a.category as string) ?? null, (a.bname as string) ?? null,
         MODE[a.tier as Tier], (a.due_date as string) ?? null, (a.jira_key as string) ?? null,
         ...parts.flatMap(p => {
-          if (!passes.has(`${a.resource_type_id}|${p.id}`)) return [null, null, null];
+          // 모든 에셋이 같은 파이프라인: 리소스 종류가 거치지 않는 파트의 기본은 "해당 없음"
           const s = states.get(`${id}|${p.id}`);
-          return [STATUS_LABEL[(s?.status as AssetStatus) ?? 'TODO'], (s?.done_at as string) ?? null, (s?.jira_key as string) ?? null];
+          return [STATUS_LABEL[(s?.status as AssetStatus) ?? (passes.has(`${a.resource_type_id}|${p.id}`) ? 'TODO' : 'OMIT')], (s?.done_at as string) ?? null, (s?.jira_key as string) ?? null];
         }),
         (a.note as string) ?? null,
       ] as C[];
@@ -190,9 +190,7 @@ export function importAssets(db: SqlDb, session: ProjectSession, sheets: Sheets,
           if (due === 'bad') throw new Error('마감일 형식이 올바르지 않습니다');
           run({ kind: 'assetField', assetIds: [id], field: 'due_date', value: due });
         }
-        const steps = new Set(db.all('SELECT part_id FROM resource_parts WHERE resource_type_id = ?', [rtId]).map(x => String(x.part_id)));
         for (const p of partCols) {
-          if (!steps.has(p.id)) continue;
           const st = p.status >= 0 ? statusOf(r[p.status]) : null;
           if (st === 'bad') throw new Error(`${p.name} 상태 "${r[p.status]}"을 알 수 없습니다`);
           const d = p.done >= 0 ? date(r[p.done]) : null;

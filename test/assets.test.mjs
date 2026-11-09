@@ -245,7 +245,7 @@ test('에셋 예시: 에셋 상태에서 다시 센 작업 진척 = 정상 예�
   a.raw.close(); b.raw.close();
 });
 
-test('칸반 단계 옮기기: 앞으로(지나친 파트 완료 · 옮긴 파트 진행) · 뒤로(수정 + 뒤 파트 대기) · 완료 · 대기 · 거치지 않는 파트는 거절 · 한 묶음 되돌리기', () => {
+test('칸반 단계 옮기기: 앞으로(지나친 파트 완료 · 옮긴 파트 진행) · 뒤로(수정 + 뒤 파트 대기) · 완료 · 대기 · 모든 에셋이 같은 파이프라인 · 한 묶음 되돌리기', () => {
   const t = open('assets');
   const stage = id => assetsView(t.db, 'LAUNCH').assets.find(a => a.assetId === id);
   const st = (id, p) => t.db.get('SELECT status, done_at, retakes FROM asset_parts WHERE asset_id = ? AND part_id = ?', [id, p]) ?? { status: 'TODO' };
@@ -271,12 +271,25 @@ test('칸반 단계 옮기기: 앞으로(지나친 파트 완료 · 옮긴 파�
   assert.equal(stage(id).progress, 1);
   apply(t, { kind: 'moveStage', assetIds: [id], stage: 'TODO' });
   assert.equal(stage(id).stage, 'TODO');
-  // 코스튬은 FX를 거치지 않는다
-  assert.throws(() => apply(t, { kind: 'moveStage', assetIds: ['A00013'], stage: 'FX' }), /거치지 않는/);
-  // 여러 장: 거치지 않는 에셋은 건너뛴다
+  // 모든 에셋이 같은 파이프라인: 코스튬은 FX를 거치지 않아 기본이 "해당 없음"이지만, FX 열로 옮기면 FX가 켜진다
+  const costume = stage('A00015');
+  assert.deepEqual(Object.keys(costume.parts), ['CONCEPT', 'MODELING', 'ANIMATION', 'FX']);
+  assert.deepEqual([costume.parts.FX.status, costume.parts.FX.inPlan, costume.parts.CONCEPT.inPlan], ['OMIT', false, true]);
+  assert.equal(costume.stage, 'TODO');
   apply(t, { kind: 'moveStage', assetIds: ['A00007', 'A00015'], stage: 'FX' });
   assert.equal(stage('A00007').stage, 'FX');
-  assert.equal(stage('A00015').stage, 'TODO', '코스튬(A00015)은 FX를 거치지 않아 그대로');
+  assert.equal(stage('A00015').stage, 'FX');
+  assert.equal(st('A00015', 'FX').status, 'WIP');
+  assert.equal(t.db.get("SELECT count(*) AS n FROM progress WHERE update_id = 'LAUNCH' AND resource_type_id = 'COSTUME' AND part_id = 'FX'").n, 0, '계획 공수에 없는 파트는 작업 진척에 세지 않는다');
+  // 다시 끄기: 해당 없음으로 돌리면 단계는 완료(시작일 기록은 남는다)
+  apply(t, { kind: 'assetPart', assetIds: ['A00015'], partId: 'FX', status: 'OMIT' });
+  assert.equal(st('A00015', 'FX').status, 'OMIT');
+  assert.equal(stage('A00015').stage, 'DONE');
+  // 거치는 파트를 해당 없음으로 끄고 다시 대기로 켜기
+  apply(t, { kind: 'assetPart', assetIds: ['A00016'], partId: 'ANIMATION', status: 'OMIT' });
+  assert.equal(stage('A00016').parts.ANIMATION.status, 'OMIT');
+  apply(t, { kind: 'assetPart', assetIds: ['A00016'], partId: 'ANIMATION', status: 'TODO' });
+  assert.equal(t.db.get("SELECT count(*) AS n FROM asset_parts WHERE asset_id = 'A00016' AND part_id = 'ANIMATION'").n, 0);
   // 작업 진척: 원화 완료가 늘었다
   assert.ok(t.db.get("SELECT completed_qty FROM progress WHERE update_id = 'LAUNCH' AND resource_type_id = 'CHAR_NEW' AND part_id = 'CONCEPT'").completed_qty >= 4);
   t.raw.close();

@@ -55,14 +55,26 @@ export const ASSET_EDIT_KINDS = new Set<string>([
 ]);
 
 /**
- * 지금 제작 단계: 모든 파트가 대기면 "대기", 모두 완료 · 해당 없음이면 "완료", 아니면 앞에서부터 아직 끝나지 않은 첫 파트.
- * statusOf(파트) = 그 파트 상태(행이 없으면 대기)
+ * 지금 제작 단계(docs/20-asset-management.md 20절). 파이프라인 = 모든 에셋이 같은 파트 순서(사용 중인 파트 전부).
+ * 모두 완료 · 해당 없음이면 "완료", 아직 아무 파트도 시작하지 않았으면(대기 · 해당 없음뿐) "대기",
+ * 아니면 앞에서부터 아직 끝나지 않은 첫 파트. statusOf(파트) = 그 파트 상태(행이 없으면 기본 상태)
  */
 export function stageOf(steps: string[], statusOf: (partId: string) => AssetStatus): Stage {
-  if (!steps.length) return 'DONE';
-  if (steps.every(p => statusOf(p) === 'TODO')) return 'TODO';
   const open = steps.find(p => !COUNTS_AS_DONE.has(statusOf(p)));
-  return open ?? 'DONE';
+  if (!open) return 'DONE';
+  if (steps.every(p => statusOf(p) === 'TODO' || statusOf(p) === 'OMIT')) return 'TODO';
+  return open;
+}
+
+/** 에셋 파트의 기본 상태(행이 없을 때): 리소스 종류가 거치는 파트는 대기, 아니면 해당 없음(언제든 대기로 켤 수 있다) */
+export const defaultStatus = (passes: boolean): AssetStatus => (passes ? 'TODO' : 'OMIT');
+
+/** 모든 에셋의 파이프라인(사용 중인 파트, 공정 순서)과 리소스 종류별 거치는 파트("리소스|파트") */
+export function pipeline(db: SqlDb): { parts: string[]; passes: Set<string> } {
+  return {
+    parts: db.all('SELECT part_id FROM parts WHERE active = 1 ORDER BY sort_order').map(r => String(r.part_id)),
+    passes: new Set(db.all('SELECT resource_type_id, part_id FROM resource_parts').map(r => `${r.resource_type_id}|${r.part_id}`)),
+  };
 }
 
 /** 이 컴퓨터의 오늘(YYYY-MM-DD) */
@@ -295,17 +307,17 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
       const jira = edit.jiraKey === undefined ? undefined : (cleanText(edit.jiraKey)?.toUpperCase() ?? null);
       if (jira && !JIRA_KEY.test(jira)) fail('Jira 키 형식은 ABC-123입니다.');
       const today = localToday();
+      const pl = pipeline(db);
+      if (!pl.parts.includes(edit.partId)) fail('사용하지 않는 파트입니다.');
       let changed = false;
       for (const assetId of edit.assetIds) {
         const a = assetRow(db, assetId);
-        if (!stepsOf(db, String(a.resource_type_id)).includes(edit.partId)) {
-          if (edit.assetIds.length === 1) fail('이 에셋의 리소스가 거치지 않는 파트입니다.');
-          continue; // 여러 개를 한 번에 바꿀 때는 그 파트를 거치지 않는 에셋을 건너뛴다
-        }
+        // 모든 에셋이 같은 파이프라인: 리소스 종류가 거치지 않는 파트도 해당 없음 ↔ 대기 · 진행 … 으로 바꿀 수 있다
+        const base = defaultStatus(pl.passes.has(`${a.resource_type_id}|${edit.partId}`));
         const key = `${assetId}|${edit.partId}`;
         const before = db.get('SELECT * FROM asset_parts WHERE asset_id = ? AND part_id = ?', [assetId, edit.partId]);
         const cur = {
-          status: (before?.status as AssetStatus | undefined) ?? 'TODO',
+          status: (before?.status as AssetStatus | undefined) ?? base,
           started_at: (before?.started_at as string | null | undefined) ?? null,
           done_at: (before?.done_at as string | null | undefined) ?? null,
           retakes: Number(before?.retakes ?? 0),
@@ -326,8 +338,8 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
         if (jira !== undefined) next.jira_key = jira;
         const fields = (Object.keys(next) as (keyof typeof next)[]).filter(f => next[f] !== cur[f]);
         if (!fields.length) continue;
-        // 기본 상태(대기 · 다른 값 없음)면 행을 두지 않는다
-        const isDefault = next.status === 'TODO' && !next.started_at && !next.done_at && next.retakes === 0 && !next.assignee && !next.jira_key;
+        // 기본 상태(거치는 파트는 대기, 아니면 해당 없음 · 다른 값 없음)면 행을 두지 않는다
+        const isDefault = next.status === base && !next.started_at && !next.done_at && next.retakes === 0 && !next.assignee && !next.jira_key;
         if (!before) {
           if (isDefault) continue;
           const row = { asset_id: assetId, part_id: edit.partId, ...next };
@@ -434,26 +446,24 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
       let changed = false;
       for (const assetId of edit.assetIds) {
         const a = assetRow(db, assetId);
-        const steps = stepsOf(db, String(a.resource_type_id));
+        const pl = pipeline(db);
+        const steps = pl.parts;
         const status = new Map(db.all('SELECT part_id, status FROM asset_parts WHERE asset_id = ?', [assetId]).map(r => [String(r.part_id), r.status as AssetStatus]));
-        const st = (p: string) => status.get(p) ?? 'TODO';
+        const st = (p: string) => status.get(p) ?? defaultStatus(pl.passes.has(`${a.resource_type_id}|${p}`));
         const from = stageOf(steps, st);
         const to = edit.stage;
-        if (to !== 'TODO' && to !== 'DONE' && !steps.includes(to)) {
-          if (edit.assetIds.length === 1) fail('이 에셋의 리소스가 거치지 않는 파트입니다.');
-          continue;
-        }
+        if (to !== 'TODO' && to !== 'DONE' && !steps.includes(to)) fail('사용하지 않는 파트입니다.');
         if (from === to) continue;
         const set = (partId: string, s: AssetStatus) => {
           if (st(partId) === s) return;
           if (applyAssetEdit(db, session, { kind: 'assetPart', assetIds: [assetId], partId, status: s }, ctx).changed) changed = true;
         };
         const rank = (x: Stage) => (x === 'TODO' ? -1 : x === 'DONE' ? steps.length : steps.indexOf(x));
-        if (to === 'TODO') { for (const p of steps) set(p, 'TODO'); continue; }
+        if (to === 'TODO') { for (const p of steps) if (st(p) !== 'OMIT') set(p, 'TODO'); continue; }
         if (to === 'DONE') { for (const p of steps) if (st(p) !== 'OMIT') set(p, 'DONE'); continue; }
         const ti = steps.indexOf(to);
         if (rank(to) > rank(from)) {
-          // 앞으로: 지나친 파트는 완료(해당 없음은 그대로), 옮긴 파트는 진행(이미 검수 요청 · 수정 · 보류면 그대로)
+          // 앞으로: 지나친 파트는 완료(해당 없음은 그대로), 옮긴 파트는 진행(이미 검수 요청 · 수정 · 보류면 그대로, 해당 없음이었으면 켜진다)
           steps.slice(0, ti).forEach(p => { if (!COUNTS_AS_DONE.has(st(p))) set(p, 'DONE'); });
           if (st(to) === 'TODO' || COUNTS_AS_DONE.has(st(to))) set(to, 'WIP');
         } else {
@@ -610,7 +620,11 @@ function clearCounted(db: SqlDb, ctx: EditContext, updateId: string, resourceTyp
 
 // ───────── 보기 ─────────
 
-export interface AssetPartState { status: AssetStatus; doneAt: string | null; startedAt: string | null; retakes: number; assignee: string | null; jiraKey: string | null }
+export interface AssetPartState {
+  status: AssetStatus; doneAt: string | null; startedAt: string | null; retakes: number; assignee: string | null; jiraKey: string | null;
+  /** 리소스 종류가 거치는 파트(계획 공수 · 작업 진척 집계에 들어간다) */
+  inPlan: boolean;
+}
 export interface AssetItem {
   assetId: string; name: string; code: string | null; category: string | null; resourceTypeId: string; batchId: string | null; tier: Tier;
   /** 속성(이름 – 값), 넣은 순서 */
@@ -673,7 +687,7 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
     if (!partRows.has(k)) partRows.set(k, {});
     partRows.get(k)![String(r.part_id)] = {
       status: r.status as AssetStatus, doneAt: (r.done_at as string) ?? null, startedAt: (r.started_at as string) ?? null,
-      retakes: Number(r.retakes ?? 0), assignee: (r.assignee as string) ?? null, jiraKey: (r.jira_key as string) ?? null,
+      retakes: Number(r.retakes ?? 0), assignee: (r.assignee as string) ?? null, jiraKey: (r.jira_key as string) ?? null, inPlan: false,
     };
   }
   const thumbs = new Map(db.all('SELECT t.asset_id, t.updated_at FROM asset_thumbs t JOIN assets a ON a.asset_id = t.asset_id WHERE a.update_id = ?', [updateId]).map(r => [String(r.asset_id), String(r.updated_at)]));
@@ -686,31 +700,35 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
   }
   const linkN = countBy('asset_links');
   const commentN = countBy('asset_comments');
-  const DEFAULT: AssetPartState = { status: 'TODO', doneAt: null, startedAt: null, retakes: 0, assignee: null, jiraKey: null };
+  const passes = new Set(db.all('SELECT resource_type_id, part_id FROM resource_parts').map(r => `${r.resource_type_id}|${r.part_id}`));
+  const blank = (inPlan: boolean): AssetPartState => ({ status: defaultStatus(inPlan), doneAt: null, startedAt: null, retakes: 0, assignee: null, jiraKey: null, inPlan });
   const assets: AssetItem[] = db.all(`SELECT a.* FROM assets a JOIN resource_types r ON r.resource_type_id = a.resource_type_id
       LEFT JOIN resource_groups g ON g.group_id = r.group_id LEFT JOIN batches b ON b.batch_id = a.batch_id
       WHERE a.update_id = ? ORDER BY a.sort_order, coalesce(g.sort_order, 999999), r.sort_order, a.asset_id`, [updateId]).map(a => {
     const id = String(a.asset_id);
     const rt = String(a.resource_type_id);
-    const st = steps.get(rt) ?? [];
     const pr = partRows.get(id) ?? {};
     const partsState: Record<string, AssetPartState> = {};
     let total = 0; let done = 0; let retakes = 0;
-    for (const p of st) {
-      const s = pr[p] ?? DEFAULT;
+    // 모든 에셋이 같은 파이프라인(사용 중인 파트 전부). 진행 = 끝낸 파트 공수 ÷ 할 파트 공수(해당 없음은 빼고, 공수가 없으면 1)
+    for (const p of partOrder) {
+      const inPlan = passes.has(`${rt}|${p}`);
+      const s = pr[p] ? { ...pr[p], inPlan } : blank(inPlan);
       partsState[p] = s;
+      retakes += s.retakes;
+      if (s.status === 'OMIT') continue;
       const d = days.get(`${rt}|${p}`) ?? 1;
       total += d;
-      if (COUNTS_AS_DONE.has(s.status)) done += d;
-      retakes += s.retakes;
+      if (s.status === 'DONE') done += d;
     }
-    const stage = stageOf(st, p => (pr[p] ?? DEFAULT).status);
-    const cur = stage === 'TODO' ? st[0] : stage === 'DONE' ? st[st.length - 1] : stage;
+    const stage = stageOf(partOrder, p => partsState[p].status);
+    const doing = partOrder.filter(p => partsState[p].status !== 'OMIT');
+    const cur = stage === 'TODO' ? doing[0] : stage === 'DONE' ? doing[doing.length - 1] : stage;
     return {
       assetId: id, name: String(a.name), code: (a.code as string) ?? null, category: (a.category as string) ?? null, attrs: attrs.get(id) ?? [], resourceTypeId: rt, batchId: (a.batch_id as string) ?? null,
       tier: a.tier as Tier, jiraKey: (a.jira_key as string) ?? null, note: (a.note as string) ?? null, thumbAt: thumbs.get(id) ?? null,
-      parts: partsState, progress: total > 0 ? done / total : 0, retakes,
-      stage, sub: stage === 'DONE' ? 'DONE' : stage === 'TODO' ? 'TODO' : (pr[stage] ?? DEFAULT).status,
+      parts: partsState, progress: total > 0 ? done / total : 1, retakes,
+      stage, sub: stage === 'DONE' ? 'DONE' : stage === 'TODO' ? 'TODO' : partsState[stage].status,
       dueDate: (a.due_date as string) ?? null, assignee: cur ? (pr[cur]?.assignee ?? null) : null,
       links: linkN.get(id) ?? 0, comments: commentN.get(id) ?? 0, sortOrder: Number(a.sort_order),
     };

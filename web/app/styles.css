@@ -1214,3 +1214,15 @@ table.grid.dash-batch-table .share .bar { width: 56px; }
 .sheet-import .import-foot .btn.primary { min-width: 116px; justify-content: center; }
 table.grid.si-sheets { min-width: 560px; }
 @media (max-width: 640px) { .si-map { grid-template-columns: minmax(0, 1fr); } .si-map-row .field { width: 150px; } .cw-attr { grid-template-columns: 90px minmax(0, 1fr) 30px; } }
+
+/* ───────── 에셋 거르기 줄 · 파이프라인 ───────── */
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.filter-bar .field { height: 30px; max-width: 170px; font-size: 12.5px; }
+.filter-bar .field.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 650; }
+.filter-label { font-weight: 700; color: var(--text-3); margin-right: 2px; }
+.filter-bar .btn { min-width: 104px; justify-content: center; }
+.cw-hint { margin: -2px 0 8px; }
+table.grid.asset-parts-table tr.row.omit td { color: var(--text-3); }
+.tag.plan-out { margin-left: 6px; background: var(--warn-soft); color: var(--warn); }
+@media (max-width: 640px) { .filter-bar .field { flex: 1 1 calc(50% - 6px); max-width: none; } }
+

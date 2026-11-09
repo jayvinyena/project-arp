@@ -60,6 +60,8 @@ interface Layout {
   milestone: number; major: number; minor: number; name: number; code: number; spec: number; note: number;
   epic: number[];
   parts: { col: number; partId: string }[];
+  /** "원화 담당" 같은 파트별 담당 칸 */
+  assign: { col: number; partId: string }[];
   attrs: { col: number; name: string }[];
 }
 
@@ -88,8 +90,13 @@ function layoutOf(sheet: string, rows: Cell[][], parts: { id: string; name: stri
       code: find(COL.code), spec: find(COL.spec), note: find(COL.note),
       epic: h.map((x, i) => (COL.epic.test(norm(x)) ? i : -1)).filter(i => i >= 0),
       parts: partCols, attrs: [],
+      assign: h.map((x, i) => {
+        const m = /^(.+?)(담당자|담당|작업자)$/.exec(norm(x));
+        const p = m ? partOf(m[1]) : null;
+        return p ? { col: i, partId: p } : null;
+      }).filter((x): x is { col: number; partId: string } => !!x),
     };
-    const used = new Set([L.name, L.milestone, L.major, L.minor, L.code, L.spec, L.note, ...L.epic, ...found.map(x => x.i)]);
+    const used = new Set([L.name, L.milestone, L.major, L.minor, L.code, L.spec, L.note, ...L.epic, ...found.map(x => x.i), ...L.assign.map(x => x.col)]);
     const names = new Set<string>();
     h.forEach((x, i) => {
       if (used.has(i) || !x || COL.ignore.test(norm(x))) return;
@@ -192,7 +199,7 @@ export function scanSheetBook(db: SqlDb, sheets: Sheets): SheetScan {
       L.milestone >= 0 ? '마일스톤' : '', L.major >= 0 ? '대분류' : '', L.minor >= 0 ? '분류' : '', '이름', L.code >= 0 ? '리소스명' : '',
       L.spec >= 0 ? '기획서' : '', L.epic.length ? '에픽(Jira)' : '', L.note >= 0 ? '비고' : '',
     ].filter(Boolean);
-    out.sheets.push({ name, included: list.length > 0, reason: list.length ? null : '이름이 적힌 행이 없습니다', rows: list.length, parts: L.parts.map(p => partName.get(p.partId) ?? p.partId), columns, attrs: L.attrs.map(a => a.name) });
+    out.sheets.push({ name, included: list.length > 0, reason: list.length ? null : '이름이 적힌 행이 없습니다', rows: list.length, parts: L.parts.map(p => partName.get(p.partId) ?? p.partId), columns: [...columns, ...L.assign.map(a => `${partName.get(a.partId)} 담당`)], attrs: L.attrs.map(a => a.name) });
     for (const { r } of list) {
       out.rows += 1;
       const k = keyOf(L, r);
@@ -278,13 +285,17 @@ export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Shee
             const v = text(r[a.col]);
             if (v != null) run({ kind: 'assetAttr', assetIds: [id], name: a.name, value: v.slice(0, 500) });
           }
-          const steps = new Set(db.all('SELECT part_id FROM resource_parts WHERE resource_type_id = ?', [rtId]).map(x => String(x.part_id)));
+          // 모든 에셋이 같은 파이프라인: 리소스 종류가 거치지 않는 파트도 시트 값대로(빈칸이면 기본 = 해당 없음)
+          const passes = new Set(db.all('SELECT part_id FROM resource_parts WHERE resource_type_id = ?', [rtId]).map(x => String(x.part_id)));
+          for (const p of L.assign) {
+            const who = text(r[p.col]);
+            if (who) run({ kind: 'assetPart', assetIds: [id], partId: p.partId, assignee: who });
+          }
           for (const p of L.parts) {
-            if (!steps.has(p.partId)) continue;
             const w = statusWord(r[p.col]);
             const st = w === 'unknown' ? (plan.words[clean(r[p.col])] || null) : w;
             if (!st) continue;
-            const cur = db.get('SELECT status FROM asset_parts WHERE asset_id = ? AND part_id = ?', [id, p.partId])?.status ?? 'TODO';
+            const cur = db.get('SELECT status FROM asset_parts WHERE asset_id = ? AND part_id = ?', [id, p.partId])?.status ?? (passes.has(p.partId) ? 'TODO' : 'OMIT');
             if (cur === st) continue;
             run({ kind: 'assetPart', assetIds: [id], partId: p.partId, status: st, ...(st === 'DONE' ? { doneAt: plan.doneDate } : {}) });
           }

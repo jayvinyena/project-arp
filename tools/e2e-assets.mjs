@@ -1,6 +1,6 @@
 // 에셋 제작 현황 시험(크롬, 화면 없음) — 리스트 + 보드(칸반) + 카드 창(docs/20-asset-management.md 16절)
 //   리스트: 단계 · 세부 상태 칸에서 바꾸기 → 작업 진척 집계 · 잠금
-//   보드: 카드를 다른 열로 끌기(앞으로) · 뒤로 끌면 확인 · 거치지 않는 파트 열은 놓을 수 없음 · 같은 열 안 순서
+//   보드: 카드를 다른 열로 끌기(앞으로) · 뒤로 끌면 확인 · 모든 에셋이 같은 파이프라인(해당 없음 파트 열에 놓으면 켜짐) · 같은 열 안 순서
 //   카드 창: 썸네일 끌어놓기(256px) · 설명 · 마감일 · 링크 · 댓글 / 보조 탭: 배치 · 물량 대조
 //   node tools/e2e-assets.mjs [--no-build]
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -92,7 +92,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("(() => [...document.querySelectorAll('.kb-col[data-col=\"CONCEPT\"] .kb-card')].some(c => c.dataset.id === 'A00006'))()", 8000).catch(() => {});
   const sub = await cdp.eval("document.querySelector('.kb-card[data-id=\"A00006\"] select')?.value");
   check('되돌리면 원화 열 · 세부 상태 "수정"', (await colIds(cdp, 'CONCEPT')).includes('A00006') && sub === 'RETAKE', sub);
-  // 코스튬은 FX를 거치지 않는다: 끄는 동안 FX 열이 막히고 놓아도 그대로
+  // 모든 에셋이 같은 파이프라인: 코스튬은 FX가 기본 "해당 없음"이지만 FX 열이 막히지 않고, 놓으면 FX가 켜진다
   await cdp.eval(`(() => { const card = document.querySelector('.kb-card[data-id="A00015"]'); card.dispatchEvent(new DragEvent('dragstart', { dataTransfer: new DataTransfer(), bubbles: true })); })()`);
   await sleep(200);
   const blocked = await cdp.eval("document.querySelector('.kb-col[data-col=\"FX\"]').classList.contains('blocked')");
@@ -100,7 +100,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(200);
   await drag(cdp, 'A00015', 'FX');
   await sleep(500);
-  check('거치지 않는 파트 열은 막히고 놓을 수 없다(코스튬 → FX)', blocked && (await colIds(cdp, 'TODO')).includes('A00015'));
+  check('해당 없음 파트 열에도 놓을 수 있다(코스튬 → FX 열: FX가 켜진다)', !blocked && (await colIds(cdp, 'FX')).includes('A00015'));
   // 같은 열 안 순서: 대기 열 셋째 카드를 맨 앞으로
   const before = await colIds(cdp, 'TODO');
   await drag(cdp, before[2], 'TODO', before[0]);

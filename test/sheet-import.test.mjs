@@ -60,7 +60,8 @@ test('훑기: 파트 상태가 있는 시트만, (시트 · 분류)와 마일스
   assert.deepEqual(by['캐릭터'].parts, ['원화', '모델링', '애니메이션', 'FX']);
   assert.deepEqual(by['캐릭터'].attrs, ['속성', '등장 지역']);
   assert.equal(by['코스튬'].included, true, '두 줄 머리글');
-  assert.deepEqual(by['코스튬'].parts, ['원화', '모델링', '애니메이션']);
+  assert.deepEqual(by['코스튬'].parts, ['원화', '모델링', '애니메이션', 'FX']);
+  assert.ok(by['코스튬'].columns.includes('원화 담당'), by['코스튬'].columns.join());
   assert.deepEqual(by['코스튬'].attrs, ['데이터 연결']);
   assert.equal(by['요약'].included, false);
   assert.match(by['레벨'].reason, /파트 상태 칸/);
@@ -114,6 +115,11 @@ test('가져오기: 에셋 · 세부 분류 · 리소스명 · Jira · 기획서
   assert.equal(shirt.resourceTypeId, 'COSTUME');
   assert.equal(shirt.category, '코스튬 · 상의');
   assert.equal(shirt.stage, 'MODELING');
+  assert.equal(shirt.parts.CONCEPT.assignee, '김원화', '파트 담당 칸 → 파트 담당');
+  // 모든 에셋이 같은 파이프라인: 코스튬은 FX를 거치지 않지만 시트 값대로 넣는다(계획 공수 밖이라 작업 진척에는 세지 않음)
+  assert.deepEqual([shirt.parts.FX.status, shirt.parts.FX.inPlan], ['DONE', false]);
+  const mini = assetsView(t.db, 'MINI1').assets.find(a => a.name === '미니 손님');
+  assert.equal(mini.parts.FX.status, 'TODO', '빈칸은 기본(거치는 파트 = 대기)');
   assert.deepEqual(shirt.attrs, [{ name: '데이터 연결', value: 'ITEM_001' }]);
   // 작업 진척 자동 집계: 신규 캐릭터 원화 = 손 입력 3 대신 에셋에서 센 2(바람 기사 · 불꽃 마법사), FX = 해당 없음 1
   const prog = Object.fromEntries(t.db.all("SELECT part_id, completed_qty FROM progress WHERE update_id = 'LAUNCH' AND resource_type_id = 'CHAR_NEW'").map(x => [x.part_id, x.completed_qty]));

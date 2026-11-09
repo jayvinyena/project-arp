@@ -3,7 +3,7 @@
 import type { SqlDb } from './db.ts';
 import type { PlanMode } from '../engine/types.ts';
 import type { AssetStatus, Stage } from './assets.ts';
-import { stageOf } from './assets.ts';
+import { stageOf, pipeline, defaultStatus } from './assets.ts';
 
 export interface DashTodo { assetId: string; name: string; resource: string; part: string | null; since: string | null; who: string | null }
 export interface DashboardView {
@@ -132,12 +132,9 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
   const weekDone = doneDates.filter(d => d >= mon && d <= today).length;
   const lastWeekDone = doneDates.filter(d => d >= lastMon && d < mon).length;
 
-  const steps = new Map<string, string[]>();
-  for (const r of db.all('SELECT rp.resource_type_id, rp.part_id FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id AND p.active = 1 ORDER BY p.sort_order')) {
-    const k = String(r.resource_type_id);
-    if (!steps.has(k)) steps.set(k, []);
-    steps.get(k)!.push(String(r.part_id));
-  }
+  // 모든 에셋이 같은 파이프라인(사용 중인 파트 전부). 행이 없으면 거치는 파트는 대기, 아니면 해당 없음
+  const pl = pipeline(db);
+  const st0 = (a: Record<string, unknown>, p: string) => ((states.get(String(a.asset_id))?.get(p)?.status as AssetStatus) ?? defaultStatus(pl.passes.has(`${a.resource_type_id}|${p}`)));
   const states = new Map<string, Map<string, Record<string, unknown>>>();
   for (const r of db.all('SELECT ap.* FROM asset_parts ap JOIN assets a ON a.asset_id = ap.asset_id WHERE a.update_id = ?', [updateId])) {
     const k = String(r.asset_id);
@@ -153,9 +150,9 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
   const staleBefore = iso(parse(today) - 14 * DAY);
   for (const a of assets) {
     const id = String(a.asset_id);
-    const st = steps.get(String(a.resource_type_id)) ?? [];
+    const st = pl.parts;
     const s = states.get(id) ?? new Map();
-    const statusOf = (p: string) => ((s.get(p)?.status as AssetStatus) ?? 'TODO');
+    const statusOf = (p: string) => st0(a, p);
     const stage = stageOf(st, statusOf);
     const g = String(a.gname);
     if (!stageGroups.has(g)) stageGroups.set(g, stageList.map(() => 0));
@@ -180,15 +177,16 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
 
   const batches = db.all('SELECT * FROM batches WHERE update_id = ? ORDER BY sort_order, batch_id', [updateId]).map(b => {
     const mine = assets.filter(a => a.batch_id === b.batch_id);
-    const doneN = mine.filter(a => stageOf(steps.get(String(a.resource_type_id)) ?? [], p => ((states.get(String(a.asset_id))?.get(p)?.status as AssetStatus) ?? 'TODO')) === 'DONE').length;
+    const doneN = mine.filter(a => stageOf(pl.parts, p => st0(a, p)) === 'DONE').length;
     const due = (b.due_date as string) ?? null;
-    // 진행 = 끝난 파트 수 ÷ 거치는 파트 수(에셋 전체)
+    // 진행 = 끝난 파트 수 ÷ 할 파트 수(에셋 전체, 해당 없음은 뺀다)
     let partsAll = 0; let partsDone = 0;
     for (const a of mine) {
-      for (const p of steps.get(String(a.resource_type_id)) ?? []) {
+      for (const p of pl.parts) {
+        const st = st0(a, p);
+        if (st === 'OMIT') continue;
         partsAll += 1;
-        const st = (states.get(String(a.asset_id))?.get(p)?.status as AssetStatus) ?? 'TODO';
-        if (st === 'DONE' || st === 'OMIT') partsDone += 1;
+        if (st === 'DONE') partsDone += 1;
       }
     }
     return {

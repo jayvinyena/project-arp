@@ -115,7 +115,70 @@ await withBrowser(async (cdp, base) => {
   const attrs2 = await cdp.eval("[...document.querySelectorAll('.asset-card-window .cw-attr-name')].map(x => x.textContent).join(',')");
   check('카드: 속성 더하기 · 지우기', attrs2 === '등장 지역,무기', attrs2);
   const okCard = await shot(cdp, 'sheet-import-card');
-  check('가로 넘침 없음(창 1440 · 390 · 카드)', okDialog && okDialog390 && okCard);
+
+  // 모든 에셋이 같은 파이프라인: 코스튬(FX를 거치지 않음)도 FX가 시트 값대로, "계획 밖" 표시
+  await cdp.eval("document.querySelector('.asset-card-window .cw-close').click()");
+  await sleep(300);
+  await cdp.eval("(() => { const i = document.querySelector('input[aria-label=\"에셋 찾기\"]'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()");
+  await sleep(300);
+  await cdp.eval("[...document.querySelectorAll('.asset-list .link-btn')].find(b => b.textContent === '여름 셔츠').click()");
+  await cdp.waitUntil("document.querySelector('.asset-card-window')", 5000);
+  const fx = await cdp.eval("(() => { const r = [...document.querySelectorAll('.asset-parts-table tr.row')].find(x => x.textContent.startsWith('FX')); return { st: r.querySelector('select').value, out: !!r.querySelector('.plan-out') }; })()");
+  check('코스튬도 FX 파트가 있고 시트 값(완료) · "계획 밖" 표시', fx.st === 'DONE' && fx.out, JSON.stringify(fx));
+  await cdp.eval("document.querySelector('.asset-card-window .cw-close').click()");
+  await sleep(300);
+
+  // 거르기 줄: 팀 · 담당 · 상태 · 세부 분류 · 속성, 고르기 전후로 높이가 그대로
+  const names = () => cdp.eval("[...document.querySelectorAll('.asset-list .link-btn')].map(b => b.textContent)");
+  const barH = () => cdp.eval("Math.round(document.querySelector('.asset-board-card').getBoundingClientRect().top + document.querySelector('.asset-summary').getBoundingClientRect().top)");
+  const h0 = await barH();
+  await select(cdp, '팀 거르기', 'FX');
+  await sleep(300);
+  let list = await names();
+  check('팀(FX) 거르기: FX가 해당 없음인 에셋은 빠지고 FX를 켠 코스튬은 보인다', list.includes('여름 셔츠') && !list.includes('바람 기사'), `${list.length}개`);
+  await select(cdp, '상태 거르기', 'DONE');
+  await sleep(300);
+  list = await names();
+  check('팀 + 상태: FX 완료만', list.join() === '여름 셔츠', list.join());
+  const label = await cdp.eval("document.querySelector('select[aria-label=\"상태 거르기\"] option').textContent");
+  check('팀을 고르면 담당 · 상태 기준이 그 파트로(“모든 FX 상태”)', label === '모든 FX 상태', label);
+  await cdp.eval("[...document.querySelectorAll('.filter-bar button')].find(b => b.textContent.startsWith('거르기 풀기')).click()");
+  await sleep(300);
+  await select(cdp, '팀 거르기', 'CONCEPT');
+  await select(cdp, '담당 거르기', '김원화');
+  await sleep(300);
+  list = await names();
+  check('원화팀 + 담당(김원화): 시트의 "원화 담당" 칸이 파트 담당으로', list.includes('여름 셔츠'), list.join());
+  await cdp.eval("[...document.querySelectorAll('.filter-bar button')].find(b => b.textContent.startsWith('거르기 풀기')).click()");
+  await sleep(300);
+  await select(cdp, '세부 분류 거르기', '코스튬 · 상의');
+  await sleep(300);
+  check('세부 분류 거르기', (await names()).join() === '여름 셔츠');
+  await select(cdp, '세부 분류 거르기', 'all');
+  await select(cdp, '속성 거르기', JSON.stringify(['속성', '불']));
+  await sleep(300);
+  check('속성 거르기(속성: 불)', (await names()).join() === '불꽃 마법사', (await names()).join());
+  const h1 = await barH();
+  check('거르기를 골라도 위쪽 높이가 그대로(들썩임 0px)', h0 === h1, `${h0} → ${h1}`);
+  const clearTxt = await cdp.eval("[...document.querySelectorAll('.filter-bar button')].find(b => b.textContent.startsWith('거르기 풀기')).textContent");
+  check('거르기 풀기에 고른 개수', clearTxt === '거르기 풀기 (1)', clearTxt);
+  await cdp.eval("[...document.querySelectorAll('.filter-bar button')].find(b => b.textContent.startsWith('거르기 풀기')).click()");
+  await sleep(300);
+
+  // 일괄: 고른 에셋의 파트를 해당 없음 → 대기로 켜기(파이프라인 바꾸기)
+  await cdp.eval("[...document.querySelectorAll('.asset-list tr.row')].find(r => r.textContent.includes('바람 기사')).querySelector('input[type=checkbox]').click()");
+  await sleep(200);
+  await select(cdp, '일괄 파트', 'FX');
+  await select(cdp, '일괄 파트 상태', 'TODO');
+  await sleep(150);
+  await cdp.eval("[...document.querySelectorAll('.bulk-bar button')].find(b => b.textContent === '파트 상태 바꾸기').click()");
+  await sleep(600);
+  await select(cdp, '팀 거르기', 'FX');
+  await sleep(300);
+  check('일괄 파트 상태 바꾸기: 바람 기사 FX 해당 없음 → 대기(FX팀에 보인다)', (await names()).includes('바람 기사'));
+  await select(cdp, '팀 거르기', 'all');
+  const okFilter = await shot(cdp, 'assets-filter-390', 390);
+  check('가로 넘침 없음(창 1440 · 390 · 카드 · 거르기 390)', okDialog && okDialog390 && okCard && okFilter);
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(x => !x).length;
