@@ -178,7 +178,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(300);
   const pageW = () => cdp.eval("Math.round(document.querySelector('main .page:last-of-type, main .page').getBoundingClientRect().width)");
   const w0 = await pageW();
-  await cdp.eval("[...document.querySelectorAll('[aria-label=\"화면 폭\"] button')].find(b => b.textContent === '넓게').click()");
+  await cdp.eval("document.querySelector('.width-toggle').click()");
   await sleep(300);
   const widths = {};
   for (const [label, menu] of [['에셋', '에셋 제작 현황'], ['현황판', '제작 현황판'], ['업데이트 계획', '업데이트 계획'], ['리소스', '프로젝트']]) {
@@ -196,9 +196,9 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.reload', {});
   await cdp.waitUntil("document.querySelector('.sidebar')", 20000);
   await sleep(800);
-  const kept = await cdp.eval("document.querySelector('.app').classList.contains('wide') && document.querySelector('[aria-label=\"화면 폭\"] button.on').textContent === '넓게'");
+  const kept = await cdp.eval("document.querySelector('.app').classList.contains('wide') && document.querySelector('.width-toggle').getAttribute('aria-pressed') === 'true' && document.querySelector('.width-toggle').getAttribute('aria-label') === '기본 폭으로 보기'");
   check('새로 고침해도 넓게가 유지된다', kept);
-  await cdp.eval("[...document.querySelectorAll('[aria-label=\"화면 폭\"] button')].find(b => b.textContent === '기본').click()");
+  await cdp.eval("document.querySelector('.width-toggle').click()");
   await sleep(300);
   check('기본으로 되돌리기', !(await cdp.eval("document.querySelector('.app').classList.contains('wide')")) && (await pageW()) <= 1240);
 }, { build: !process.argv.includes('--no-build') });

@@ -37,7 +37,7 @@ import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage, IconChart } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage, IconChart, IconWiden, IconNarrow } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 type Page = HelpPage;
@@ -741,7 +741,11 @@ export function App() {
   return (
     <div class={`app${wide ? ' wide' : ''}`}>
       <aside class="sidebar">
-        <div class="brand"><span class="brand-mark"><IconLogo /></span>ARP</div>
+        <div class="brand"><span class="brand-mark"><IconLogo /></span>ARP
+          {/* 화면 폭: 모든 화면에 적용, 이 브라우저에 기억 */}
+          <button type="button" class={`width-toggle${wide ? ' on' : ''}`} aria-pressed={wide} aria-label={wide ? '기본 폭으로 보기' : '넓게 보기'}
+            data-tip={wide ? '기본 폭으로 보기' : '넓게 보기 · 모든 화면'} onClick={() => setWide(w => !w)}>{wide ? <IconNarrow /> : <IconWiden />}</button>
+        </div>
         <div class="project-chip">
           <div class="small faint">프로젝트</div>
           <div class="name" title={file.name}>{view.snapshot.projectName}</div>
@@ -768,13 +772,6 @@ export function App() {
           </button>
         </nav>
         <div class="sidebar-foot">
-          <div class="width-pick">
-            <span class="small faint">화면 폭</span>
-            <div class="segmented" role="radiogroup" aria-label="화면 폭">
-              <button type="button" role="radio" aria-checked={!wide} class={!wide ? 'on' : ''} title="내용을 가운데 1240px 폭으로" onClick={() => setWide(false)}>기본</button>
-              <button type="button" role="radio" aria-checked={wide} class={wide ? 'on' : ''} title="모든 화면을 창 폭 전부로(큰 모니터에서 표 · 보드를 넓게)" onClick={() => setWide(true)}>넓게</button>
-            </div>
-          </div>
           <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>
           {!file.handle && <div class="small faint editor">수정한 내용을 남기려면 다른 이름으로 저장하십시오</div>}
           <div style="display: flex; gap: 6px">

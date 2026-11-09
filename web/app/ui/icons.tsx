@@ -31,4 +31,7 @@ export const IconImage = () => base(<><rect x="4" y="5" width="16" height="14" r
 export const IconGrid = () => base(<><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>);
 export const IconList = () => base(<><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="5" cy="6" r="1" /><circle cx="5" cy="12" r="1" /><circle cx="5" cy="18" r="1" /></>);
 export const IconChart = () => base(<><path d="M4 19h16" /><path d="M6 16l4-5 3 3 5-7" /><circle cx="18" cy="7" r="1.2" /></>);
+/** 넓게 보기(양옆으로 펼침) · 기본 폭(가운데로 모음) */
+export const IconWiden = () => base(<><path d="M4 5v14M20 5v14" /><path d="M8 12h8M10.5 9.5L8 12l2.5 2.5M13.5 9.5L16 12l-2.5 2.5" /></>);
+export const IconNarrow = () => base(<><path d="M4 5v14M20 5v14" /><path d="M7 12h3.5M13.5 12H17M8.5 9.5L11 12l-2.5 2.5M15.5 9.5L13 12l2.5 2.5" /></>);
 export const IconHelp = () => base(<><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7" /><path d="M12 16.9v.01" /></>);

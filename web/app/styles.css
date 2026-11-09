@@ -1233,9 +1233,23 @@ table.grid.asset-parts-table tr.row.omit td { color: var(--text-3); }
 .si-new .field.bad { border-color: var(--bad); }
 
 /* ───────── 화면 폭: 넓게(모든 화면) ───────── */
-.width-pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.width-pick .segmented { flex: none; }
-.width-pick .segmented button { padding: 0 12px; white-space: nowrap; }
+/* 로고 줄 오른쪽 아이콘 단추. 넓게일 때 강조색, 올리면 바로 설명(지연 없는 말풍선) */
+.width-toggle {
+  position: relative; margin-left: auto; width: 30px; height: 30px; display: grid; place-items: center; padding: 0;
+  border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-3); cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.width-toggle .icon { width: 18px; height: 18px; }
+.width-toggle:hover { background: var(--hover); color: var(--text); }
+.width-toggle:focus-visible { outline: none; box-shadow: var(--ring); }
+.width-toggle.on { background: var(--accent-soft); color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.width-toggle::after {
+  content: attr(data-tip); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); z-index: 30;
+  padding: 5px 9px; border-radius: 7px; background: var(--text); color: var(--surface); font-size: 12px; font-weight: 600; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .12s;
+}
+.width-toggle:hover::after, .width-toggle:focus-visible::after { opacity: 1; }
+@media (max-width: 860px) { .width-toggle { display: none; } }
 .app.wide .page { max-width: none; }
 @media (min-width: 861px) { .app.wide .main { padding-left: 32px; padding-right: 32px; } }
 .app.wide .kb-col { flex: 1 0 264px; }
