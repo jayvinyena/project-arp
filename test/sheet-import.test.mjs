@@ -11,7 +11,8 @@ import { ProjectSession } from '../core/pipeline.ts';
 import { applyEdit } from '../core/edits.ts';
 import { undoBatch } from '../core/history.ts';
 import { assetsView, assetDetail } from '../core/assets.ts';
-import { scanSheetBook, importSheetBook, isArpAssetBook, statusWord } from '../core/sheet-import.ts';
+import { scanSheetBook, importSheetBook, isArpAssetBook, statusWord, NEW_RESOURCE } from '../core/sheet-import.ts';
+import { validate } from '../core/pipeline.ts';
 import { readXlsx, readXlsxWithLinks } from '../core/xlsx.ts';
 import { writeXlsx } from '../core/xlsx-write.ts';
 import { assetBook } from '../core/asset-io.ts';
@@ -174,3 +175,38 @@ test('에셋 속성 · 세부 분류: 고치기 · 지우기 · 에셋을 지웠
   applyEdit(t.db, t.session, { kind: 'assetAttr', assetIds: [id], name: '지역', value: '' }, ctx());
   assert.deepEqual(assetsView(t.db, 'LAUNCH').assets.find(x => x.assetId === id).attrs.map(x => x.name), ['속성']);
 });
+
+test('가져오기: 시트 분류대로 새 리소스 종류 만들기(분류 = 시트 이름, 거치는 파트 = 시트 파트 칸, 공수 0 → E08 주의), 같은 이름은 하나로, 한 번에 되돌리기', async () => {
+  const t = open();
+  const { sheets, links } = await readXlsxWithLinks(bytes(), { fillMerged: true });
+  const scan = scanSheetBook(t.db, sheets);
+  const k = Object.fromEntries(scan.keys.map(x => [`${x.sheet}|${x.label}`, x]));
+  assert.deepEqual(k['코스튬|코스튬 · 상의'].suggest, { group: '코스튬', name: '코스튬 · 상의' });
+  assert.deepEqual(k['코스튬|코스튬 · 상의'].parts, ['CONCEPT', 'MODELING', 'ANIMATION', 'FX']);
+  const a = k['코스튬|코스튬 · 상의'].key; const b = k['코스튬|신규 · 캐릭터'].key;
+  const plan = planFor(scan, {
+    resources: { ...planFor(scan).resources, [a]: NEW_RESOURCE, [b]: NEW_RESOURCE },
+    create: { [a]: { group: '마이쿠키 의상', name: '의상 상의' }, [b]: { group: '마이쿠키 의상', name: '의상 상의' } },
+  });
+  const c = ctx();
+  const r = importSheetBook(t.db, t.session, sheets, links, plan, c);
+  assert.deepEqual(r.resourcesCreated, ['의상 상의'], '같은 이름은 하나로');
+  const rt = t.db.get("SELECT r.resource_type_id AS id, g.name AS g FROM resource_types r JOIN resource_groups g ON g.group_id = r.group_id WHERE r.name = '의상 상의'");
+  assert.equal(rt.g, '마이쿠키 의상');
+  assert.deepEqual(t.db.all("SELECT part_id, days FROM efforts WHERE resource_type_id = ? AND profile_id = 'BASE' ORDER BY part_id", [rt.id]).map(x => [x.part_id, x.days]),
+    [['ANIMATION', 0], ['CONCEPT', 0], ['FX', 0], ['MODELING', 0]]);
+  const shirt = t.db.get("SELECT resource_type_id FROM assets WHERE name = '여름 셔츠'");
+  assert.equal(shirt.resource_type_id, rt.id);
+  const f = validate(t.db).filter(x => x.code === 'E08');
+  assert.deepEqual(f.map(x => x.key), [rt.id], '공수 0 → 데이터 점검 주의');
+  assert.ok(!validate(t.db).some(x => x.level === 'ERROR'), '계산은 멈추지 않는다');
+  // 다시 넣기: 같은 이름이 있으면 새로 만들지 않는다
+  const again = importSheetBook(t.db, t.session, sheets, links, plan, ctx());
+  assert.deepEqual([again.resourcesCreated.length, again.created], [0, 0]);
+  // 되돌리기: 리소스 종류 · 분류도 함께
+  undoBatch(t.db, t.session, c.batchId, ctx());
+  assert.equal(t.db.get("SELECT count(*) AS n FROM resource_types WHERE name = '의상 상의'").n, 0);
+  assert.equal(t.db.get("SELECT count(*) AS n FROM resource_groups WHERE name = '마이쿠키 의상'").n, 0);
+  assert.throws(() => importSheetBook(t.db, t.session, sheets, links, planFor(scan, { resources: { [a]: NEW_RESOURCE }, create: { [a]: { group: '', name: ' ' } } }), ctx()), /이름이 비었/);
+});
+

@@ -34,6 +34,7 @@ export const RULE_TABLES = {
   E03: ['volumes', 'updates', 'resource_parts', 'parts', 'efforts'],
   E04: ['efforts'], E05: ['resource_parts'], E06: ['effort_mix'],
   E07: ['effort_mix', 'resource_parts', 'efforts'],
+  E08: ['volumes', 'updates', 'resource_parts', 'parts', 'efforts'],
   U01: ['updates'], U02: ['updates'], U03: ['updates'], U04: ['updates', 'settings'],
   U05: ['updates', 'update_types'], U06: ['updates'], U07: ['updates', 'volumes'],
   V01: ['volumes', 'updates'], V02: ['volumes', 'updates'], V03: ['volumes', 'updates'], V04: ['volumes', 'updates'],
@@ -154,6 +155,16 @@ export const RULES = [
       WHERE m.profile_id <> 'BASE' AND m.share > 0
         AND NOT EXISTS (SELECT 1 FROM efforts e WHERE e.resource_type_id = rp.resource_type_id AND e.part_id = rp.part_id AND e.profile_id = m.profile_id)
       GROUP BY m.part_id, m.profile_id`),
+  },
+  {
+    // 제작 리스트 가져오기에서 새로 만든 리소스 종류는 공수 0(거치지만 공수 미정)으로 만든다(docs/20-asset-management.md 21절)
+    code: 'E08', level: 'WARN', title: '물량이 있는 리소스 종류의 기본 공수가 모두 0이다',
+    fix: '기준 정보의 리소스 표에서 그 리소스의 파트별 1개당 인·일을 입력한다. 0이면 일이 없는 것으로 계산된다.',
+    sql: q(`SELECT rp.resource_type_id AS key, '기본 공수가 모두 0이라 일이 없는 것으로 계산합니다' AS detail
+      FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id AND p.active = 1
+      JOIN efforts e ON e.resource_type_id = rp.resource_type_id AND e.part_id = rp.part_id AND e.profile_id = 'BASE'
+      WHERE rp.resource_type_id IN (SELECT resource_type_id FROM live_volumes)
+      GROUP BY rp.resource_type_id HAVING max(e.days) = 0`),
   },
 
   // ───────── 업데이트 ─────────

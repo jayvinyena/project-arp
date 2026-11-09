@@ -1225,4 +1225,10 @@ table.grid.si-sheets { min-width: 560px; }
 table.grid.asset-parts-table tr.row.omit td { color: var(--text-3); }
 .tag.plan-out { margin-left: 6px; background: var(--warn-soft); color: var(--warn); }
 @media (max-width: 640px) { .filter-bar .field { flex: 1 1 calc(50% - 6px); max-width: none; } }
+.si-new-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.si-key.new { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.si-key.new .si-map-row { border-bottom: 0; }
+.si-new { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding-left: 12px; border-left: 2px solid var(--accent); }
+.si-new .field { height: 30px; font-size: 12.5px; }
+.si-new .field.bad { border-color: var(--bad); }
 

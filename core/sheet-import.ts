@@ -113,7 +113,11 @@ function layoutOf(sheet: string, rows: Cell[][], parts: { id: string; name: stri
 export interface SheetScan {
   sheets: { name: string; included: boolean; reason: string | null; rows: number; parts: string[]; columns: string[]; attrs: string[] }[];
   /** (시트 · 대분류 · 분류) → 리소스 종류. key = JSON [시트, 대분류, 분류] */
-  keys: { key: string; sheet: string; label: string; count: number; guess: string | null }[];
+  keys: {
+    key: string; sheet: string; label: string; count: number; guess: string | null;
+    /** 새 리소스 종류로 만들 때 제안(분류 = 시트 이름, 이름 = 대분류 · 분류) · 거치는 파트(그 시트의 파트 칸) */
+    suggest: { group: string; name: string }; parts: string[];
+  }[];
   milestones: { value: string; count: number; guess: string | null }[];
   /** 알아보지 못한 파트 상태 말 */
   unknownWords: { word: string; count: number }[];
@@ -125,9 +129,13 @@ export interface SheetScan {
   volumes: string[];
   rows: number;
 }
+/** resources 값: 리소스 종류 ID · ''(건너뛰기) · NEW_RESOURCE(create의 분류 · 이름으로 새로 만들기) */
+export const NEW_RESOURCE = '+new';
 export interface SheetPlan {
   milestones: Record<string, string>;
   resources: Record<string, string>;
+  /** 새로 만들 리소스 종류(키 → 분류 · 이름). 이름이 같으면 하나로, 이미 있으면 그 종류를 쓴다 */
+  create?: Record<string, { group: string; name: string }>;
   words: Record<string, AssetStatus | ''>;
   /** 시트에서 "완료"인 파트의 완료일 */
   doneDate: string;
@@ -136,6 +144,8 @@ export interface SheetPlan {
 }
 export interface SheetImportReport {
   created: number; changed: number; unchanged: number; volumesAdded: number; jiraBaseSet: boolean;
+  /** 새로 만든 리소스 종류(공수 0 — 데이터 점검 E08에서 채운다) */
+  resourcesCreated: string[];
   skipped: { sheet: string; row: number; reason: string }[];
 }
 
@@ -205,7 +215,8 @@ export function scanSheetBook(db: SqlDb, sheets: Sheets): SheetScan {
       const k = keyOf(L, r);
       if (!keys.has(k)) {
         const [, major, minor] = JSON.parse(k) as string[];
-        keys.set(k, { key: k, sheet: name, label: [major, minor].filter(Boolean).join(' · ') || '(분류 없음)', count: 0, guess: guessResource(resources, name, major, minor) });
+        const label = [major, minor].filter(Boolean).join(' · ');
+        keys.set(k, { key: k, sheet: name, label: label || '(분류 없음)', count: 0, guess: guessResource(resources, name, major, minor), suggest: { group: name, name: label || name }, parts: L.parts.map(p => p.partId) });
       }
       keys.get(k)!.count += 1;
       const m = msOf(L, r);
@@ -218,6 +229,16 @@ export function scanSheetBook(db: SqlDb, sheets: Sheets): SheetScan {
     }
   }
   out.keys = [...keys.values()];
+  // 제안 이름이 다른 줄 · 기존 종류와 겹치면 앞에 시트 이름을 붙인다
+  const taken = new Set(resources.map(r => norm(r.name)));
+  const count = new Map<string, number>();
+  for (const k of out.keys) count.set(norm(k.suggest.name), (count.get(norm(k.suggest.name)) ?? 0) + 1);
+  for (const k of out.keys) {
+    const n = norm(k.suggest.name);
+    if ((taken.has(n) && !k.guess) || (count.get(n) ?? 0) > 1) {
+      if (k.suggest.name !== k.sheet) k.suggest = { ...k.suggest, name: `${k.sheet} ${k.suggest.name}` };
+    }
+  }
   out.pairs = [...pairs.entries()].map(([pk, count]) => { const [m, key] = JSON.parse(pk) as string[]; return { ms: m, key, count }; });
   out.milestones = [...ms.entries()].map(([value, count]) => ({ value, count, guess: guessUpdate(updates, value) }))
     .sort((a, b) => (a.value === NO_MS ? 1 : b.value === NO_MS ? -1 : a.value.localeCompare(b.value, 'ko', { numeric: true })));
@@ -228,7 +249,7 @@ export function scanSheetBook(db: SqlDb, sheets: Sheets): SheetScan {
 export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Sheets, links: SheetLinks, plan: SheetPlan,
   ctx: { editor: string; batchId: string }): SheetImportReport {
   if (!DATE.test(plan.doneDate)) throw new Error('완료일 형식은 YYYY-MM-DD입니다.');
-  const report: SheetImportReport = { created: 0, changed: 0, unchanged: 0, volumesAdded: 0, jiraBaseSet: false, skipped: [] };
+  const report: SheetImportReport = { created: 0, changed: 0, unchanged: 0, volumesAdded: 0, jiraBaseSet: false, resourcesCreated: [], skipped: [] };
   const parts = partsOf(db);
   const run = (edit: Parameters<typeof applyEdit>[2]) => applyEdit(db, session, edit, ctx);
   const added = new Set<string>(); // 물량에 새로 더한 업데이트|리소스
@@ -237,6 +258,32 @@ export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Shee
 
   db.exec('SAVEPOINT import_sheet');
   try {
+    // 새 리소스 종류: 분류 = 시트 이름, 거치는 파트 = 그 시트의 파트 칸(공수 0 = 거치지만 공수 미정)
+    const resources = { ...plan.resources };
+    const sheetParts = new Map<string, string[]>();
+    for (const [name, rows] of Object.entries(sheets)) {
+      const L = layoutOf(name, rows, parts);
+      if (typeof L !== 'string') sheetParts.set(name, L.parts.map(p => p.partId));
+    }
+    for (const [key, target] of Object.entries(plan.resources)) {
+      if (target !== NEW_RESOURCE) continue;
+      const want = plan.create?.[key];
+      const rtName = clean(want?.name);
+      if (!rtName) throw new Error('새 리소스 종류의 이름이 비었습니다.');
+      let id = db.get('SELECT resource_type_id FROM resource_types WHERE name = ?', [rtName])?.resource_type_id as string | undefined;
+      if (!id) {
+        id = run({ kind: 'createResource', name: rtName, groupName: clean(want?.group) }).createdId!;
+        report.resourcesCreated.push(rtName);
+      }
+      const [sheet] = JSON.parse(key) as string[];
+      for (const partId of sheetParts.get(sheet) ?? []) {
+        if (!db.get('SELECT 1 AS ok FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [id, partId])) {
+          run({ kind: 'effort', resourceTypeId: id, partId, profileId: 'BASE', days: 0 });
+        }
+      }
+      resources[key] = id;
+    }
+    plan = { ...plan, resources };
     for (const [name, rows] of Object.entries(sheets)) {
       const L = layoutOf(name, rows, parts);
       if (typeof L === 'string') continue;

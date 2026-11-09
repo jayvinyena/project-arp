@@ -10,16 +10,22 @@ const WORD_TO: { s: AssetStatus | ''; label: string }[] = [
   { s: '', label: '바꾸지 않음' }, { s: 'TODO', label: '대기' }, { s: 'WIP', label: '진행' }, { s: 'REVIEW', label: '검수 요청' },
   { s: 'RETAKE', label: '수정' }, { s: 'DONE', label: '완료' }, { s: 'HOLD', label: '보류' }, { s: 'OMIT', label: '해당 없음' },
 ];
+/** core/sheet-import.ts NEW_RESOURCE와 같은 값(화면 쪽에 계산 모듈을 싣지 않으려고 따로 둔다) */
+const NEW = '+new';
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 export function SheetImportDialog(props: { fileName: string; scan: SheetScan; busy: boolean; onImport: (plan: SheetPlan) => void; onClose: () => void }) {
   const s = props.scan;
   const [ms, setMs] = useState<Record<string, string>>(() => Object.fromEntries(s.milestones.map(m => [m.value, m.guess ?? ''])));
   const [rt, setRt] = useState<Record<string, string>>(() => Object.fromEntries(s.keys.map(k => [k.key, k.guess ?? ''])));
+  const [create, setCreate] = useState<Record<string, { group: string; name: string }>>(() => Object.fromEntries(s.keys.map(k => [k.key, k.suggest])));
   const [words, setWords] = useState<Record<string, AssetStatus | ''>>(() => Object.fromEntries(s.unknownWords.map(w => [w.word, ''])));
   const [doneDate, setDoneDate] = useState(today());
   const [addVolumes, setAddVolumes] = useState(true);
   const groups = useMemo(() => [...new Set(s.resources.map(r => r.group))], [s]);
+  const unmatched = s.keys.filter(k => !rt[k.key]);
+  const newNames = [...new Set(s.keys.filter(k => rt[k.key] === NEW).map(k => create[k.key].name.trim()))];
+  const namesOk = s.keys.every(k => rt[k.key] !== NEW || create[k.key].name.trim());
   const sheetsIn = s.sheets.filter(x => x.included);
   const sheetsOut = s.sheets.filter(x => !x.included);
   const keySheets = [...new Set(s.keys.map(k => k.sheet))];
@@ -29,7 +35,7 @@ export function SheetImportDialog(props: { fileName: string; scan: SheetScan; bu
   let rows = 0;
   const newVol = new Set<string>();
   for (const p of s.pairs) {
-    const u = ms[p.ms]; const r = rt[p.key];
+    const u = ms[p.ms]; const r = rt[p.key] === NEW ? `${NEW}${create[p.key].name.trim()}` : rt[p.key];
     if (!u || !r) continue;
     if (!vols.has(`${u}|${r}`)) { if (!addVolumes) continue; newVol.add(`${u}|${r}`); }
     rows += p.count;
@@ -38,6 +44,7 @@ export function SheetImportDialog(props: { fileName: string; scan: SheetScan; bu
   const resourceSelect = (key: string, label: string) => (
     <select class={`field${rt[key] ? '' : ' unset'}`} aria-label={`${label} 리소스 종류`} value={rt[key]} onChange={e => setRt({ ...rt, [key]: (e.target as HTMLSelectElement).value })}>
       <option value="">건너뛰기</option>
+      <option value={NEW}>＋ 새 종류 만들기</option>
       {groups.map(g => <optgroup label={g || '분류 없음'}>{s.resources.filter(r => r.group === g).map(r => <option value={r.resourceTypeId}>{r.name}</option>)}</optgroup>)}
     </select>
   );
@@ -94,12 +101,27 @@ export function SheetImportDialog(props: { fileName: string; scan: SheetScan; bu
             <div>
               <h3>분류 → 리소스 종류</h3>
               <p class="small muted">시트 · 대분류 · 분류마다 공수 · 물량을 셀 리소스 종류를 고릅니다. 대분류 · 분류 값은 에셋의 세부 분류로 들어갑니다. 이름이 비슷한 종류는 미리 골라 두었습니다.</p>
+              <div class="si-new-bar">
+                <button type="button" class="btn sm" disabled={unmatched.length === 0}
+                  onClick={() => setRt({ ...rt, ...Object.fromEntries(unmatched.map(k => [k.key, NEW])) })}>대응 없는 줄을 모두 새 종류로{unmatched.length ? ` (${unmatched.length})` : ''}</button>
+                <span class="small faint">새 종류: 분류 = 시트 이름, 이름 = 대분류 · 분류, 거치는 파트 = 그 시트의 파트 칸. 공수는 0으로 만들어 데이터 점검에서 채웁니다.</span>
+              </div>
               {keySheets.map(sh => (
                 <div class="si-group">
                   <div class="si-group-h">{sh}</div>
                   <div class="si-map">
                     {s.keys.filter(k => k.sheet === sh).map(k => (
-                      <label class="si-map-row"><span><b>{k.label}</b> <span class="faint small">{fmtInt(k.count)}행</span></span>{resourceSelect(k.key, `${sh} ${k.label}`)}</label>
+                      <div class={`si-key${rt[k.key] === NEW ? ' new' : ''}`}>
+                        <label class="si-map-row"><span><b>{k.label}</b> <span class="faint small">{fmtInt(k.count)}행</span></span>{resourceSelect(k.key, `${sh} ${k.label}`)}</label>
+                        {rt[k.key] === NEW && (
+                          <div class="si-new">
+                            <input class="field" aria-label={`${sh} ${k.label} 새 분류`} placeholder="분류" list="si-groups" value={create[k.key].group}
+                              onInput={e => { const t = (e.target as HTMLInputElement).value; setCreate(c => ({ ...c, [k.key]: { ...c[k.key], group: t } })); }} />
+                            <input class={`field${create[k.key].name.trim() ? '' : ' bad'}`} aria-label={`${sh} ${k.label} 새 이름`} placeholder="리소스 종류 이름" value={create[k.key].name}
+                              onInput={e => { const t = (e.target as HTMLInputElement).value; setCreate(c => ({ ...c, [k.key]: { ...c[k.key], name: t } })); }} />
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -144,10 +166,11 @@ export function SheetImportDialog(props: { fileName: string; scan: SheetScan; bu
           </section>
         </div>
         <div class="import-foot">
-          <p class="small" style="flex: 1" aria-live="polite"><b>{fmtInt(rows)}행</b>을 넣습니다{rows < s.rows ? ` · ${fmtInt(s.rows - rows)}행 건너뜀` : ''}{newVol.size ? ` · 물량에 새로 더할 리소스 ${newVol.size}곳` : ''}</p>
+          <datalist id="si-groups">{groups.filter(Boolean).map(g => <option value={g} />)}</datalist>
+          <p class="small" style="flex: 1" aria-live="polite"><b>{fmtInt(rows)}행</b>을 넣습니다{rows < s.rows ? ` · ${fmtInt(s.rows - rows)}행 건너뜀` : ''}{newNames.length ? ` · 새 리소스 종류 ${newNames.length}개` : ''}{newVol.size ? ` · 물량에 새로 더할 리소스 ${newVol.size}곳` : ''}</p>
           <button type="button" class="btn sm ghost" onClick={props.onClose}>그만두기</button>
-          <button type="button" class="btn primary" disabled={props.busy || rows === 0 || !dateOk}
-            onClick={() => props.onImport({ milestones: ms, resources: rt, words, doneDate, addVolumes })}><IconFolder />{props.busy ? '넣는 중…' : '가져오기'}</button>
+          <button type="button" class="btn primary" disabled={props.busy || rows === 0 || !dateOk || !namesOk}
+            onClick={() => props.onImport({ milestones: ms, resources: rt, create: Object.fromEntries(s.keys.filter(k => rt[k.key] === NEW).map(k => [k.key, { group: create[k.key].group.trim(), name: create[k.key].name.trim() }])), words, doneDate, addVolumes })}><IconFolder />{props.busy ? '넣는 중…' : '가져오기'}</button>
         </div>
       </div>
     </div>

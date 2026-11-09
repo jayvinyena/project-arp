@@ -490,10 +490,10 @@ export function App() {
     setSheetImport({ ...sheetImport, busy: true });
     try {
       const r = await rpc.importSheet(sheetImport.bytes, plan, me);
-      if (r.created || r.changed || r.volumesAdded) markChanged(true);
+      if (r.created || r.changed || r.volumesAdded || r.resourcesCreated.length) markChanged(true);
       setSheetImport(null);
       const skipped = r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.sheet} ${s.row}행 ${s.reason}`).join(', ')})` : '';
-      showToast(`제작 리스트를 가져왔습니다 · 새로 ${r.created}개, 바뀜 ${r.changed}개${r.unchanged ? `, 그대로 ${r.unchanged}개` : ''}${r.volumesAdded ? ` · 물량에 더한 리소스 ${r.volumesAdded}곳` : ''}${r.jiraBaseSet ? ' · Jira 주소 설정' : ''}${skipped}`);
+      showToast(`제작 리스트를 가져왔습니다 · 새로 ${r.created}개, 바뀜 ${r.changed}개${r.unchanged ? `, 그대로 ${r.unchanged}개` : ''}${r.resourcesCreated.length ? ` · 새 리소스 종류 ${r.resourcesCreated.length}개(공수 0 — 데이터 점검에서 채우십시오)` : ''}${r.volumesAdded ? ` · 물량에 더한 리소스 ${r.volumesAdded}곳` : ''}${r.jiraBaseSet ? ' · Jira 주소 설정' : ''}${skipped}`);
     } catch (error) {
       setSheetImport(s => (s ? { ...s, busy: false } : s));
       showToast(`넣지 못했습니다: ${(error as Error).message}`);

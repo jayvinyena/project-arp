@@ -178,6 +178,36 @@ await withBrowser(async (cdp, base) => {
   check('일괄 파트 상태 바꾸기: 바람 기사 FX 해당 없음 → 대기(FX팀에 보인다)', (await names()).includes('바람 기사'));
   await select(cdp, '팀 거르기', 'all');
   const okFilter = await shot(cdp, 'assets-filter-390', 390);
+
+  // 시트 분류대로 새 리소스 종류 만들기(docs/20-asset-management.md 21절): 다시 넣고 한 줄을 새 종류로
+  await cdp.eval("[...document.querySelectorAll('.asset-bar button')].find(b => b.textContent.includes('엑셀 넣기')).click()");
+  await cdp.waitUntil("document.querySelector('.dialog.sheet-import')", 10000);
+  await select(cdp, '코스튬 신규 · 캐릭터 리소스 종류', '+new');
+  await sleep(200);
+  const nw = await cdp.eval(`(() => ({
+    group: document.querySelector('input[aria-label="코스튬 신규 · 캐릭터 새 분류"]')?.value,
+    name: document.querySelector('input[aria-label="코스튬 신규 · 캐릭터 새 이름"]')?.value,
+    foot: document.querySelector('.sheet-import .import-foot').textContent,
+  }))()`);
+  check('새 리소스 종류로 만들기: 분류 = 시트 이름 · 이름 = 대분류 · 분류(기존 이름과 겹쳐 시트 이름을 붙임), 아래 줄에 개수', nw.group === '코스튬' && nw.name === '코스튬 신규 · 캐릭터' && nw.foot.includes('새 리소스 종류 1개'), JSON.stringify(nw));
+  await cdp.eval("document.querySelector('.si-key.new').scrollIntoView({ block: 'center' })");
+  const okNew = await shot(cdp, 'sheet-import-new');
+  await cdp.eval(`(() => { const i = document.querySelector('input[aria-label="코스튬 신규 · 캐릭터 새 이름"]'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(150);
+  check('새 이름이 비면 가져오기를 누를 수 없다', await cdp.eval("document.querySelector('.sheet-import .import-foot .btn.primary').disabled"));
+  await cdp.eval(`(() => { const i = document.querySelector('input[aria-label="코스튬 신규 · 캐릭터 새 이름"]'); i.value = '미니 손님류'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(150);
+  const allBtn = await cdp.eval("[...document.querySelectorAll('.si-new-bar button')][0].textContent");
+  check('"대응 없는 줄을 모두 새 종류로"에 대응 없는 줄 수', allBtn === '대응 없는 줄을 모두 새 종류로', allBtn);
+  await cdp.eval("document.querySelector('.sheet-import .import-foot .btn.primary').click()");
+  await cdp.waitUntil("!document.querySelector('.dialog.sheet-import')", 10000);
+  const toast2 = await cdp.eval("document.querySelector('.toast')?.textContent ?? ''");
+  check('가져오기 결과: 새 리소스 종류 1개(공수 0 안내)', toast2.includes('새 리소스 종류 1개') && toast2.includes('데이터 점검'), toast2);
+  await cdp.eval("[...document.querySelectorAll('.sidebar .nav-item')].find(b => b.textContent.includes('데이터 점검')).click()");
+  await sleep(600);
+  const chk = await cdp.eval("document.querySelector('main').textContent");
+  check('데이터 점검에 "기본 공수가 모두 0" 주의', chk.includes('기본 공수가 모두 0'), '');
+  check('가로 넘침 없음(새 종류 줄)', okNew);
   check('가로 넘침 없음(창 1440 · 390 · 카드 · 거르기 390)', okDialog && okDialog390 && okCard && okFilter);
 }, { build: !process.argv.includes('--no-build') });
 
