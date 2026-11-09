@@ -64,12 +64,12 @@ const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 const NS = 'http://schemas.openxmlformats.org';
 
 /** sheets: { 시트 이름: [[...], ...] } → .xlsx 바이트. 첫 행은 굵게 고정, 열 너비는 글자 수에 맞춘다 */
-export function writeXlsx(sheets: Record<string, (Cell | StyledCell)[][]>, options: { deflate?: DeflateRaw; freezeRows?: Record<string, number> } = {}): Uint8Array {
+export function writeXlsx(sheets: Record<string, (Cell | StyledCell)[][]>, options: { deflate?: DeflateRaw; freezeRows?: Record<string, number>; links?: Record<string, Record<string, string>> } = {}): Uint8Array {
   const names = Object.keys(sheets);
   const strings: string[] = [];
   const index = new Map<string, number>();
   const si = (s: string) => { if (!index.has(s)) { index.set(s, strings.length); strings.push(s); } return index.get(s)!; };
-  const sheetXml = (rows: (Cell | StyledCell)[][], freeze = 1) => {
+  const sheetXml = (rows: (Cell | StyledCell)[][], freeze = 1, links: Record<string, string> = {}) => {
     const widths: number[] = [];
     rows.forEach(row => row.forEach((cell, c) => {
       const v = isStyled(cell) ? (cell.s === 'title' || cell.s === 'note' ? null : cell.v) : cell;
@@ -92,7 +92,9 @@ export function writeXlsx(sheets: Record<string, (Cell | StyledCell)[][]>, optio
       return `<c r="${ref}" t="s"${style}><v>${si(String(v))}</v></c>`;
     }).join('')}</row>`).join('');
     const pane = rows.length > 1 && freeze > 0 ? `<sheetViews><sheetView workbookViewId="0"><pane ySplit="${freeze}" topLeftCell="A${freeze + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` : '';
-    return `${XML}<worksheet xmlns="${NS}/spreadsheetml/2006/main">${pane}${cols}<sheetData>${body}</sheetData></worksheet>`;
+    // 칸 하이퍼링크("행,열" → 주소): 시트 rels의 rIdN
+    const hl = Object.keys(links).map((k, i) => { const [r, c] = k.split(',').map(Number); return `<hyperlink ref="${colName(c)}${r + 1}" r:id="rId${i + 1}"/>`; }).join('');
+    return `${XML}<worksheet xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships">${pane}${cols}<sheetData>${body}</sheetData>${hl ? `<hyperlinks>${hl}</hyperlinks>` : ''}</worksheet>`;
   };
   const files: [string, string][] = [
     ['[Content_Types].xml', `${XML}<Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${names.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
@@ -100,8 +102,12 @@ export function writeXlsx(sheets: Record<string, (Cell | StyledCell)[][]>, optio
     ['xl/workbook.xml', `${XML}<workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`],
     ['xl/_rels/workbook.xml.rels', `${XML}<Relationships xmlns="${NS}/package/2006/relationships">${names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${names.length + 1}" Type="${NS}/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId${names.length + 2}" Type="${NS}/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
     ['xl/styles.xml', `${XML}<styleSheet xmlns="${NS}/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><fonts count="4"><font><sz val="11"/><name val="Malgun Gothic"/></font><font><b/><sz val="11"/><name val="Malgun Gothic"/></font><font><i/><sz val="10"/><color rgb="FF8A8A93"/><name val="Malgun Gothic"/></font><font><b/><sz val="14"/><name val="Malgun Gothic"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE4E4FA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF1F1F3"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="8"><xf fontId="0"/><xf fontId="1" applyFont="1"/><xf fontId="0" numFmtId="164" applyNumberFormat="1"/><xf fontId="1" fillId="2" applyFont="1" applyFill="1"/><xf fontId="1" fillId="3" applyFont="1" applyFill="1"/><xf fontId="2" applyFont="1"><alignment wrapText="1" vertical="top"/></xf><xf fontId="3" applyFont="1"/><xf fontId="1" fillId="3" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`],
-    ...names.map((n, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sheets[n], options.freezeRows?.[n] ?? 1)]),
+    ...names.map((n, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sheets[n], options.freezeRows?.[n] ?? 1, options.links?.[n])]),
   ];
+  names.forEach((n, i) => {
+    const urls = Object.values(options.links?.[n] ?? {});
+    if (urls.length) files.push([`xl/worksheets/_rels/sheet${i + 1}.xml.rels`, `${XML}<Relationships xmlns="${NS}/package/2006/relationships">${urls.map((u, j) => `<Relationship Id="rId${j + 1}" Type="${NS}/officeDocument/2006/relationships/hyperlink" Target="${esc(u)}" TargetMode="External"/>`).join('')}</Relationships>`]);
+  });
   files.push(['xl/sharedStrings.xml', `${XML}<sst xmlns="${NS}/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${strings.map(s => `<si><t xml:space="preserve">${esc(s)}</t></si>`).join('')}</sst>`]);
   return zip(files, options.deflate);
 }

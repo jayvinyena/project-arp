@@ -28,13 +28,13 @@ export function assetBook(db: SqlDb, updateId: string | null = null): { sheets: 
   const passes = new Set(db.all('SELECT resource_type_id, part_id FROM resource_parts').map(r => `${r.resource_type_id}|${r.part_id}`));
   const partHead = parts.flatMap(p => [head(`${p.name} 상태`), head(`${p.name} 완료일`), head(`${p.name} Jira`)]);
   const assetRows: C[][] = [
-    [head('에셋 ID'), head('마일스톤', true), head('분류'), head('리소스 종류', true), head('에셋 이름', true), head('코드'), head('배치'), head('포함 템플릿'), head('마감일'), head('에셋 Jira'), ...partHead, head('메모')],
-    [note('새 에셋은 ID를 비웁니다'), note('업데이트 이름'), note('참고용'), note('리소스 이름'), null, null, note('없으면 새로 만듭니다'), note(`${MODE.MIN} · ${MODE.TARGET} · ${MODE.STRETCH}`), note('YYYY-MM-DD(비우면 배치 마감일)'), note('ABC-123'),
+    [head('에셋 ID'), head('마일스톤', true), head('분류'), head('리소스 종류', true), head('에셋 이름', true), head('리소스명'), head('세부 분류'), head('배치'), head('포함 템플릿'), head('마감일'), head('에셋 Jira'), ...partHead, head('메모')],
+    [note('새 에셋은 ID를 비웁니다'), note('업데이트 이름'), note('참고용'), note('리소스 이름'), null, note('파일 이름 규칙'), note('예: 코스튬 · 상의'), note('없으면 새로 만듭니다'), note(`${MODE.MIN} · ${MODE.TARGET} · ${MODE.STRETCH}`), note('YYYY-MM-DD(비우면 배치 마감일)'), note('ABC-123'),
       ...parts.flatMap((_, i) => (i === 0 ? [note(ASSET_STATUSES.map(s => STATUS_LABEL[s]).join(' · ')), note('YYYY-MM-DD'), null] : [null, null, null])), null],
     ...assets.map(a => {
       const id = String(a.asset_id);
       return [
-        id, String(a.uname), String(a.gname), String(a.rname), String(a.name), (a.code as string) ?? null, (a.bname as string) ?? null,
+        id, String(a.uname), String(a.gname), String(a.rname), String(a.name), (a.code as string) ?? null, (a.category as string) ?? null, (a.bname as string) ?? null,
         MODE[a.tier as Tier], (a.due_date as string) ?? null, (a.jira_key as string) ?? null,
         ...parts.flatMap(p => {
           if (!passes.has(`${a.resource_type_id}|${p.id}`)) return [null, null, null];
@@ -58,7 +58,7 @@ export function assetBook(db: SqlDb, updateId: string | null = null): { sheets: 
       '배치': batchRows,
       '안내': [
         [{ v: '에셋 엑셀', s: 'title' }],
-        ['"에셋" 시트에서 이름 · 배치 · 포함 템플릿 · 파트별 상태 · 완료일 · Jira 키를 고치거나 새 행을 더한 뒤 "엑셀 넣기"로 넣습니다.'],
+        ['"에셋" 시트에서 이름 · 리소스명 · 세부 분류 · 배치 · 포함 템플릿 · 파트별 상태 · 완료일 · Jira 키를 고치거나 새 행을 더한 뒤 "엑셀 넣기"로 넣습니다.'],
         ['에셋 ID가 있으면 그 에셋을 고치고, 비어 있으면 마일스톤 · 리소스 종류 · 에셋 이름으로 찾거나 새로 만듭니다.'],
         [`상태: ${ASSET_STATUSES.map(s => STATUS_LABEL[s]).join(' · ')}. "완료"와 "해당 없음"이 작업 진척의 완료 수량에 들어갑니다.`],
         ['완료일이 비어 있으면 넣는 날의 날짜를 사용합니다. 비워 둔 칸은 변경하지 않습니다(지우기는 앱에서 합니다).'],
@@ -139,7 +139,7 @@ export function importAssets(db: SqlDb, session: ProjectSession, sheets: Sheets,
     const ci = (re: RegExp) => h.findIndex(x => re.test(x));
     const col = {
       id: ci(/^(에셋id|assetid)$/), u: ci(/^(마일스톤|업데이트|milestone|update)$/), rt: ci(/^(리소스종류|리소스|resourcetype|resource)$/),
-      name: ci(/^(에셋이름|에셋|이름|assetname|name)$/), code: ci(/^(코드|code)$/), batch: ci(/^(배치|batch)$/), tier: ci(/^(포함템플릿|템플릿|tier)$/),
+      name: ci(/^(에셋이름|에셋|이름|assetname|name)$/), code: ci(/^(리소스명|코드|code)$/), category: ci(/^(세부분류|category)$/), batch: ci(/^(배치|batch)$/), tier: ci(/^(포함템플릿|템플릿|tier)$/),
       jira: ci(/^(에셋jira|jira|jirakey)$/), note: ci(/^(메모|설명|note)$/), due: ci(/^(마감일|due|duedate)$/),
     };
     if (col.u < 0 || col.rt < 0 || col.name < 0) throw new Error('"마일스톤", "리소스 종류", "에셋 이름" 칸을 찾지 못했습니다.');
@@ -182,7 +182,7 @@ export function importAssets(db: SqlDb, session: ProjectSession, sheets: Sheets,
           if (bName) run({ kind: 'assetField', assetIds: [id], field: 'batch_id', value: bId });
           if (tier) run({ kind: 'assetField', assetIds: [id], field: 'tier', value: tier });
         }
-        for (const [f, c] of [['code', col.code], ['jira_key', col.jira], ['note', col.note]] as const) {
+        for (const [f, c] of [['code', col.code], ['category', col.category], ['jira_key', col.jira], ['note', col.note]] as const) {
           if (c >= 0 && text(r[c]) != null) run({ kind: 'assetField', assetIds: [id], field: f, value: text(r[c]) });
         }
         if (col.due >= 0 && r[col.due] != null && r[col.due] !== '') {

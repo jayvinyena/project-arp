@@ -25,7 +25,7 @@ export async function buildSamples(outDir = `${ROOT}samples/out`) {
   const v1 = `${outDir}/normal-v1.arp`;
   copyFileSync(`${outDir}/normal.arp`, v1);
   const old = new DatabaseSync(v1);
-  old.exec('DROP TABLE asset_comments; DROP TABLE asset_links; DROP TABLE asset_thumbs; DROP TABLE asset_parts; DROP TABLE assets; DROP TABLE batches; ALTER TABLE progress DROP COLUMN spent_days; ALTER TABLE scenario_changes DROP COLUMN group_no; ALTER TABLE scenario_changes DROP COLUMN label; ALTER TABLE scenarios DROP COLUMN applied_at; PRAGMA user_version = 1;');
+  old.exec('DROP TABLE asset_attrs; DROP TABLE asset_comments; DROP TABLE asset_links; DROP TABLE asset_thumbs; DROP TABLE asset_parts; DROP TABLE assets; DROP TABLE batches; ALTER TABLE progress DROP COLUMN spent_days; ALTER TABLE scenario_changes DROP COLUMN group_no; ALTER TABLE scenario_changes DROP COLUMN label; ALTER TABLE scenarios DROP COLUMN applied_at; PRAGMA user_version = 1;');
   old.close();
 
   // 옛 도구 시트 예시(.xlsx): 가져오기 화면 시험용
@@ -34,6 +34,9 @@ export async function buildSamples(outDir = `${ROOT}samples/out`) {
   // 운영 시트 흉내(구글 시트에서 내보낸 모양, 날짜는 엑셀 날짜): 실제 규모 가져오기 시험용
   const { buildOperatingFixture, toExportedXlsx } = await import('./gen-operating-sheet.mjs');
   writeFileSync(`${outDir}/operating-sheet.xlsx`, toExportedXlsx(buildOperatingFixture()));
+  // 팀 제작 리스트 형식(가상 예시): 에셋 화면 "엑셀 넣기" → 제작 리스트 가져오기 창 시험용
+  const { BOOK, LINKS } = await import('../samples/production-list.mjs');
+  writeFileSync(`${outDir}/production-list-sample.xlsx`, writeXlsx(BOOK, { links: LINKS }));
   return built;
 }
 

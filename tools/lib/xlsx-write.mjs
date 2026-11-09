@@ -3,6 +3,6 @@ import { deflateRawSync } from 'node:zlib';
 import { writeXlsx as coreWrite } from '../../core/xlsx-write.ts';
 
 /** sheets: { 시트 이름: [[...], ...] } → .xlsx 바이트. compress = false면 저장 방식 */
-export function writeXlsx(sheets, { compress = true } = {}) {
-  return coreWrite(sheets, compress ? { deflate: d => new Uint8Array(deflateRawSync(d)) } : {});
+export function writeXlsx(sheets, { compress = true, links } = {}) {
+  return coreWrite(sheets, { ...(compress ? { deflate: d => new Uint8Array(deflateRawSync(d)) } : {}), ...(links ? { links } : {}) });
 }

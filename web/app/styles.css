@@ -1192,3 +1192,25 @@ table.grid.dash-batch-table .share { min-width: 0; }
 table.grid.dash-batch-table .share .bar { width: 56px; }
 .stage-legend .stg { box-shadow: inset 0 0 0 1px var(--line-strong); }
 
+
+/* ───────── 에셋 속성 · 제작 리스트 가져오기 ───────── */
+.cw-attrs { display: flex; flex-direction: column; gap: 4px; }
+.cw-attr { display: grid; grid-template-columns: 120px minmax(0, 1fr) 30px; align-items: center; gap: 8px; min-height: 32px; padding: 0 4px 0 8px; border-radius: 8px; background: var(--surface-2); }
+.cw-attr-name { font-size: 12.5px; font-weight: 650; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-attr .field { background: transparent; border-color: transparent; }
+.cw-attr .field:hover { border-color: var(--line); }
+.cw-attr .field:focus { background: var(--surface); }
+.cw-attrs + .cw-link-add { margin-top: 8px; }
+.sheet-import .drawer-body { padding-top: 0; }
+.si-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 16px; margin-top: 8px; }
+.si-map-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 2px 0; border-bottom: 1px solid var(--line); }
+.si-map-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.si-map-row .field { flex: none; width: 170px; }
+.si-map-row .field.unset { color: var(--text-3); border-style: dashed; }
+.si-group { margin-top: 10px; }
+.si-group-h { font-size: 12px; font-weight: 700; color: var(--text-2); padding: 4px 8px; border-radius: 6px; background: var(--surface-2); }
+.si-opts { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; max-width: 560px; }
+.si-notes { margin: 10px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.sheet-import .import-foot .btn.primary { min-width: 116px; justify-content: center; }
+table.grid.si-sheets { min-width: 560px; }
+@media (max-width: 640px) { .si-map { grid-template-columns: minmax(0, 1fr); } .si-map-row .field { width: 150px; } .cw-attr { grid-template-columns: 90px minmax(0, 1fr) 30px; } }

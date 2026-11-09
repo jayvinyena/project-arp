@@ -14,6 +14,7 @@ import type { ScenarioOp, ScenarioAction, ScenarioSummary, SimMeta, CompareView,
 import type { AdvisorOptions, AdvisorResult } from '../../../core/advisor.ts';
 import type { AssetsView, AssetDetail } from '../../../core/assets.ts';
 import type { AssetImportReport } from '../../../core/asset-io.ts';
+import type { SheetScan, SheetPlan, SheetImportReport } from '../../../core/sheet-import.ts';
 import type { DashboardView } from '../../../core/dashboard.ts';
 
 export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null> }
@@ -76,6 +77,8 @@ export const rpc = {
   thumbs: (assetIds: string[]) => call<{ items: { assetId: string; mime: string; data: Uint8Array; updatedAt: string }[] }>('thumbs', { assetIds }),
   assetBook: (updateId: string | null) => call<{ bytes: ArrayBuffer }>('assetBook', { updateId }),
   importAssets: (bytes: ArrayBuffer, editor: string) => call<AssetImportReport>('importAssets', { bytes, editor }, [bytes]),
+  scanAssetFile: (bytes: ArrayBuffer) => call<{ kind: 'arp' } | { kind: 'sheet'; scan: SheetScan }>('scanAssetFile', { bytes }),
+  importSheet: (bytes: ArrayBuffer, plan: SheetPlan, editor: string) => call<SheetImportReport>('importSheet', { bytes, plan, editor }),
   scenarios: () => call<{ scenarios: ScenarioSummary[]; meta: SimMeta }>('scenarios'),
   scenarioOp: (op: ScenarioOp) => call<{ changed: boolean; createdId?: string; groupNo?: number }>('scenarioOp', { op }),
   compare: (ids: string[], planMode: PlanMode) => call<CompareView>('compare', { ids, planMode }),

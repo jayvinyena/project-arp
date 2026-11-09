@@ -3,6 +3,8 @@
 
 export type Cell = string | number | boolean | null;
 export type Sheets = Record<string, Cell[][]>;
+/** 시트마다 칸("행,열", 0부터) → 하이퍼링크 주소 */
+export type SheetLinks = Record<string, Record<string, string>>;
 
 interface Entry { name: string; method: number; compressedSize: number; offset: number }
 
@@ -76,6 +78,11 @@ function colIndex(ref: string): number {
 }
 
 export async function readXlsx(bytes: Uint8Array): Promise<Sheets> {
+  return (await readXlsxWithLinks(bytes)).sheets;
+}
+
+/** 값 + 칸 하이퍼링크(시트의 hyperlink 목록, HYPERLINK 수식). 구글 시트에서 받은 파일의 링크 칸을 읽는다 */
+export async function readXlsxWithLinks(bytes: Uint8Array, options: { fillMerged?: boolean } = {}): Promise<{ sheets: Sheets; links: SheetLinks }> {
   const entries = zipEntries(bytes);
   const get = async (name: string) => { const e = entries.get(name); return e ? readEntry(bytes, e) : null; };
   const workbook = await get('xl/workbook.xml');
@@ -92,6 +99,7 @@ export async function readXlsx(bytes: Uint8Array): Promise<Sheets> {
   if (sst) for (const m of sst.matchAll(/<si\b[^>]*?\/>|<si\b[^>]*>([\s\S]*?)<\/si>/g)) shared.push(m[1] ? textOf(m[1]) : '');
 
   const sheets: Sheets = {};
+  const links: SheetLinks = {};
   for (const m of workbook.matchAll(/<sheet\b([^>]*)\/?>/g)) {
     const name = attr(m[1], 'name');
     const rid = attr(m[1], 'r:id');
@@ -119,14 +127,49 @@ export async function readXlsx(bytes: Uint8Array): Promise<Sheets> {
         else if (t === 'd') value = v == null ? null : unescapeXml(v).slice(0, 10); // 날짜형 칸(ISO 글자)
         else if (v != null && v !== '') value = Number(v);
         row[ci] = value;
+        const f = /<f\b[^>]*>([\s\S]*?)<\/f>/.exec(inner)?.[1];
+        const hl = f ? /HYPERLINK\(\s*"([^"]+)"/i.exec(unescapeXml(f))?.[1] : undefined;
+        if (hl) (links[name] ??= {})[`${ri},${ci}`] = hl;
       }
       for (let i = 0; i < row.length; i += 1) if (row[i] === undefined) row[i] = null;
       rows[ri] = row;
     }
     for (let i = 0; i < rows.length; i += 1) if (!rows[i]) rows[i] = [];
     sheets[name] = rows;
+    // 병합 칸: 왼쪽 위 값을 병합 범위 전체에 채운다(세로로 합친 "마일스톤 · 분류" 칸)
+    if (options.fillMerged) {
+      for (const m2 of xml.matchAll(/<mergeCell\b[^>]*\bref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)) {
+        const c0 = colIndex(m2[1]); const r0 = Number(m2[2]) - 1; const c1 = colIndex(m2[3]); const r1 = Number(m2[4]) - 1;
+        const v0 = rows[r0]?.[c0] ?? null;
+        if (v0 == null || r1 - r0 > 5000) continue;
+        for (let r = r0; r <= r1; r += 1) {
+          rows[r] ??= [];
+          for (let c = c0; c <= c1; c += 1) if (rows[r][c] == null) rows[r][c] = v0;
+          for (let i = 0; i < rows[r].length; i += 1) if (rows[r][i] === undefined) rows[r][i] = null;
+        }
+      }
+    }
+    // 칸 하이퍼링크: <hyperlink ref="E2" r:id="rId1"/> → 시트 rels의 외부 주소
+    const tags = [...xml.matchAll(/<hyperlink\b([^>]*?)\/?>/g)];
+    if (tags.length) {
+      const relXml = await get(path.replace(/([^/]+)$/, '_rels/$1.rels'));
+      const out = new Map<string, string>();
+      if (relXml) for (const m2 of relXml.matchAll(/<Relationship\b([^>]*)\/?>/g)) {
+        const id = attr(m2[1], 'Id'); const t = attr(m2[1], 'Target');
+        if (id && t) out.set(id, t);
+      }
+      for (const m2 of tags) {
+        const ref = attr(m2[1], 'ref');
+        const rid = attr(m2[1], 'r:id');
+        const url = rid ? out.get(rid) : null;
+        if (!ref || !url) continue;
+        const cell = /^([A-Z]+)(\d+)/.exec(ref);
+        if (!cell) continue;
+        (links[name] ??= {})[`${Number(cell[2]) - 1},${colIndex(cell[1])}`] = url;
+      }
+    }
   }
-  return sheets;
+  return { sheets, links };
 }
 
 /** 엑셀 날짜 일련번호 → YYYY-MM-DD (1900 날짜 체계) */

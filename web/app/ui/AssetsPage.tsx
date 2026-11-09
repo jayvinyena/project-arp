@@ -145,6 +145,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
   const [drag, setDrag] = useState(false);
   const [link, setLink] = useState({ title: '', url: '' });
   const [comment, setComment] = useState('');
+  const [attr, setAttr] = useState({ name: '', value: '' });
   const [showActivity, setShowActivity] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { void rpc.assetDetail(a.assetId).then(setD); }, [a.assetId, props.version]);
@@ -192,7 +193,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
         <div class="cw-body">
           <div class="cw-main">
             <Field class="title-input" value={a.name} label="에셋 이름" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'name', value: t })} />
-            <p class="small muted cw-sub">{group?.name} · {rt?.name}{a.code ? ` · ${a.code}` : ''} · 단계 <b>{stageName}</b> · 진행 {fmtPct(a.progress)}{a.retakes ? ` · 리테이크 ${a.retakes}회` : ''}</p>
+            <p class="small muted cw-sub">{group?.name} · {rt?.name}{a.category && a.category !== rt?.name ? ` · ${a.category}` : ''}{a.code ? ` · ${a.code}` : ''} · 단계 <b>{stageName}</b> · 진행 {fmtPct(a.progress)}{a.retakes ? ` · 리테이크 ${a.retakes}회` : ''}</p>
             <div class="cw-labels">
               <span class={`label-chip st-${a.sub}`}>{LABEL[a.sub]}</span>
               <span class="label-chip">{batch ? batch.name : '미배정'}</span>
@@ -204,6 +205,27 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
             <section class="cw-section">
               <h3 class="sub-h">설명</h3>
               <TextArea value={a.note ?? ''} label="설명" placeholder="요청 사항 · 참고 · 특이 사항을 적습니다" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'note', value: t })} />
+            </section>
+
+            <section class="cw-section">
+              <h3 class="sub-h">속성 <span class="small faint">제작 리스트의 추가 칸(속성 · 지역 · 무기 …)</span></h3>
+              <div class="cw-attrs">
+                {a.attrs.length === 0 && <p class="small faint">아직 속성이 없습니다.</p>}
+                {a.attrs.map(x => (
+                  <div class="cw-attr">
+                    <span class="cw-attr-name">{x.name}</span>
+                    <Field value={x.value} label={`속성 ${x.name}`} disabled={ro} onCommit={t => apply({ kind: 'assetAttr', assetIds: [a.assetId], name: x.name, value: t })} />
+                    {!ro && <button type="button" class="btn ghost icon-btn" aria-label={`속성 ${x.name} 지우기`} onClick={() => void apply({ kind: 'assetAttr', assetIds: [a.assetId], name: x.name, value: null })}><IconX /></button>}
+                  </div>
+                ))}
+              </div>
+              {!ro && (
+                <div class="inline cw-link-add">
+                  <input class="field" aria-label="속성 이름" placeholder="이름(예: 속성)" value={attr.name} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, name: t })); }} />
+                  <input class="field" aria-label="속성 값" placeholder="값(예: 바람)" value={attr.value} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, value: t })); }} />
+                  <button type="button" class="btn sm" disabled={!attr.name.trim() || !attr.value.trim()} onClick={async () => { if (await apply({ kind: 'assetAttr', assetIds: [a.assetId], name: attr.name, value: attr.value })) setAttr({ name: '', value: '' }); }}><IconPlus />속성 더하기</button>
+                </div>
+              )}
             </section>
 
             <section class="cw-section">
@@ -248,8 +270,8 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
               </ul>
               {!ro && (
                 <div class="inline cw-link-add">
-                  <input class="field" aria-label="링크 제목" placeholder="제목(예: 컨셉 문서)" value={link.title} onInput={e => setLink({ ...link, title: (e.target as HTMLInputElement).value })} />
-                  <input class="field" aria-label="링크 주소" placeholder="https://" value={link.url} onInput={e => setLink({ ...link, url: (e.target as HTMLInputElement).value })} />
+                  <input class="field" aria-label="링크 제목" placeholder="제목(예: 컨셉 문서)" value={link.title} onInput={e => { const t = (e.target as HTMLInputElement).value; setLink(x => ({ ...x, title: t })); }} />
+                  <input class="field" aria-label="링크 주소" placeholder="https://" value={link.url} onInput={e => { const t = (e.target as HTMLInputElement).value; setLink(x => ({ ...x, url: t })); }} />
                   <button type="button" class="btn sm" disabled={!link.url.trim()} onClick={async () => { if (await apply({ kind: 'addLink', assetId: a.assetId, title: link.title, url: link.url })) setLink({ title: '', url: '' }); }}><IconPlus />링크 더하기</button>
                 </div>
               )}
@@ -300,8 +322,10 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
             </select>
             <span class="cw-side-h">Jira 키</span>
             <Field value={a.jiraKey ?? ''} label="에셋 Jira 키" placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'jira_key', value: t })} />
-            <span class="cw-side-h">코드</span>
-            <Field value={a.code ?? ''} label="에셋 코드" placeholder="예: CK_0123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'code', value: t })} />
+            <span class="cw-side-h">세부 분류</span>
+            <Field value={a.category ?? ''} label="세부 분류" placeholder="예: 코스튬 · 상의" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'category', value: t })} />
+            <span class="cw-side-h">리소스명</span>
+            <Field value={a.code ?? ''} label="리소스명" placeholder="예: CH_0123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'code', value: t })} />
             <div class="viewer-slot small faint">에셋 뷰어(큰 이미지 · 3D)는 다음 단계에서 이 자리에</div>
             {!ro && (confirmDelete
               ? <div class="cw-danger"><span class="small">삭제하시겠습니까? 썸네일은 돌아오지 않습니다.</span>
@@ -318,7 +342,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
 // ───────── 화면 ─────────
 type Tab = 'assets' | 'batches' | 'volumes';
 type View = 'list' | 'board';
-type GroupBy = 'none' | 'group' | 'batch' | 'stage';
+type GroupBy = 'none' | 'group' | 'category' | 'batch' | 'stage';
 
 export function AssetsPage(props: {
   version: number; readOnly: boolean;
@@ -383,7 +407,7 @@ export function AssetsPage(props: {
   const shown = v.assets.filter(a => rtIds.has(a.resourceTypeId)
     && (batch === 'all' || (batch === 'none' ? !a.batchId : a.batchId === batch))
     && (who === 'all' || Object.values(a.parts).some(p => p.assignee === who))
-    && (!query || a.name.toLowerCase().includes(query) || (a.code ?? '').toLowerCase().includes(query) || (a.jiraKey ?? '').toLowerCase().includes(query)));
+    && (!query || [a.name, a.code, a.category, a.jiraKey, ...a.attrs.map(x => x.value)].some(x => (x ?? '').toLowerCase().includes(query))));
   const count = (pred: (a: AssetItem) => boolean) => shown.filter(pred).length;
   const toggle = (id: string) => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const selIds = [...sel].filter(id => shown.some(a => a.assetId === id));
@@ -439,7 +463,9 @@ export function AssetsPage(props: {
   const groupsOfList: { key: string; name: string; items: AssetItem[] }[] = (() => {
     const list = shown.slice(0, limit);
     if (groupBy === 'none') return [{ key: 'all', name: '', items: list }];
-    const keyOf = (a: AssetItem) => groupBy === 'group' ? `${groupName.get(a.resourceTypeId)} · ${rtName.get(a.resourceTypeId)}` : groupBy === 'batch' ? (a.batchId ? batchById.get(a.batchId)?.name ?? '' : '미배정') : stageName.get(a.stage) ?? '';
+    const keyOf = (a: AssetItem) => groupBy === 'group' ? `${groupName.get(a.resourceTypeId)} · ${rtName.get(a.resourceTypeId)}`
+      : groupBy === 'category' ? `${rtName.get(a.resourceTypeId)} › ${a.category ?? '세부 분류 없음'}`
+      : groupBy === 'batch' ? (a.batchId ? batchById.get(a.batchId)?.name ?? '' : '미배정') : stageName.get(a.stage) ?? '';
     const order = groupBy === 'stage' ? stages.map(s => s.name) : groupBy === 'batch' ? [...v.batches.map(b => b.name), '미배정'] : [...new Set(list.map(keyOf))];
     const m = new Map<string, AssetItem[]>();
     for (const a of list) { const k = keyOf(a); if (!m.has(k)) m.set(k, []); m.get(k)!.push(a); }
@@ -492,7 +518,7 @@ export function AssetsPage(props: {
               <option value="all">모든 담당</option>
               {people.map(p => <option value={p}>{p}</option>)}
             </select>
-            <input class="field" type="search" aria-label="에셋 찾기" placeholder="이름 · 코드 · Jira 찾기" value={q} onInput={e => setQ((e.target as HTMLInputElement).value)} />
+            <input class="field" type="search" aria-label="에셋 찾기" placeholder="이름 · 리소스명 · 분류 · 속성 · Jira" value={q} onInput={e => setQ((e.target as HTMLInputElement).value)} />
             <span style="flex: 1" />
             <div class="segmented wide" role="radiogroup" aria-label="보기">
               <button type="button" role="radio" aria-checked={view === 'list'} class={view === 'list' ? 'on' : ''} onClick={() => setView('list')}><IconList />리스트</button>
@@ -550,7 +576,7 @@ export function AssetsPage(props: {
               <div class="list-opts small">
                 <span class="faint">묶기</span>
                 <div class="segmented wide" role="radiogroup" aria-label="리스트 묶기">
-                  {([['group', '항목'], ['batch', '배치'], ['stage', '단계'], ['none', '없음']] as [GroupBy, string][]).map(([k, l]) => <button type="button" role="radio" aria-checked={groupBy === k} class={groupBy === k ? 'on' : ''} onClick={() => setGroupBy(k)}>{l}</button>)}
+                  {([['group', '항목'], ['category', '세부 분류'], ['batch', '배치'], ['stage', '단계'], ['none', '없음']] as [GroupBy, string][]).map(([k, l]) => <button type="button" role="radio" aria-checked={groupBy === k} class={groupBy === k ? 'on' : ''} onClick={() => setGroupBy(k)}>{l}</button>)}
                 </div>
               </div>
               <div class="table-wrap ref-wrap">
@@ -572,7 +598,7 @@ export function AssetsPage(props: {
                               <td class="c"><input type="checkbox" aria-label={`${a.name} 고르기`} checked={sel.has(a.assetId)} onChange={() => toggle(a.assetId)} /></td>
                               <td><button type="button" class="thumb-btn" aria-label={`${a.name} 카드 열기`} onClick={() => setOpenId(a.assetId)}><Thumb asset={a} size="sm" /></button></td>
                               <td><button type="button" class="link-btn" onClick={() => setOpenId(a.assetId)}>{a.name}</button>
-                                <span class="row-meta small faint">{a.code ?? ''}{a.comments ? ` · 댓글 ${a.comments}` : ''}{a.links ? ` · 링크 ${a.links}` : ''}</span></td>
+                                <span class="row-meta small faint">{[groupBy !== 'category' && a.category !== rtName.get(a.resourceTypeId) ? a.category : null, a.code, a.comments ? `댓글 ${a.comments}` : null, a.links ? `링크 ${a.links}` : null].filter(Boolean).join(' · ')}</span></td>
                               {groupBy !== 'group' && <td class="small">{groupName.get(a.resourceTypeId)} · {rtName.get(a.resourceTypeId)}</td>}
                               <td><select class={`field stage-select stage-${a.stage === 'DONE' ? 'done' : a.stage === 'TODO' ? 'todo' : 'mid'}`} aria-label={`${a.name} 단계`} value={a.stage} disabled={ro} onChange={e => move([a.assetId], (e.target as HTMLSelectElement).value)}>
                                 {stages.filter(s => s.id === 'TODO' || s.id === 'DONE' || a.parts[s.id]).map(s => <option value={s.id}>{s.name}</option>)}
@@ -636,7 +662,7 @@ export function AssetsPage(props: {
                                 <input type="checkbox" class="kb-check" aria-label={`${a.name} 고르기`} checked={sel.has(a.assetId)} onChange={() => toggle(a.assetId)} />
                                 <div class="kb-body">
                                   <span class="kb-name">{a.name}</span>
-                                  <span class="kb-meta small faint">{rtName.get(a.resourceTypeId)}{a.batchId ? ` · ${batchById.get(a.batchId)?.name}` : ''}</span>
+                                  <span class="kb-meta small faint">{a.category ?? rtName.get(a.resourceTypeId)}{a.batchId ? ` · ${batchById.get(a.batchId)?.name}` : ''}</span>
                                   <div class="kb-badges">
                                     {!partBoard && a.stage !== 'TODO' && a.stage !== 'DONE'
                                       ? <StatusSelect value={a.sub} label={`${a.name} 세부 상태`} disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />

@@ -29,15 +29,15 @@ const ctx = () => ({ editor: '검사', batchId: `b${(n += 1)}` });
 const apply = (t, e) => applyEdit(t.db, t.session, e, ctx());
 const prog = (db, u, rt) => Object.fromEntries(db.all('SELECT part_id, completed_qty, as_of FROM progress WHERE update_id = ? AND resource_type_id = ?', [u, rt]).map(r => [r.part_id, [r.completed_qty, r.as_of]]));
 
-test('구조 전환: v1 파일 → 최신(v5), 에셋 표 6개가 생긴다', () => {
+test('구조 전환: v1 파일 → 최신(v6), 에셋 표 7개가 생긴다', () => {
   const path = `${OUT}/v1-copy.arp`;
   copyFileSync(`${OUT}/normal-v1.arp`, path);
   const raw = new DatabaseSync(path);
   const r = migrate(nodeDb(raw));
   assert.deepEqual([r.from, r.to], [1, LATEST_SCHEMA]);
-  assert.equal(LATEST_SCHEMA, 5);
+  assert.equal(LATEST_SCHEMA, 6);
   const tables = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(x => x.name);
-  for (const t of ['batches', 'assets', 'asset_parts', 'asset_thumbs', 'asset_links', 'asset_comments']) assert.ok(tables.includes(t), t);
+  for (const t of ['batches', 'assets', 'asset_parts', 'asset_thumbs', 'asset_links', 'asset_comments', 'asset_attrs']) assert.ok(tables.includes(t), t);
   raw.close();
 });
 

@@ -5,6 +5,8 @@ import { rpc, DEVICE } from './lib/rpc.ts';
 import type { View } from './lib/rpc.ts';
 import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveInPlace, pickXlsx, fetchBytes } from './lib/files.ts';
 import { ImportReport } from './ui/ImportReport.tsx';
+import { SheetImportDialog } from './ui/SheetImport.tsx';
+import type { SheetScan, SheetPlan } from '../../core/sheet-import.ts';
 import { ImportGuide } from './ui/ImportGuide.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
 import { CalibrationPage } from './ui/CalibrationPage.tsx';
@@ -64,6 +66,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(new URLSearchParams(location.search).has('new'));
   const [imported, setImported] = useState<ImportReportData | null>(null);
+  const [sheetImport, setSheetImport] = useState<{ name: string; bytes: ArrayBuffer; scan: SheetScan; busy: boolean } | null>(null);
   const [importing, setImporting] = useState(new URLSearchParams(location.search).has('importGuide'));
   const [recovery, setRecovery] = useState<Recovery | null>(null);
   const [recent, setRecent] = useState<RecentFile[]>([]);
@@ -472,10 +475,27 @@ export function App() {
     const picked = await pickXlsx();
     if (!picked) return;
     try {
+      // ARP 에셋 양식이 아니면 팀 제작 리스트로 보고 가져오기 창을 연다
+      const kind = await rpc.scanAssetFile(picked.bytes);
+      if (kind.kind === 'sheet') { setSheetImport({ name: picked.name, bytes: picked.bytes, scan: kind.scan, busy: false }); return; }
       const r = await rpc.importAssets(picked.bytes, me);
       if (r.created || r.changed) markChanged(true);
       showToast(`에셋을 입력했습니다 · 새로 ${r.created}개, 바뀜 ${r.changed}개${r.unchanged ? `, 그대로 ${r.unchanged}개` : ''}${r.batches ? ` · 새 배치 ${r.batches}개` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
     } catch (error) {
+      showToast(`넣지 못했습니다: ${(error as Error).message}`);
+    }
+  };
+  const onImportSheet = async (plan: SheetPlan) => {
+    if (!sheetImport) return;
+    setSheetImport({ ...sheetImport, busy: true });
+    try {
+      const r = await rpc.importSheet(sheetImport.bytes, plan, me);
+      if (r.created || r.changed || r.volumesAdded) markChanged(true);
+      setSheetImport(null);
+      const skipped = r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.sheet} ${s.row}행 ${s.reason}`).join(', ')})` : '';
+      showToast(`제작 리스트를 가져왔습니다 · 새로 ${r.created}개, 바뀜 ${r.changed}개${r.unchanged ? `, 그대로 ${r.unchanged}개` : ''}${r.volumesAdded ? ` · 물량에 더한 리소스 ${r.volumesAdded}곳` : ''}${r.jiraBaseSet ? ' · Jira 주소 설정' : ''}${skipped}`);
+    } catch (error) {
+      setSheetImport(s => (s ? { ...s, busy: false } : s));
       showToast(`넣지 못했습니다: ${(error as Error).message}`);
     }
   };
@@ -818,6 +838,7 @@ export function App() {
           onCheck={() => { setImported(null); setPage('check'); }}
           onSave={async () => { if (await writeNow()) setImported(null); }} />
       )}
+      {sheetImport && <SheetImportDialog fileName={sheetImport.name} scan={sheetImport.scan} busy={sheetImport.busy} onImport={p => void onImportSheet(p)} onClose={() => setSheetImport(null)} />}
       {help && <HelpPanel page={help} onClose={() => setHelp(null)} onGo={p => { setHelp(null); setPage(p); }} />}
       {toast && <div class="toast" role="status">{toast}</div>}
     </div>

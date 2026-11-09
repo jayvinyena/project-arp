@@ -12,7 +12,7 @@ import type { SqlDb } from '../../core/db.ts';
 import { writeNewProject } from '../../core/new-project.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
 import schemaSql from '../../schema/schema-v1.sql?raw';
-import { readXlsx } from '../../core/xlsx.ts';
+import { readXlsx, readXlsxWithLinks } from '../../core/xlsx.ts';
 import { legacyToRows, writeImported } from '../../core/import-legacy.ts';
 import { historyView, undoBatch } from '../../core/history.ts';
 import { exportSheets } from '../../core/export.ts';
@@ -26,6 +26,8 @@ import type { Seen } from '../../core/notice.ts';
 import { applyEdit } from '../../core/edits.ts';
 import { assetsView, assetThumbs, assetDetail, localToday } from '../../core/assets.ts';
 import { assetBook, importAssets } from '../../core/asset-io.ts';
+import { isArpAssetBook, scanSheetBook, importSheetBook } from '../../core/sheet-import.ts';
+import type { SheetPlan } from '../../core/sheet-import.ts';
 import { dashboardView } from '../../core/dashboard.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
@@ -190,6 +192,23 @@ const handlers: Record<string, (payload: any) => unknown> = {
   assetBook(p: { updateId: string | null }) {
     const { sheets, freezeRows } = assetBook(need().sql, p.updateId);
     return { bytes: writeXlsx(sheets, { freezeRows }).buffer };
+  },
+
+  /** 에셋 엑셀 넣기 전에: ARP 에셋 양식인지, 팀 제작 리스트 형식이면 가져오기 창에서 고를 것 */
+  async scanAssetFile(p: { bytes: ArrayBuffer }) {
+    const sheets = await readXlsx(new Uint8Array(p.bytes));
+    if (isArpAssetBook(sheets)) return { kind: 'arp' as const };
+    const scan = scanSheetBook(need().sql, sheets);
+    if (!scan.sheets.some(s => s.included)) {
+      throw new Error(`에셋 양식도, 제작 리스트 형식(이름 + 원화 · 모델링 · 애니 · FX 칸)도 아닙니다. ${scan.sheets.slice(0, 3).map(s => `${s.name}: ${s.reason}`).join(' / ')}`);
+    }
+    return { kind: 'sheet' as const, scan };
+  },
+
+  async importSheet(p: { bytes: ArrayBuffer; plan: SheetPlan; editor: string }) {
+    const { sql: s, session: ss } = need();
+    const { sheets, links } = await readXlsxWithLinks(new Uint8Array(p.bytes), { fillMerged: true });
+    return importSheetBook(s, ss, sheets, links, p.plan, { editor: p.editor || '이름 없음', batchId: newBatchId() });
   },
 
   async importAssets(p: { bytes: ArrayBuffer; editor: string }) {
