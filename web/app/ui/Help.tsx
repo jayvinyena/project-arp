@@ -4,7 +4,7 @@ import { useEffect } from 'preact/hooks';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { IconX, IconHelp } from './icons.tsx';
 
-export type HelpPage = 'launch' | 'plan' | 'assets' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+export type HelpPage = 'dashboard' | 'launch' | 'plan' | 'assets' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
 
 interface HelpDoc {
   /** 메뉴 이름 */
@@ -74,6 +74,32 @@ export function helpDoc(page: HelpPage): HelpDoc {
         { page: 'templates', why: '유형별 기본 물량을 바꿀 때' },
         { page: 'simulation', why: '우선순위 · 인원을 바꿔 보고 싶을 때(원본은 그대로)' },
         { page: 'advisor', why: '늦는 업데이트를 맞출 방법을 찾을 때' },
+      ],
+    };
+    case 'dashboard': return {
+      name: '제작 현황판',
+      short: '마일스톤 하나의 진행률 · 계획 대비 · 처리할 것 · 항목별 진행을 한 화면에서 봅니다',
+      what: '고른 마일스톤(업데이트)의 제작 상황을 한 화면에 모았습니다. 진행은 작업 진척의 완료 수량을 기본 공수로 바꿔 계산하므로, 에셋을 등록한 리소스와 손으로 입력한 리소스가 같은 기준으로 합쳐집니다.',
+      steps: [
+        '위쪽에서 마일스톤과 물량 템플릿을 고릅니다.',
+        '요약 4칸에서 진행률 · 계획선 대비 앞섬/늦음과 완료 예정 · 이번 주 완료 · 다음 배치 마감을 확인합니다.',
+        '추이 그래프에서 실제 완료선이 계획선보다 위(앞섬)인지 아래(늦음)인지 봅니다. 선 위에 올리면 주마다 값이 표시됩니다.',
+        '"처리할 것"에서 검수 요청 · 수정 · 마감 지남 · 오래 머문 진행 · 보류를 누르면 그 에셋의 카드가 바로 열립니다.',
+        '"항목 × 파트 진행"에서 어느 리소스의 어느 파트가 밀렸는지 찾습니다.',
+      ],
+      tips: [
+        '계획선은 시작일 0%에서 제작 완료 목표일(없으면 출시일) 100%까지 곧게 이은 선입니다. 앞섬 · 늦음은 그 차이를 영업일(주 5일)로 어림한 값입니다.',
+        '완료 예정은 계산 엔진 결과입니다(남은 일 · 인력 · 다른 업데이트와 나눠 쓰기 반영).',
+        '이번 주 완료 · 처리할 것 · 단계 분포 · 배치는 에셋을 등록한 리소스에서 셉니다.',
+        '"오래 머문 진행"은 진행으로 바꾼 지 2주가 넘은 파트 작업입니다.',
+      ],
+      terms: [
+        ['계획선', '시작일부터 목표일까지 같은 속도로 만들었을 때의 누적 진행.'],
+        ['진행률', '끝낸 파트 작업의 기본 공수 ÷ 만들 물량 전체의 기본 공수.'],
+      ],
+      related: [
+        { page: 'assets', why: '에셋을 고치거나 보드에서 단계를 옮길 때' },
+        { page: 'progress', why: '파트별 완료 수량을 직접 볼 때' },
       ],
     };
     case 'assets': return {

@@ -30,11 +30,12 @@ import { TemplatesPage } from './ui/TemplatesPage.tsx';
 import { CapacityPage } from './ui/CapacityPage.tsx';
 import { ProgressPage } from './ui/ProgressPage.tsx';
 import { AssetsPage } from './ui/AssetsPage.tsx';
+import { DashboardPage } from './ui/DashboardPage.tsx';
 import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage, IconChart } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 type Page = HelpPage;
@@ -569,9 +570,9 @@ export function App() {
 
   const [simFocus, setSimFocus] = useState<string | null>(null);
   // 다른 화면(작업 진척 · 물량 표)에서 에셋 화면으로: 업데이트 · 리소스 종류를 넘긴다
-  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string } | null>(null);
+  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string; assetId?: string } | null>(null);
   useEffect(() => {
-    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
+    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string; assetId?: string }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
     window.addEventListener('arp:assets', go);
     return () => window.removeEventListener('arp:assets', go);
   }, []);
@@ -725,6 +726,7 @@ export function App() {
         </div>
         <nav class="nav" aria-label="메뉴">
           <div class="nav-label">계획</div>
+          {navItem('dashboard', <IconChart />)}
           {navItem('launch', <IconLaunch />)}
           {navItem('plan', <IconCalendar />)}
           {navItem('assets', <IconImage />)}
@@ -798,6 +800,7 @@ export function App() {
         )}
         {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} />}
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
+        {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} />}
         {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}

@@ -14,6 +14,7 @@ import type { ScenarioOp, ScenarioAction, ScenarioSummary, SimMeta, CompareView,
 import type { AdvisorOptions, AdvisorResult } from '../../../core/advisor.ts';
 import type { AssetsView, AssetDetail } from '../../../core/assets.ts';
 import type { AssetImportReport } from '../../../core/asset-io.ts';
+import type { DashboardView } from '../../../core/dashboard.ts';
 
 export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null> }
 
@@ -69,6 +70,7 @@ export const rpc = {
   types: () => call<TypeView[]>('types'),
   capacity: () => call<CapacityView>('capacity'),
   progress: (updateId: string | null) => call<ProgressView>('progress', { updateId }),
+  dashboard: (updateId: string | null, planMode: PlanMode) => call<DashboardView & { forecast: { completion: string | null; status: string } | null }>('dashboard', { updateId, planMode }),
   assets: (updateId: string | null) => call<AssetsView>('assets', { updateId }),
   assetDetail: (assetId: string) => call<AssetDetail>('assetDetail', { assetId }),
   thumbs: (assetIds: string[]) => call<{ items: { assetId: string; mime: string; data: Uint8Array; updatedAt: string }[] }>('thumbs', { assetIds }),

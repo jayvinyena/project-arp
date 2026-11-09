@@ -26,6 +26,7 @@ import type { Seen } from '../../core/notice.ts';
 import { applyEdit } from '../../core/edits.ts';
 import { assetsView, assetThumbs, assetDetail, localToday } from '../../core/assets.ts';
 import { assetBook, importAssets } from '../../core/asset-io.ts';
+import { dashboardView } from '../../core/dashboard.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
@@ -157,6 +158,19 @@ const handlers: Record<string, (payload: any) => unknown> = {
 
   progress(p: { updateId: string | null }) {
     return progressView(need().sql, p.updateId);
+  },
+
+  // ───────── 제작 현황판 ─────────
+  dashboard(p: { updateId: string | null; planMode: PlanMode }) {
+    const { sql: s, session: ss } = need();
+    const view = dashboardView(s, p.updateId, p.planMode, localToday());
+    // 완료 예정은 계산 엔진 결과(계산이 막혔으면 없음)
+    let forecast: { completion: string | null; status: string } | null = null;
+    try {
+      const row = planView(s, ss, p.planMode).rows.find(r => r.updateId === view.updateId);
+      if (row?.result) forecast = { completion: row.result.completion, status: row.result.status };
+    } catch { /* 계산 막힘 */ }
+    return { ...view, forecast };
   },
 
   // ───────── 에셋 관리 ─────────

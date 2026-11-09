@@ -30,4 +30,5 @@ export const IconCopy = () => base(<><rect x="9" y="9" width="11" height="11" rx
 export const IconImage = () => base(<><rect x="4" y="5" width="16" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M20 16l-4.5-4.5L8 19" /></>);
 export const IconGrid = () => base(<><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>);
 export const IconList = () => base(<><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="5" cy="6" r="1" /><circle cx="5" cy="12" r="1" /><circle cx="5" cy="18" r="1" /></>);
+export const IconChart = () => base(<><path d="M4 19h16" /><path d="M6 16l4-5 3 3 5-7" /><circle cx="18" cy="7" r="1.2" /></>);
 export const IconHelp = () => base(<><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7" /><path d="M12 16.9v.01" /></>);

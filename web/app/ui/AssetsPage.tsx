@@ -325,7 +325,8 @@ export function AssetsPage(props: {
   onApply: (e: Edit) => Promise<boolean>;
   onExport: (updateId: string | null) => Promise<void>;
   onImport: () => Promise<void>;
-  focus?: { updateId: string; resourceTypeId?: string } | null;
+  /** 다른 화면에서 넘어올 때: 업데이트 · 리소스 종류 · 바로 열 에셋 */
+  focus?: { updateId: string; resourceTypeId?: string; assetId?: string } | null;
 }) {
   const ro = props.readOnly;
   const pref = <T,>(k: string, d: T): T => { try { return (localStorage.getItem(`arp.assets.${k}`) as T | null) ?? d; } catch { return d; } };
@@ -351,7 +352,11 @@ export function AssetsPage(props: {
   const [confirm, setConfirm] = useState<{ ids: string[]; stage: Stage; text: string } | null>(null);
   const [focusRt, setFocusRt] = useState<string | null>(props.focus?.resourceTypeId ?? null);
 
-  useEffect(() => { if (props.focus) { setUpdateId(props.focus.updateId); setFocusRt(props.focus.resourceTypeId ?? null); setTab('assets'); } }, [props.focus]);
+  useEffect(() => {
+    if (!props.focus) return;
+    setUpdateId(props.focus.updateId); setFocusRt(props.focus.resourceTypeId ?? null); setTab('assets');
+    if (props.focus.assetId) { setGroup('all'); setBatch('all'); setWho('all'); setQ(''); setOpenId(props.focus.assetId); }
+  }, [props.focus]);
   useEffect(() => { void rpc.assets(updateId).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); }); }, [props.version, updateId]);
   useEffect(() => { try { localStorage.setItem('arp.assets.view', view); localStorage.setItem('arp.assets.boardBy', boardBy); localStorage.setItem('arp.assets.groupBy', groupBy); } catch { /* 없어도 된다 */ } }, [view, boardBy, groupBy]);
   useEffect(() => {
