@@ -63,6 +63,9 @@ export function App() {
   pageRef.current = page;
   const [save, setSave] = useState<{ state: SaveState; at?: number; message?: string }>({ state: 'saved' });
   const [toast, setToast] = useState<string | null>(null);
+  // 화면 폭: 기본(가운데 1240px) · 넓게(창 폭 전부). 모든 화면에 적용, 이 브라우저에 기억
+  const [wide, setWide] = useState(() => { try { return localStorage.getItem('arp.width') === 'wide'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('arp.width', wide ? 'wide' : 'normal'); } catch { /* 없어도 된다 */ } }, [wide]);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(new URLSearchParams(location.search).has('new'));
   const [imported, setImported] = useState<ImportReportData | null>(null);
@@ -736,7 +739,7 @@ export function App() {
   );
 
   return (
-    <div class="app">
+    <div class={`app${wide ? ' wide' : ''}`}>
       <aside class="sidebar">
         <div class="brand"><span class="brand-mark"><IconLogo /></span>ARP</div>
         <div class="project-chip">
@@ -765,6 +768,13 @@ export function App() {
           </button>
         </nav>
         <div class="sidebar-foot">
+          <div class="width-pick">
+            <span class="small faint">화면 폭</span>
+            <div class="segmented" role="radiogroup" aria-label="화면 폭">
+              <button type="button" role="radio" aria-checked={!wide} class={!wide ? 'on' : ''} title="내용을 가운데 1240px 폭으로" onClick={() => setWide(false)}>기본</button>
+              <button type="button" role="radio" aria-checked={wide} class={wide ? 'on' : ''} title="모든 화면을 창 폭 전부로(큰 모니터에서 표 · 보드를 넓게)" onClick={() => setWide(true)}>넓게</button>
+            </div>
+          </div>
           <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>
           {!file.handle && <div class="small faint editor">수정한 내용을 남기려면 다른 이름으로 저장하십시오</div>}
           <div style="display: flex; gap: 6px">

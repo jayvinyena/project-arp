@@ -1232,3 +1232,11 @@ table.grid.asset-parts-table tr.row.omit td { color: var(--text-3); }
 .si-new .field { height: 30px; font-size: 12.5px; }
 .si-new .field.bad { border-color: var(--bad); }
 
+/* ───────── 화면 폭: 넓게(모든 화면) ───────── */
+.width-pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.width-pick .segmented { flex: none; }
+.width-pick .segmented button { padding: 0 12px; white-space: nowrap; }
+.app.wide .page { max-width: none; }
+@media (min-width: 861px) { .app.wide .main { padding-left: 32px; padding-right: 32px; } }
+.app.wide .kb-col { flex: 1 0 264px; }
+

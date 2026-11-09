@@ -172,6 +172,35 @@ await withBrowser(async (cdp, base) => {
   const ok1440 = await shot(cdp, 'assets-1440');
   const ok390 = await shot(cdp, 'assets-390', 390);
   check('가로 넘침 없음(리스트 1440 · 390 · 보드 · 카드 창)', ok1440 && ok390 && okBoard && okCard);
+
+  // 6. 화면 폭: 넓게(모든 화면, 이 브라우저에 기억)
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 2200, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
+  const pageW = () => cdp.eval("Math.round(document.querySelector('main .page:last-of-type, main .page').getBoundingClientRect().width)");
+  const w0 = await pageW();
+  await cdp.eval("[...document.querySelectorAll('[aria-label=\"화면 폭\"] button')].find(b => b.textContent === '넓게').click()");
+  await sleep(300);
+  const widths = {};
+  for (const [label, menu] of [['에셋', '에셋 제작 현황'], ['현황판', '제작 현황판'], ['업데이트 계획', '업데이트 계획'], ['리소스', '프로젝트']]) {
+    await nav(cdp, menu);
+    await sleep(700);
+    widths[label] = await pageW();
+  }
+  check('넓게: 모든 화면이 창 폭 전부(기본 1240px 넘음)', w0 <= 1240 && Object.values(widths).every(w => w > 1700), `기본 ${w0} → ${JSON.stringify(widths)}`);
+  await nav(cdp, '에셋 제작 현황');
+  await sleep(600);
+  await clickText(cdp, '보드');
+  await sleep(400);
+  const fill = await cdp.eval("(() => { const k = document.querySelector('.kanban'); return k.scrollWidth <= k.clientWidth + 1 && document.querySelector('.kb-col').getBoundingClientRect().width > 264; })()");
+  check('넓게: 보드 열이 늘어나 가로 스크롤 없이 모든 열이 보인다', fill);
+  await cdp.send('Page.reload', {});
+  await cdp.waitUntil("document.querySelector('.sidebar')", 20000);
+  await sleep(800);
+  const kept = await cdp.eval("document.querySelector('.app').classList.contains('wide') && document.querySelector('[aria-label=\"화면 폭\"] button.on').textContent === '넓게'");
+  check('새로 고침해도 넓게가 유지된다', kept);
+  await cdp.eval("[...document.querySelectorAll('[aria-label=\"화면 폭\"] button')].find(b => b.textContent === '기본').click()");
+  await sleep(300);
+  check('기본으로 되돌리기', !(await cdp.eval("document.querySelector('.app').classList.contains('wide')")) && (await pageW()) <= 1240);
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(x => !x).length;
