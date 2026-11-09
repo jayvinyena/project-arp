@@ -4,6 +4,8 @@ import type { SqlDb } from './db.ts';
 import type { ProjectSession, EngineTable } from './pipeline.ts';
 import type { PlanMode } from '../engine/types.ts';
 import { PLAN_MODES, DEFAULT_MODE_NAMES, modeMetaKey, readModeNames } from './modes.ts';
+import type { AssetEdit } from './assets.ts';
+import { applyAssetEdit, ASSET_EDIT_KINDS, assetDriven } from './assets.ts';
 
 export type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 export type UpdateField = 'name' | 'update_type_id' | 'start_date' | 'freeze_date' | 'release_date' | 'status';
@@ -60,20 +62,22 @@ export type Edit =
   | { kind: 'effort'; resourceTypeId: string; partId: string; profileId: 'BASE' | 'AI'; days: number | null }
   | { kind: 'rework'; resourceTypeId: string; partId: string; rate: number }
   // AI 활용 비율(파트별): 공수 = 기본 × (1 − 비율) + AI 사용 시 × 비율
-  | { kind: 'aiShare'; partId: string; share: number };
+  | { kind: 'aiShare'; partId: string; share: number }
+  // 에셋 관리(core/assets.ts)
+  | AssetEdit;
 
 export interface EditContext { editor: string; batchId: string; reason?: string }
 export interface EditResult { changed: boolean; createdId?: string }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 달력에 있는 날짜만(2027-02-30 같은 날은 거절) */
-const DATE = { test: (d: string) => DATE_RE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d };
+export const DATE = { test: (d: string) => DATE_RE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d };
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const STATUSES = new Set(['PLANNED', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
 
-function fail(message: string): never { throw new Error(message); }
+export function fail(message: string): never { throw new Error(message); }
 
-function log(db: SqlDb, ctx: EditContext, action: string, target: string, key: string, field: string | null, oldValue: unknown, newValue: unknown) {
+export function log(db: SqlDb, ctx: EditContext, action: string, target: string, key: string, field: string | null, oldValue: unknown, newValue: unknown) {
   db.run(`INSERT INTO change_log (batch_id, at, editor, action, target, target_key, field, old_json, new_json, reason)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
     ctx.batchId, new Date().toISOString(), ctx.editor, action, target, key, field,
@@ -81,7 +85,7 @@ function log(db: SqlDb, ctx: EditContext, action: string, target: string, key: s
   ]);
 }
 
-function nextId(db: SqlDb, table: string, column: string, prefix: string, width: number): string {
+export function nextId(db: SqlDb, table: string, column: string, prefix: string, width: number): string {
   // 지운 ID도 다시 쓰지 않는다(지우기를 되돌릴 수 있게, 이력·시나리오가 다른 행을 가리키지 않게): 변경 이력에 남은 ID까지 본다
   const rows = [
     ...db.all(`SELECT ${column} AS id FROM ${table} WHERE ${column} LIKE ?`, [`${prefix}%`]),
@@ -108,6 +112,7 @@ const qtyOk = (v: number | null) => v == null || (Number.isInteger(v) && v >= 0)
 /** 고치기 하나. 값이 그대로면 changed = false */
 export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: EditContext): EditResult {
   const dirty = (...t: EngineTable[]) => session.markDirty(...t);
+  if (ASSET_EDIT_KINDS.has(edit.kind)) return applyAssetEdit(db, session, edit as AssetEdit, ctx);
 
   switch (edit.kind) {
     // ───────── 업데이트 ─────────
@@ -167,6 +172,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'deleteUpdate': {
       const old = db.get('SELECT * FROM updates WHERE update_id = ?', [edit.updateId]);
       if (!old) return { changed: false };
+      const nAssets = Number(db.get('SELECT count(*) AS n FROM assets WHERE update_id = ?', [edit.updateId])?.n ?? 0);
+      if (nAssets) fail(`이 업데이트에 에셋이 ${nAssets}개 있습니다. 에셋 화면에서 먼저 지우십시오.`);
       const volumes = db.all('SELECT * FROM volumes WHERE update_id = ?', [edit.updateId]);
       const progress = db.all('SELECT * FROM progress WHERE update_id = ?', [edit.updateId]);
       db.run('DELETE FROM updates WHERE update_id = ?', [edit.updateId]); // 물량·실적은 함께 지워진다 → 되돌릴 수 있게 함께 남긴다
@@ -197,6 +204,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'removeResource': {
       const old = db.get('SELECT * FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId]);
       if (!old) return { changed: false };
+      if (assetDriven(db, edit.updateId, edit.resourceTypeId)) fail('이 리소스에 등록된 에셋이 있습니다. 에셋 화면에서 먼저 지우십시오.');
       // 그 리소스의 실적도 함께 지운다(남기면 물량 없는 실적). 되돌리면 함께 돌아온다
       for (const p of db.all('SELECT * FROM progress WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])) {
         db.run('DELETE FROM progress WHERE update_id = ? AND resource_type_id = ? AND part_id = ?', [p.update_id, p.resource_type_id, p.part_id]);
@@ -279,12 +287,14 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       if (edit.kind === 'progress') {
         if (!(edit.value == null || (Number.isInteger(edit.value) && edit.value >= 0))) fail('완료 수량은 0 이상의 정수입니다.');
         if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트입니다.');
+        if (assetDriven(db, edit.updateId, edit.resourceTypeId)) fail('이 리소스의 완료 수량은 에셋 상태에서 집계합니다. 에셋 화면에서 상태를 변경하십시오.');
         targets.push({ partId: edit.partId, field: 'completed_qty', value: edit.value });
       } else if (edit.kind === 'progressSpent') {
         if (!(edit.value == null || (Number.isFinite(edit.value) && edit.value >= 0))) fail('실투입 공수는 0 이상의 숫자(인·일)입니다.');
         if (!steps.includes(edit.partId)) fail('이 리소스가 거치지 않는 파트입니다.');
         targets.push({ partId: edit.partId, field: 'spent_days', value: edit.value === 0 ? null : edit.value });
       } else {
+        if (assetDriven(db, edit.updateId, edit.resourceTypeId)) fail('이 리소스의 완료 수량은 에셋 상태에서 집계합니다. 에셋 화면에서 상태를 변경하십시오.');
         // 다 끝남: 거치는 모든 파트를 (목표 − 외주)만큼 완료로
         const v = db.get('SELECT target_qty, outsource_qty FROM volumes WHERE update_id = ? AND resource_type_id = ?', [edit.updateId, edit.resourceTypeId])!;
         const n = Math.max(0, Number(v.target_qty ?? 0) - Number(v.outsource_qty ?? 0));
@@ -591,7 +601,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
     case 'deleteResource': {
       const old = db.get('SELECT * FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
       if (!old) return { changed: false };
-      const used = ['volumes', 'type_templates', 'progress'].filter(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [edit.resourceTypeId]));
+      const used = ['volumes', 'type_templates', 'progress', 'assets'].filter(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [edit.resourceTypeId]));
       if (used.length) fail('물량·유형 템플릿·작업 진척에 쓰이는 리소스입니다. 그곳에서 제외한 뒤 삭제하거나 "사용 안 함"으로 두십시오.');
       const resourceParts = db.all('SELECT * FROM resource_parts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ?', [edit.resourceTypeId]);

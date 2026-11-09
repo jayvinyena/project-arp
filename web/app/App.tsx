@@ -29,11 +29,12 @@ import { PlanPage } from './ui/PlanPage.tsx';
 import { TemplatesPage } from './ui/TemplatesPage.tsx';
 import { CapacityPage } from './ui/CapacityPage.tsx';
 import { ProgressPage } from './ui/ProgressPage.tsx';
+import { AssetsPage } from './ui/AssetsPage.tsx';
 import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 type Page = HelpPage;
@@ -461,6 +462,22 @@ export function App() {
       showToast(`넣지 못했습니다: ${(error as Error).message}`);
     }
   };
+  // 에셋 엑셀
+  const onExportAssets = async (updateId: string | null) => {
+    const { bytes } = await rpc.assetBook(updateId);
+    download(bytes, `${(view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_')} 에셋.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  };
+  const onImportAssets = async () => {
+    const picked = await pickXlsx();
+    if (!picked) return;
+    try {
+      const r = await rpc.importAssets(picked.bytes, me);
+      if (r.created || r.changed) markChanged(true);
+      showToast(`에셋을 입력했습니다 · 새로 ${r.created}개, 바뀜 ${r.changed}개${r.unchanged ? `, 그대로 ${r.unchanged}개` : ''}${r.batches ? ` · 새 배치 ${r.batches}개` : ''}${r.skipped.length ? ` · 건너뛴 행 ${r.skipped.length}개(${r.skipped.slice(0, 2).map(s => `${s.row}행 ${s.reason}`).join(', ')})` : ''}`);
+    } catch (error) {
+      showToast(`넣지 못했습니다: ${(error as Error).message}`);
+    }
+  };
   const onCalibrate = async (picks: { resourceTypeId: string; partId: string; ratio: number }[]) => {
     try {
       const r = await rpc.calibrate(picks, me);
@@ -551,6 +568,13 @@ export function App() {
   };
 
   const [simFocus, setSimFocus] = useState<string | null>(null);
+  // 다른 화면(작업 진척 · 물량 표)에서 에셋 화면으로: 업데이트 · 리소스 종류를 넘긴다
+  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string } | null>(null);
+  useEffect(() => {
+    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
+    window.addEventListener('arp:assets', go);
+    return () => window.removeEventListener('arp:assets', go);
+  }, []);
   useEffect(() => { if (page !== 'simulation') setSimFocus(null); }, [page]);
   const onAdviceScenario = async (name: string, actions: ScenarioAction[]): Promise<boolean> => {
     if (fileRef.current?.readOnly) return false;
@@ -703,6 +727,7 @@ export function App() {
           <div class="nav-label">계획</div>
           {navItem('launch', <IconLaunch />)}
           {navItem('plan', <IconCalendar />)}
+          {navItem('assets', <IconImage />)}
           {navItem('progress', <IconProgress />)}
           {navItem('simulation', <IconSliders />)}
           {navItem('advisor', <IconTarget />)}
@@ -773,6 +798,7 @@ export function App() {
         )}
         {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} />}
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
+        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
         {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} focus={simFocus} />}

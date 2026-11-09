@@ -12,6 +12,8 @@ import type { PlanView, UpdateDetail, TypeView, CapacityView, ProgressView, Setu
 import type { Finding } from '../../../core/pipeline.ts';
 import type { ScenarioOp, ScenarioAction, ScenarioSummary, SimMeta, CompareView, Sensitivity, ApplyResult } from '../../../core/scenarios.ts';
 import type { AdvisorOptions, AdvisorResult } from '../../../core/advisor.ts';
+import type { AssetsView } from '../../../core/assets.ts';
+import type { AssetImportReport } from '../../../core/asset-io.ts';
 
 export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null> }
 
@@ -67,6 +69,10 @@ export const rpc = {
   types: () => call<TypeView[]>('types'),
   capacity: () => call<CapacityView>('capacity'),
   progress: (updateId: string | null) => call<ProgressView>('progress', { updateId }),
+  assets: (updateId: string | null) => call<AssetsView>('assets', { updateId }),
+  thumbs: (assetIds: string[]) => call<{ items: { assetId: string; mime: string; data: Uint8Array; updatedAt: string }[] }>('thumbs', { assetIds }),
+  assetBook: (updateId: string | null) => call<{ bytes: ArrayBuffer }>('assetBook', { updateId }),
+  importAssets: (bytes: ArrayBuffer, editor: string) => call<AssetImportReport>('importAssets', { bytes, editor }, [bytes]),
   scenarios: () => call<{ scenarios: ScenarioSummary[]; meta: SimMeta }>('scenarios'),
   scenarioOp: (op: ScenarioOp) => call<{ changed: boolean; createdId?: string; groupNo?: number }>('scenarioOp', { op }),
   compare: (ids: string[], planMode: PlanMode) => call<CompareView>('compare', { ids, planMode }),

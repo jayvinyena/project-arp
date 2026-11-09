@@ -19,6 +19,7 @@ export const TABLE_ORDER = [
   'update_types', 'type_templates', 'updates', 'volumes', 'progress',
   'capacity',
   'scenarios', 'scenario_changes',
+  'batches', 'assets', 'asset_parts',
   'change_log',
 ];
 

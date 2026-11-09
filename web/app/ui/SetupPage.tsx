@@ -60,6 +60,9 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         <div class="card-body setup-project">
           <label class="form-row"><span class="form-label">프로젝트 이름</span>
             <Field value={v.project.name} label="프로젝트 이름" disabled={ro} onCommit={t => apply({ kind: 'projectName', name: t })} /></label>
+          <label class="form-row"><span class="form-label">Jira 주소</span>
+            <Field value={v.project.jiraBase ?? ''} label="Jira 주소" placeholder="https://회사.atlassian.net/browse/" disabled={ro} onCommit={t => apply({ kind: 'jiraBase', url: t })} />
+            <span class="form-help">에셋의 Jira 키(ABC-123)를 이 주소 뒤에 붙여 이슈를 엽니다.</span></label>
           <label class="form-row"><span class="form-label">여유율</span>
             <span class="inline"><Field class="field narrow n" numeric value={pctText(v.project.bufferRate)} label="여유율" disabled={ro} onCommit={t => apply({ kind: 'setting', field: 'buffer_rate', value: (num(t) ?? 0) / 100 })} /><span class="faint">%</span></span></label>
           <div class="form-row"><span class="form-label">근무 요일</span>

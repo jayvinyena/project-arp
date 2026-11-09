@@ -102,6 +102,16 @@ change_log, meta                            (변경 이력, 파일 정보)
 | 업데이트 추가·제외 | `updates`·`volumes` INSERT / DELETE |
 | 공정 겹침 | `part_overlaps` SET overlap_rate |
 
+### 에셋 관리 (v4, [20-asset-management.md](20-asset-management.md))
+| 표 | 한 줄 | 핵심 항목 |
+|---|---|---|
+| `batches` | 배치 하나(업데이트 안 납품 묶음) | 이름, 마감일, 순서, 메모 |
+| `assets` | 에셋 하나(물량 1개) | 업데이트, 배치(없으면 미배정), 리소스 종류, 이름, 코드, 포함 템플릿(`tier`), Jira 키, 메모 |
+| `asset_parts` | 에셋 × 파트 | 상태(대기 · 진행 · 검수 요청 · 수정 · 완료 · 보류 · 해당 없음), 시작일, 완료일, 리테이크 수, 담당, Jira 키. 대기이고 다른 값이 없으면 행이 없다 |
+| `asset_thumbs` | 에셋 썸네일 하나 | WebP 바이트(긴 변 256px), 크기, 바꾼 시각 |
+
+에셋이 있는 업데이트 × 리소스 종류의 `progress.completed_qty`는 에셋 상태(완료 · 해당 없음)에서 자동으로 센다. 기준일 = 그 파트 완료일 중 가장 늦은 날. Jira 주소는 `meta.jira_base_url`.
+
 ### 이력 · 파일 정보
 | 표 | 한 줄 | 핵심 항목 |
 |---|---|---|

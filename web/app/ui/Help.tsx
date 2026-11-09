@@ -4,7 +4,7 @@ import { useEffect } from 'preact/hooks';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { IconX, IconHelp } from './icons.tsx';
 
-export type HelpPage = 'launch' | 'plan' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+export type HelpPage = 'launch' | 'plan' | 'assets' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
 
 interface HelpDoc {
   /** 메뉴 이름 */
@@ -74,6 +74,34 @@ export function helpDoc(page: HelpPage): HelpDoc {
         { page: 'templates', why: '유형별 기본 물량을 바꿀 때' },
         { page: 'simulation', why: '우선순위 · 인원을 바꿔 보고 싶을 때(원본은 그대로)' },
         { page: 'advisor', why: '늦는 업데이트를 맞출 방법을 찾을 때' },
+      ],
+    };
+    case 'assets': return {
+      name: '에셋 제작 현황',
+      short: '개별 에셋의 파트별 상태 · 썸네일 · 배치 · Jira를 관리하고 작업 진척에 자동 반영합니다',
+      what: '물량을 이루는 개별 에셋(예: 동료쿠키 신규 "OO쿠키")을 등록하고, 원화 · 모델링 · 애니 · FX 파트별 상태를 관리합니다. 파트 상태의 "완료"는 작업 진척의 완료 수량으로 자동 집계되어 완료 예정 계산에 바로 반영됩니다.',
+      steps: [
+        '위쪽에서 마일스톤(업데이트)을 고르고, ① 항목에서 분류(마이쿠키 · 동료쿠키 · 트리처 등)를 고릅니다.',
+        '② 물량 대조에서 "빈 에셋 만들기"로 물량만큼 에셋을 한 번에 만들거나, ③ 에셋의 "에셋 더하기" · "엑셀 넣기"로 등록합니다.',
+        '카드를 눌러 상세 패널을 열고 썸네일(끌어놓기 · 붙여넣기) · 배치 · 포함 템플릿 · Jira 키 · 파트별 상태를 입력합니다. 표 보기에서는 칸에서 바로 상태를 바꿉니다.',
+        '④ 배치에서 납품 묶음과 마감일을 정하고, 여러 에셋을 골라 "배치 옮기기"로 나눕니다.',
+      ],
+      tips: [
+        '상태: 대기 · 진행 · 검수 요청 · 수정 · 완료 · 보류 · 해당 없음. "완료"와 "해당 없음"이 완료 수량에 들어갑니다.',
+        '에셋이 등록된 리소스는 작업 진척 화면에서 완료 수량을 손으로 입력할 수 없습니다(실투입 인·일은 입력합니다).',
+        '"빈 에셋 만들기"는 손으로 입력해 둔 완료 수량을 앞 에셋부터 "완료"로 옮깁니다. 기준일도 이어집니다.',
+        'Jira 주소는 "프로젝트 · 파트 · 리소스" 화면에서 입력합니다. 키(ABC-123)를 누르면 이슈가 새 탭으로 열립니다.',
+        '썸네일은 긴 변 256px로 줄여 프로젝트 파일에 저장합니다. 이미지는 변경 이력에 남지 않아 되돌릴 수 없습니다.',
+      ],
+      terms: [
+        ['에셋', '물량 1개에 해당하는 실제 결과물 하나.'],
+        ['배치', '마일스톤 안의 납품 묶음. 마감일은 그 배치 에셋의 모든 파트가 완료되는 날 기준입니다.'],
+        ['포함 템플릿', '이 에셋이 최소안 · 기본안 · 최대안 중 어디부터 들어가는지. "물량을 에셋에"로 물량을 맞출 때 씁니다.'],
+        ['리테이크', '검수에서 "수정"으로 돌아간 횟수.'],
+      ],
+      related: [
+        { page: 'progress', why: '에셋에서 집계한 완료 수량 확인' },
+        { page: 'launch', why: '물량 · 완료 예정 확인' },
       ],
     };
     case 'progress': return {

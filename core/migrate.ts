@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 3;
+export const LATEST_SCHEMA = 4;
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -19,6 +19,55 @@ const STEPS: { to: number; note: string; sql: string }[] = [
     to: 3,
     note: '실적에 실투입 공수(spent_days, 인·일) — 공수 보정 제안에 쓴다',
     sql: `ALTER TABLE progress ADD COLUMN spent_days REAL;`,
+  },
+  {
+    to: 4,
+    note: '에셋 관리: 배치 · 에셋 · 에셋 파트별 상태 · 썸네일(docs/20-asset-management.md)',
+    sql: `
+      CREATE TABLE batches (
+        batch_id   TEXT PRIMARY KEY,
+        update_id  TEXT NOT NULL REFERENCES updates(update_id) ON DELETE CASCADE,
+        name       TEXT NOT NULL,
+        due_date   TEXT CHECK (due_date IS NULL OR (due_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND date(due_date) = due_date)),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        note       TEXT
+      ) STRICT;
+      CREATE TABLE assets (
+        asset_id         TEXT PRIMARY KEY,
+        update_id        TEXT NOT NULL REFERENCES updates(update_id) ON DELETE CASCADE,
+        batch_id         TEXT REFERENCES batches(batch_id) ON DELETE SET NULL,
+        resource_type_id TEXT NOT NULL REFERENCES resource_types(resource_type_id),
+        name             TEXT NOT NULL,
+        code             TEXT,
+        tier             TEXT NOT NULL DEFAULT 'TARGET' CHECK (tier IN ('MIN', 'TARGET', 'STRETCH')),
+        jira_key         TEXT,
+        note             TEXT,
+        sort_order       INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX assets_by_update ON assets(update_id, resource_type_id);
+      CREATE INDEX assets_by_batch ON assets(batch_id);
+      -- 상태가 대기가 아닌 파트만 행이 있다(없으면 대기)
+      CREATE TABLE asset_parts (
+        asset_id   TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+        part_id    TEXT NOT NULL REFERENCES parts(part_id),
+        status     TEXT NOT NULL CHECK (status IN ('TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD', 'OMIT')),
+        started_at TEXT,
+        done_at    TEXT CHECK (done_at IS NULL OR (done_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND date(done_at) = done_at)),
+        retakes    INTEGER NOT NULL DEFAULT 0,
+        assignee   TEXT,
+        jira_key   TEXT,
+        PRIMARY KEY (asset_id, part_id)
+      ) STRICT;
+      CREATE TABLE asset_thumbs (
+        asset_id   TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+        mime       TEXT NOT NULL,
+        data       BLOB NOT NULL,
+        width      INTEGER,
+        height     INTEGER,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+    `,
   },
 ];
 

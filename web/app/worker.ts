@@ -24,6 +24,8 @@ import { progressTemplate, importProgress } from '../../core/progress-io.ts';
 import { outlookNow, noticeSince } from '../../core/notice.ts';
 import type { Seen } from '../../core/notice.ts';
 import { applyEdit } from '../../core/edits.ts';
+import { assetsView, assetThumbs, localToday } from '../../core/assets.ts';
+import { assetBook, importAssets } from '../../core/asset-io.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
@@ -155,6 +157,27 @@ const handlers: Record<string, (payload: any) => unknown> = {
 
   progress(p: { updateId: string | null }) {
     return progressView(need().sql, p.updateId);
+  },
+
+  // ───────── 에셋 관리 ─────────
+  assets(p: { updateId: string | null }) {
+    return assetsView(need().sql, p.updateId);
+  },
+
+  /** 썸네일 바이트(보이는 카드만) */
+  thumbs(p: { assetIds: string[] }) {
+    return { items: assetThumbs(need().sql, p.assetIds) };
+  },
+
+  assetBook(p: { updateId: string | null }) {
+    const { sheets, freezeRows } = assetBook(need().sql, p.updateId);
+    return { bytes: writeXlsx(sheets, { freezeRows }).buffer };
+  },
+
+  async importAssets(p: { bytes: ArrayBuffer; editor: string }) {
+    const { sql: s, session: ss } = need();
+    const sheets = await readXlsx(new Uint8Array(p.bytes));
+    return importAssets(s, ss, sheets, { editor: p.editor || '이름 없음', batchId: newBatchId() }, localToday());
   },
 
   // ───────── 이력 · 되돌리기 · 내보내기 · 복구 사본 ─────────

@@ -8,7 +8,7 @@ mkdirSync(OUT, { recursive: true });
 const arg = k => process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1];
 const only = arg('only')?.split(',');
 const sample = arg('sample') ?? 'normal';
-const PAGES = ['launch', 'plan', 'progress', 'simulation', 'advisor', 'setup', 'templates', 'capacity', 'calibration', 'history', 'check'];
+const PAGES = ['launch', 'plan', 'assets', 'progress', 'simulation', 'advisor', 'setup', 'templates', 'capacity', 'calibration', 'history', 'check'];
 
 async function shot(cdp, name, width) {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 600 });

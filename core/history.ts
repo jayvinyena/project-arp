@@ -22,6 +22,9 @@ const KEYS: Record<string, string[]> = {
   effort_profiles: ['profile_id'],
   holidays: ['date'],
   meta: ['key'],
+  batches: ['batch_id'],
+  assets: ['asset_id'],
+  asset_parts: ['asset_id', 'part_id'],
 };
 const ENGINE = new Set(['settings', 'part_overlaps', 'resource_parts', 'efforts', 'effort_mix', 'update_types', 'updates', 'volumes', 'progress', 'capacity', 'parts', 'resource_types', 'holidays']);
 /** 지울 때 함께 남긴 딸린 행(키 → 표). 되돌리면 이 순서로 다시 넣는다 */
@@ -29,18 +32,22 @@ const CHILD_TABLES: [string, string][] = [
   ['capacity', 'capacity'], ['part_overlaps', 'part_overlaps'], ['effort_mix', 'effort_mix'],
   ['resource_parts', 'resource_parts'], ['efforts', 'efforts'],
   ['volumes', 'volumes'], ['progress', 'progress'], ['template', 'type_templates'],
+  ['asset_parts', 'asset_parts'],
 ];
 
 const TARGET_NAME: Record<string, string> = {
   volumes: '물량', updates: '업데이트', capacity: '인력', progress: '작업 진척', update_types: '유형', type_templates: '템플릿',
   settings: '설정', part_overlaps: '겹침률', effort_mix: 'AI 비율', efforts: '공수', resource_parts: '거치는 파트',
   parts: '파트', resource_types: '리소스', resource_groups: '분류', holidays: '휴일', meta: '프로젝트', effort_profiles: '공수 프로필',
+  assets: '에셋', asset_parts: '에셋 상태', batches: '배치', asset_thumbs: '썸네일',
 };
 const FIELD_NAME: Record<string, string> = {
   min_qty: '최소안', target_qty: '기본안', stretch_qty: '최대안', outsource_qty: '외주', name: '이름', start_date: '시작', freeze_date: '제작 완료 목표',
   release_date: '출시', priority: '우선순위', days: '1개당 인·일', spent_days: '실투입', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
   productivity: '생산성', outsource_days: '외주', support_days: '지원', completed_qty: '완료', horizon: '계획 기간', share: '비율', overlap_rate: '겹침률',
   sort_order: '순서', active: '사용', group_id: '분류', rework_rate: '재작업률', buffer_rate: '여유율', work_weekdays: '근무 요일', value: '값',
+  tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', code: '코드', note: '메모', due_date: '마감일', done_at: '완료일', started_at: '시작일',
+  assignee: '담당', retakes: '리테이크', as_of: '기준일', image: '이미지',
 };
 
 export interface HistoryEntry { logId: number; action: string; target: string; key: string; field: string | null; old: unknown; next: unknown }
@@ -139,6 +146,8 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
       const field = r.field == null ? null : String(r.field);
       const oldV = parse(r.old_json);
       const newV = parse(r.new_json);
+      // 썸네일 이미지는 이력에 넣지 않아 되돌릴 수 없다(바꾼 사실만 남는다)
+      if (target === 'asset_thumbs') continue;
       touched.add(target);
       if (r.action === 'UPDATE') {
         if (target === 'settings' && field === 'horizon') {
@@ -164,6 +173,10 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
             touched.add('volumes'); touched.add('progress');
           } else if (target === 'update_types') {
             snapshot.template = db.all('SELECT * FROM type_templates WHERE update_type_id = ?', [key]);
+          } else if (target === 'assets') {
+            snapshot.asset_parts = db.all('SELECT * FROM asset_parts WHERE asset_id = ?', [key]);
+            db.run('DELETE FROM asset_parts WHERE asset_id = ?', [key]);
+            db.run('DELETE FROM asset_thumbs WHERE asset_id = ?', [key]);
           }
           db.run(`DELETE FROM ${target} WHERE ${w.sql}`, w.params);
           log('DELETE', target, key, field, snapshot, undefined);

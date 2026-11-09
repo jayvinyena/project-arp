@@ -138,11 +138,15 @@ export function ProgressPage(props: {
                     <tr class="group"><td colSpan={view.parts.length + 4}>{g.name}</td></tr>
                     {g.rows.map(r => (
                       <tr class="row">
-                        <td><span class="title" style="font-weight: 600">{r.name}</span>{r.outsource > 0 && <span class="small faint"> · 외주 {fmtInt(r.outsource)}</span>}</td>
+                        <td><span class="title" style="font-weight: 600">{r.name}</span>{r.outsource > 0 && <span class="small faint"> · 외주 {fmtInt(r.outsource)}</span>}
+                          {r.fromAssets && <button type="button" class="tag tag-link" title="완료 수량은 에셋 상태에서 집계합니다. 눌러서 에셋 화면으로 이동합니다"
+                            onClick={() => window.dispatchEvent(new CustomEvent('arp:assets', { detail: { updateId, resourceTypeId: r.resourceTypeId } }))}>에셋에서 집계</button>}</td>
                         <td class="n num">{fmtInt(r.target)}</td>
                         {r.cells.map((c, i) => (
                           <td class="n">
                             {!c.passes ? <span class="off-cell" aria-hidden="true" />
+                              : field === 'done' && r.fromAssets
+                                ? <span class="num locked-cell" title="에셋 상태에서 집계한 값">{c.completed ?? <span class="faint">—</span>}</span>
                               : field === 'done'
                                 ? <DoneInput value={c.completed} label={`${r.name} ${view.parts[i].name} 완료`} flag={c.flag} disabled={props.readOnly}
                                   onCommit={v => apply({ kind: 'progress', updateId, resourceTypeId: r.resourceTypeId, partId: c.partId, value: v, asOf })} />
@@ -157,7 +161,7 @@ export function ProgressPage(props: {
                           </span>
                         </td>
                         <td class="n">
-                          {!props.readOnly && r.doneRate < 1 && (
+                          {!props.readOnly && r.doneRate < 1 && !r.fromAssets && (
                             <button type="button" class="btn sm" title="거치는 모든 파트를 목표만큼 완료로" onClick={() => apply({ kind: 'completeRow', updateId, resourceTypeId: r.resourceTypeId, asOf })}>다 끝남</button>
                           )}
                         </td>

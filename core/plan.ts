@@ -268,6 +268,8 @@ export interface ProgressRow {
   cells: ProgressCell[];
   /** 마지막 공정 완료 ÷ (목표 − 외주) */
   doneRate: number;
+  /** 에셋이 등록된 줄: 완료 수량은 에셋 상태에서 집계(손 입력 잠금) */
+  fromAssets: boolean;
 }
 export interface ProgressView {
   updates: { updateId: string; name: string; live: boolean; status: string }[];
@@ -294,6 +296,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
   // 실적 관련 주의(A02 확장 초과, A04 앞 공정보다 많이 끝남)를 칸에 붙인다
   const flags = new Map<string, string>();
   const vol = new Map(db.all('SELECT resource_type_id, stretch_qty FROM volumes WHERE update_id = ?', [updateId]).map(r => [String(r.resource_type_id), Number(r.stretch_qty ?? 0)]));
+  const withAssets = new Set(db.all('SELECT DISTINCT resource_type_id FROM assets WHERE update_id = ?', [updateId]).map(r => String(r.resource_type_id)));
   const byPart = new Map(parts.map(p => [p.partId, { ...p, doneDays: 0, totalDays: 0 }]));
   const rows: ProgressRow[] = db.all(`SELECT v.*, r.name, coalesce(g.name, '분류 없음') AS group_name FROM volumes v
       JOIN resource_types r ON r.resource_type_id = v.resource_type_id LEFT JOIN resource_groups g ON g.group_id = r.group_id
@@ -324,7 +327,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
       if (flag) flags.set(key, flag);
       return { partId: p.partId, passes: on, completed: completed === 0 ? null : completed, spent: row?.spent_days == null ? null : Number(row.spent_days), asOf: row?.as_of == null ? null : String(row.as_of), flag };
     });
-    return { resourceTypeId: rt, name: String(v.name), groupName: String(v.group_name), target, stretch: Number(v.stretch_qty ?? 0), outsource, cells, doneRate: need > 0 ? Math.min(1, last / need) : (last > 0 ? 1 : 0) };
+    return { resourceTypeId: rt, name: String(v.name), groupName: String(v.group_name), target, stretch: Number(v.stretch_qty ?? 0), outsource, cells, doneRate: need > 0 ? Math.min(1, last / need) : (last > 0 ? 1 : 0), fromAssets: withAssets.has(rt) };
   });
   const list = [...byPart.values()];
   const latest = db.get('SELECT max(as_of) AS d FROM progress WHERE update_id = ?', [updateId])?.d;
@@ -338,7 +341,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
 // ───────── 프로젝트 · 파트 · 리소스(만든 뒤 고치기) ─────────
 
 export interface SetupView {
-  project: { name: string; bufferRate: number; workWeekdays: string; holidays: { date: string; name: string; kind: string }[] };
+  project: { name: string; bufferRate: number; workWeekdays: string; holidays: { date: string; name: string; kind: string }[]; jiraBase: string | null };
   horizon: { start: string; end: string };
   parts: { partId: string; name: string; active: boolean; usedBy: number; hasProgress: boolean; headcount: number | null; utilization: number | null; aiShare: number }[];
   groups: { groupId: string; name: string }[];
@@ -378,13 +381,14 @@ export function setupView(db: SqlDb): SetupView {
       const of = (prof: string) => { const e = effs.find(x => x.resource_type_id === id && x.part_id === rp.part_id && x.profile_id === prof); return e ? Number(e.days) : null; };
       efforts[String(rp.part_id)] = { base: of('BASE'), ai: of('AI'), rework: Number(rp.rework_rate) };
     }
-    const used = ['volumes', 'type_templates', 'progress'].some(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [id]));
+    const used = ['volumes', 'type_templates', 'progress', 'assets'].some(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [id]));
     return { resourceTypeId: id, name: String(r.name), groupId: r.group_id == null ? null : String(r.group_id), groupName: r.group_id == null ? '' : groupName.get(String(r.group_id)) ?? '', active: Number(r.active) === 1, used, efforts };
   });
   return {
     project: {
       name: String(meta.project_name ?? ''), bufferRate: Number(s.buffer_rate), workWeekdays: String(s.work_weekdays),
       holidays: db.all('SELECT * FROM holidays ORDER BY date').map(h => ({ date: String(h.date), name: String(h.name), kind: String(h.kind) })),
+      jiraBase: meta.jira_base_url ? String(meta.jira_base_url) : null,
     },
     horizon: { start, end },
     parts, groups, resources,
