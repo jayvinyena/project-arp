@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 4;
+export const LATEST_SCHEMA = 5;
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -67,6 +67,29 @@ const STEPS: { to: number; note: string; sql: string }[] = [
         height     INTEGER,
         updated_at TEXT NOT NULL
       ) STRICT;
+    `,
+  },
+  {
+    to: 5,
+    note: '에셋 카드: 에셋 마감일 · 링크 · 댓글(docs/20-asset-management.md 16절)',
+    sql: `
+      ALTER TABLE assets ADD COLUMN due_date TEXT CHECK (due_date IS NULL OR (due_date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND date(due_date) = due_date));
+      CREATE TABLE asset_links (
+        link_id    TEXT PRIMARY KEY,
+        asset_id   TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+        title      TEXT NOT NULL,
+        url        TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      CREATE INDEX asset_links_by_asset ON asset_links(asset_id);
+      CREATE TABLE asset_comments (
+        comment_id TEXT PRIMARY KEY,
+        asset_id   TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+        at         TEXT NOT NULL,
+        author     TEXT NOT NULL,
+        body       TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX asset_comments_by_asset ON asset_comments(asset_id);
     `,
   },
 ];

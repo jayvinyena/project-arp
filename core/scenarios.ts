@@ -35,7 +35,7 @@ export type ScenarioOp =
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** 달력에 있는 날짜만(2027-09-31 같은 날은 거절) */
-const realDate = (d: string) => DATE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+const realDate = (d: string) => DATE.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const fail = (m: string): never => { throw new Error(m); };
 const fmtN = (n: number) => (Math.round(n * 10) / 10).toString();

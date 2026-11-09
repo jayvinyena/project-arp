@@ -71,7 +71,8 @@ export interface EditResult { changed: boolean; createdId?: string }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 달력에 있는 날짜만(2027-02-30 같은 날은 거절) */
-export const DATE = { test: (d: string) => DATE_RE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d };
+// 13월 · 32일처럼 Date가 만들 수 없는 값도 거절(toISOString이 예외를 내지 않게 먼저 본다)
+export const DATE = { test: (d: string) => DATE_RE.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d };
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const STATUSES = new Set(['PLANNED', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
 

@@ -25,7 +25,7 @@ export async function buildSamples(outDir = `${ROOT}samples/out`) {
   const v1 = `${outDir}/normal-v1.arp`;
   copyFileSync(`${outDir}/normal.arp`, v1);
   const old = new DatabaseSync(v1);
-  old.exec('DROP TABLE asset_thumbs; DROP TABLE asset_parts; DROP TABLE assets; DROP TABLE batches; ALTER TABLE progress DROP COLUMN spent_days; ALTER TABLE scenario_changes DROP COLUMN group_no; ALTER TABLE scenario_changes DROP COLUMN label; ALTER TABLE scenarios DROP COLUMN applied_at; PRAGMA user_version = 1;');
+  old.exec('DROP TABLE asset_comments; DROP TABLE asset_links; DROP TABLE asset_thumbs; DROP TABLE asset_parts; DROP TABLE assets; DROP TABLE batches; ALTER TABLE progress DROP COLUMN spent_days; ALTER TABLE scenario_changes DROP COLUMN group_no; ALTER TABLE scenario_changes DROP COLUMN label; ALTER TABLE scenarios DROP COLUMN applied_at; PRAGMA user_version = 1;');
   old.close();
 
   // 옛 도구 시트 예시(.xlsx): 가져오기 화면 시험용

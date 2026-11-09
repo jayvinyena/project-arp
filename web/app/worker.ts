@@ -24,7 +24,7 @@ import { progressTemplate, importProgress } from '../../core/progress-io.ts';
 import { outlookNow, noticeSince } from '../../core/notice.ts';
 import type { Seen } from '../../core/notice.ts';
 import { applyEdit } from '../../core/edits.ts';
-import { assetsView, assetThumbs, localToday } from '../../core/assets.ts';
+import { assetsView, assetThumbs, assetDetail, localToday } from '../../core/assets.ts';
 import { assetBook, importAssets } from '../../core/asset-io.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
@@ -162,6 +162,10 @@ const handlers: Record<string, (payload: any) => unknown> = {
   // ───────── 에셋 관리 ─────────
   assets(p: { updateId: string | null }) {
     return assetsView(need().sql, p.updateId);
+  },
+
+  assetDetail(p: { assetId: string }) {
+    return assetDetail(need().sql, p.assetId);
   },
 
   /** 썸네일 바이트(보이는 카드만) */

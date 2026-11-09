@@ -17,7 +17,9 @@ export const COUNTS_AS_DONE = new Set<AssetStatus>(['DONE', 'OMIT']);
 export type Tier = PlanMode;
 const TIERS = new Set<string>(['MIN', 'TARGET', 'STRETCH']);
 const JIRA_KEY = /^[A-Z][A-Z0-9_]+-\d+$/;
-export type AssetField = 'name' | 'code' | 'tier' | 'batch_id' | 'jira_key' | 'note';
+export type AssetField = 'name' | 'code' | 'tier' | 'batch_id' | 'jira_key' | 'note' | 'due_date';
+/** 칸반 열(제작 단계): 대기 · 파트 ID · 완료 */
+export type Stage = 'TODO' | 'DONE' | string;
 export type BatchField = 'name' | 'due_date' | 'note';
 
 export type AssetEdit =
@@ -34,11 +36,31 @@ export type AssetEdit =
   /** 물량만큼 이름 미정 에셋 만들기(템플릿 구간별로 모자란 만큼). 손으로 넣은 완료 수량이 있으면 앞 에셋부터 완료로 옮긴다 */
   | { kind: 'fillAssets'; updateId: string; resourceTypeId: string }
   /** 물량을 등록 에셋 수에 맞추기: 최소안 = 최소안 에셋, 기본안 = 최소안 + 기본안, 최대안 = 전부 */
-  | { kind: 'volumeFromAssets'; updateId: string; resourceTypeId: string };
+  | { kind: 'volumeFromAssets'; updateId: string; resourceTypeId: string }
+  /** 칸반에서 단계 옮기기(16.2 규칙): 대기 · 파트 · 완료 */
+  | { kind: 'moveStage'; assetIds: string[]; stage: Stage }
+  /** 보드 열 안 순서: 이 순서대로 다시 매긴다 */
+  | { kind: 'reorderAssets'; assetIds: string[] }
+  | { kind: 'addLink'; assetId: string; title: string; url: string }
+  | { kind: 'removeLink'; linkId: string }
+  | { kind: 'addComment'; assetId: string; body: string }
+  | { kind: 'removeComment'; commentId: string };
 
 export const ASSET_EDIT_KINDS = new Set<string>([
   'createBatch', 'batchField', 'moveBatch', 'deleteBatch', 'createAssets', 'assetField', 'deleteAssets', 'assetPart', 'assetThumb', 'jiraBase', 'fillAssets', 'volumeFromAssets',
+  'moveStage', 'reorderAssets', 'addLink', 'removeLink', 'addComment', 'removeComment',
 ]);
+
+/**
+ * 지금 제작 단계: 모든 파트가 대기면 "대기", 모두 완료 · 해당 없음이면 "완료", 아니면 앞에서부터 아직 끝나지 않은 첫 파트.
+ * statusOf(파트) = 그 파트 상태(행이 없으면 대기)
+ */
+export function stageOf(steps: string[], statusOf: (partId: string) => AssetStatus): Stage {
+  if (!steps.length) return 'DONE';
+  if (steps.every(p => statusOf(p) === 'TODO')) return 'TODO';
+  const open = steps.find(p => !COUNTS_AS_DONE.has(statusOf(p)));
+  return open ?? 'DONE';
+}
 
 /** 이 컴퓨터의 오늘(YYYY-MM-DD) */
 export const localToday = () => {
@@ -221,6 +243,11 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
         } else if (edit.field === 'jira_key') {
           value = cleanText(value)?.toUpperCase() ?? null;
           if (value && !JIRA_KEY.test(value)) fail('Jira 키 형식은 ABC-123입니다.');
+        } else if (edit.field === 'due_date') {
+          value = value || null;
+          if (value != null && !DATE.test(value)) fail('마감일 형식은 YYYY-MM-DD입니다.');
+        } else if (edit.field === 'note') {
+          value = (value ?? '').replace(/\s+$/, '') || null; // 설명은 여러 줄 그대로
         } else value = cleanText(value);
         const old = a[edit.field] == null ? null : String(a[edit.field]);
         if (old === value) continue;
@@ -236,11 +263,15 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
         const a = db.get('SELECT * FROM assets WHERE asset_id = ?', [assetId]);
         if (!a) continue;
         const parts = db.all('SELECT * FROM asset_parts WHERE asset_id = ?', [assetId]);
+        const links = db.all('SELECT * FROM asset_links WHERE asset_id = ?', [assetId]);
+        const comments = db.all('SELECT * FROM asset_comments WHERE asset_id = ?', [assetId]);
         db.run('DELETE FROM asset_parts WHERE asset_id = ?', [assetId]);
+        db.run('DELETE FROM asset_links WHERE asset_id = ?', [assetId]);
+        db.run('DELETE FROM asset_comments WHERE asset_id = ?', [assetId]);
         db.run('DELETE FROM asset_thumbs WHERE asset_id = ?', [assetId]);
         db.run('DELETE FROM assets WHERE asset_id = ?', [assetId]);
-        // 상태 행도 함께 남긴다(되돌리면 함께 돌아온다). 썸네일은 이력에 넣지 않아 돌아오지 않는다
-        log(db, ctx, 'DELETE', 'assets', assetId, null, { ...a, asset_parts: parts }, undefined);
+        // 상태 · 링크 · 댓글도 함께 남긴다(되돌리면 함께 돌아온다). 썸네일은 이력에 넣지 않아 돌아오지 않는다
+        log(db, ctx, 'DELETE', 'assets', assetId, null, { ...a, asset_parts: parts, asset_links: links, asset_comments: comments }, undefined);
         touch(a.update_id, a.resource_type_id);
         changed = true;
       }
@@ -392,7 +423,135 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
       if (changed) session.markDirty('volumes');
       return { changed };
     }
+
+    // ───────── 칸반 · 카드 ─────────
+    case 'moveStage': {
+      let changed = false;
+      for (const assetId of edit.assetIds) {
+        const a = assetRow(db, assetId);
+        const steps = stepsOf(db, String(a.resource_type_id));
+        const status = new Map(db.all('SELECT part_id, status FROM asset_parts WHERE asset_id = ?', [assetId]).map(r => [String(r.part_id), r.status as AssetStatus]));
+        const st = (p: string) => status.get(p) ?? 'TODO';
+        const from = stageOf(steps, st);
+        const to = edit.stage;
+        if (to !== 'TODO' && to !== 'DONE' && !steps.includes(to)) {
+          if (edit.assetIds.length === 1) fail('이 에셋의 리소스가 거치지 않는 파트입니다.');
+          continue;
+        }
+        if (from === to) continue;
+        const set = (partId: string, s: AssetStatus) => {
+          if (st(partId) === s) return;
+          if (applyAssetEdit(db, session, { kind: 'assetPart', assetIds: [assetId], partId, status: s }, ctx).changed) changed = true;
+        };
+        const rank = (x: Stage) => (x === 'TODO' ? -1 : x === 'DONE' ? steps.length : steps.indexOf(x));
+        if (to === 'TODO') { for (const p of steps) set(p, 'TODO'); continue; }
+        if (to === 'DONE') { for (const p of steps) if (st(p) !== 'OMIT') set(p, 'DONE'); continue; }
+        const ti = steps.indexOf(to);
+        if (rank(to) > rank(from)) {
+          // 앞으로: 지나친 파트는 완료(해당 없음은 그대로), 옮긴 파트는 진행(이미 검수 요청 · 수정 · 보류면 그대로)
+          steps.slice(0, ti).forEach(p => { if (!COUNTS_AS_DONE.has(st(p))) set(p, 'DONE'); });
+          if (st(to) === 'TODO' || COUNTS_AS_DONE.has(st(to))) set(to, 'WIP');
+        } else {
+          // 뒤로: 옮긴 파트는 수정(리테이크), 그 뒤 파트는 대기(해당 없음은 그대로)
+          set(to, 'RETAKE');
+          steps.slice(ti + 1).forEach(p => { if (st(p) !== 'OMIT') set(p, 'TODO'); });
+        }
+      }
+      return finish({ changed });
+    }
+    case 'reorderAssets': {
+      let changed = false;
+      edit.assetIds.forEach((assetId, i) => {
+        const a = assetRow(db, assetId);
+        const next = (i + 1) * 10;
+        if (Number(a.sort_order) === next) return;
+        db.run('UPDATE assets SET sort_order = ? WHERE asset_id = ?', [next, assetId]);
+        log(db, ctx, 'UPDATE', 'assets', assetId, 'sort_order', Number(a.sort_order), next);
+        changed = true;
+      });
+      return { changed };
+    }
+    case 'addLink': {
+      assetRow(db, edit.assetId);
+      const url = edit.url.trim();
+      if (!/^https?:\/\/\S+$/.test(url)) fail('링크는 http(s)://로 시작하는 주소입니다.');
+      const title = cleanText(edit.title) ?? url.replace(/^https?:\/\//, '').slice(0, 60);
+      const id = nextId(db, 'asset_links', 'link_id', 'L', 5);
+      const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM asset_links WHERE asset_id = ?', [edit.assetId])?.s ?? 0) + 1;
+      const row = { link_id: id, asset_id: edit.assetId, title, url, sort_order: sortOrder };
+      db.run('INSERT INTO asset_links (link_id, asset_id, title, url, sort_order) VALUES (?, ?, ?, ?, ?)', Object.values(row));
+      log(db, ctx, 'INSERT', 'asset_links', id, null, undefined, row);
+      return { changed: true, createdId: id };
+    }
+    case 'removeLink': {
+      const old = db.get('SELECT * FROM asset_links WHERE link_id = ?', [edit.linkId]);
+      if (!old) return { changed: false };
+      db.run('DELETE FROM asset_links WHERE link_id = ?', [edit.linkId]);
+      log(db, ctx, 'DELETE', 'asset_links', edit.linkId, null, old, undefined);
+      return { changed: true };
+    }
+    case 'addComment': {
+      assetRow(db, edit.assetId);
+      const body = edit.body.replace(/\s+$/, '').replace(/^\s+/, '');
+      if (!body) fail('댓글 내용을 입력하십시오.');
+      if (body.length > 4000) fail('댓글은 4천 자 이하입니다.');
+      const id = nextId(db, 'asset_comments', 'comment_id', 'C', 6);
+      const row = { comment_id: id, asset_id: edit.assetId, at: new Date().toISOString(), author: ctx.editor, body };
+      db.run('INSERT INTO asset_comments (comment_id, asset_id, at, author, body) VALUES (?, ?, ?, ?, ?)', Object.values(row));
+      log(db, ctx, 'INSERT', 'asset_comments', id, null, undefined, row);
+      return { changed: true, createdId: id };
+    }
+    case 'removeComment': {
+      const old = db.get('SELECT * FROM asset_comments WHERE comment_id = ?', [edit.commentId]);
+      if (!old) return { changed: false };
+      db.run('DELETE FROM asset_comments WHERE comment_id = ?', [edit.commentId]);
+      log(db, ctx, 'DELETE', 'asset_comments', edit.commentId, null, old, undefined);
+      return { changed: true };
+    }
   }
+}
+
+// ───────── 카드 창: 링크 · 댓글 · 활동 ─────────
+export interface AssetDetail {
+  links: { linkId: string; title: string; url: string }[];
+  comments: { commentId: string; at: string; author: string; body: string }[];
+  /** 이 에셋의 변경 이력(최근 순) */
+  activity: { at: string; editor: string; text: string }[];
+}
+
+const ACT_FIELD: Record<string, string> = {
+  name: '이름', code: '코드', tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', note: '설명', due_date: '마감일', sort_order: '순서',
+  status: '상태', done_at: '완료일', started_at: '시작일', retakes: '리테이크', assignee: '담당',
+};
+
+export function assetDetail(db: SqlDb, assetId: string): AssetDetail {
+  const parts = new Map(db.all('SELECT part_id, name FROM parts').map(r => [String(r.part_id), String(r.name)]));
+  const fmt = (field: string | null, v: unknown) => {
+    if (v == null) return '없음';
+    const x = JSON.parse(String(v));
+    if (field === 'status' && typeof x === 'string') return STATUS_LABEL[x as AssetStatus] ?? x;
+    return typeof x === 'object' ? '' : String(x);
+  };
+  const activity = db.all(`SELECT * FROM change_log WHERE (target = 'assets' AND target_key = ?) OR (target = 'asset_parts' AND target_key LIKE ?)
+      OR (target IN ('asset_links', 'asset_comments', 'asset_thumbs') AND (target_key = ? OR new_json LIKE ? OR old_json LIKE ?))
+      ORDER BY log_id DESC LIMIT 60`, [assetId, `${assetId}|%`, assetId, `%"asset_id":"${assetId}"%`, `%"asset_id":"${assetId}"%`]).map(r => {
+    const target = String(r.target);
+    const field = r.field == null ? null : String(r.field);
+    const part = target === 'asset_parts' ? parts.get(String(r.target_key).split('|')[1]) ?? '' : '';
+    let text: string;
+    if (target === 'asset_thumbs') text = '썸네일을 바꿈';
+    else if (target === 'asset_links') text = r.action === 'INSERT' ? '링크를 더함' : '링크를 지움';
+    else if (target === 'asset_comments') text = r.action === 'INSERT' ? '댓글을 남김' : '댓글을 지움';
+    else if (r.action === 'INSERT') text = target === 'assets' ? '에셋을 만듦' : `${part} 상태를 ${fmt('status', JSON.stringify((JSON.parse(String(r.new_json)) as { status: string }).status))}(으)로`;
+    else if (r.action === 'DELETE') text = target === 'assets' ? '에셋을 지움' : `${part} 상태를 대기로`;
+    else text = `${part ? `${part} ` : ''}${ACT_FIELD[field ?? ''] ?? field}: ${fmt(field, r.old_json)} → ${fmt(field, r.new_json)}`;
+    return { at: String(r.at), editor: String(r.editor), text };
+  });
+  return {
+    links: db.all('SELECT * FROM asset_links WHERE asset_id = ? ORDER BY sort_order, link_id', [assetId]).map(r => ({ linkId: String(r.link_id), title: String(r.title), url: String(r.url) })),
+    comments: db.all('SELECT * FROM asset_comments WHERE asset_id = ? ORDER BY at DESC, comment_id DESC', [assetId]).map(r => ({ commentId: String(r.comment_id), at: String(r.at), author: String(r.author), body: String(r.body) })),
+    activity,
+  };
 }
 
 /** 에셋이 없어진 줄: 에셋에서 센 완료 수량을 지운다(실투입 인·일만 남는다) */
@@ -416,6 +575,14 @@ export interface AssetPartState { status: AssetStatus; doneAt: string | null; st
 export interface AssetItem {
   assetId: string; name: string; code: string | null; resourceTypeId: string; batchId: string | null; tier: Tier;
   jiraKey: string | null; note: string | null; thumbAt: string | null;
+  /** 칸반 열: 대기 · 파트 ID · 완료 */
+  stage: Stage;
+  /** 지금 단계 파트의 상태(대기 · 완료 단계면 그 상태) */
+  sub: AssetStatus;
+  dueDate: string | null;
+  /** 지금 단계 파트의 담당 */
+  assignee: string | null;
+  links: number; comments: number; sortOrder: number;
   parts: Record<string, AssetPartState>;
   /** 끝난 파트 공수 ÷ 거치는 파트 공수(기본 공수 기준) */
   progress: number;
@@ -469,10 +636,13 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
     };
   }
   const thumbs = new Map(db.all('SELECT t.asset_id, t.updated_at FROM asset_thumbs t JOIN assets a ON a.asset_id = t.asset_id WHERE a.update_id = ?', [updateId]).map(r => [String(r.asset_id), String(r.updated_at)]));
+  const countBy = (table: string) => new Map(db.all(`SELECT x.asset_id, count(*) AS n FROM ${table} x JOIN assets a ON a.asset_id = x.asset_id WHERE a.update_id = ? GROUP BY x.asset_id`, [updateId]).map(r => [String(r.asset_id), Number(r.n)]));
+  const linkN = countBy('asset_links');
+  const commentN = countBy('asset_comments');
   const DEFAULT: AssetPartState = { status: 'TODO', doneAt: null, startedAt: null, retakes: 0, assignee: null, jiraKey: null };
   const assets: AssetItem[] = db.all(`SELECT a.* FROM assets a JOIN resource_types r ON r.resource_type_id = a.resource_type_id
       LEFT JOIN resource_groups g ON g.group_id = r.group_id LEFT JOIN batches b ON b.batch_id = a.batch_id
-      WHERE a.update_id = ? ORDER BY coalesce(g.sort_order, 999999), r.sort_order, coalesce(b.sort_order, 999999), a.sort_order, a.asset_id`, [updateId]).map(a => {
+      WHERE a.update_id = ? ORDER BY a.sort_order, coalesce(g.sort_order, 999999), r.sort_order, a.asset_id`, [updateId]).map(a => {
     const id = String(a.asset_id);
     const rt = String(a.resource_type_id);
     const st = steps.get(rt) ?? [];
@@ -487,10 +657,15 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
       if (COUNTS_AS_DONE.has(s.status)) done += d;
       retakes += s.retakes;
     }
+    const stage = stageOf(st, p => (pr[p] ?? DEFAULT).status);
+    const cur = stage === 'TODO' ? st[0] : stage === 'DONE' ? st[st.length - 1] : stage;
     return {
       assetId: id, name: String(a.name), code: (a.code as string) ?? null, resourceTypeId: rt, batchId: (a.batch_id as string) ?? null,
       tier: a.tier as Tier, jiraKey: (a.jira_key as string) ?? null, note: (a.note as string) ?? null, thumbAt: thumbs.get(id) ?? null,
       parts: partsState, progress: total > 0 ? done / total : 0, retakes,
+      stage, sub: stage === 'DONE' ? 'DONE' : stage === 'TODO' ? 'TODO' : (pr[stage] ?? DEFAULT).status,
+      dueDate: (a.due_date as string) ?? null, assignee: cur ? (pr[cur]?.assignee ?? null) : null,
+      links: linkN.get(id) ?? 0, comments: commentN.get(id) ?? 0, sortOrder: Number(a.sort_order),
     };
   });
   const isDone = (x: AssetItem) => Object.values(x.parts).length > 0 && Object.values(x.parts).every(s => COUNTS_AS_DONE.has(s.status));

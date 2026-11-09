@@ -28,14 +28,14 @@ export function assetBook(db: SqlDb, updateId: string | null = null): { sheets: 
   const passes = new Set(db.all('SELECT resource_type_id, part_id FROM resource_parts').map(r => `${r.resource_type_id}|${r.part_id}`));
   const partHead = parts.flatMap(p => [head(`${p.name} 상태`), head(`${p.name} 완료일`), head(`${p.name} Jira`)]);
   const assetRows: C[][] = [
-    [head('에셋 ID'), head('마일스톤', true), head('분류'), head('리소스 종류', true), head('에셋 이름', true), head('코드'), head('배치'), head('포함 템플릿'), head('에셋 Jira'), ...partHead, head('메모')],
-    [note('새 에셋은 ID를 비웁니다'), note('업데이트 이름'), note('참고용'), note('리소스 이름'), null, null, note('없으면 새로 만듭니다'), note(`${MODE.MIN} · ${MODE.TARGET} · ${MODE.STRETCH}`), note('ABC-123'),
+    [head('에셋 ID'), head('마일스톤', true), head('분류'), head('리소스 종류', true), head('에셋 이름', true), head('코드'), head('배치'), head('포함 템플릿'), head('마감일'), head('에셋 Jira'), ...partHead, head('메모')],
+    [note('새 에셋은 ID를 비웁니다'), note('업데이트 이름'), note('참고용'), note('리소스 이름'), null, null, note('없으면 새로 만듭니다'), note(`${MODE.MIN} · ${MODE.TARGET} · ${MODE.STRETCH}`), note('YYYY-MM-DD(비우면 배치 마감일)'), note('ABC-123'),
       ...parts.flatMap((_, i) => (i === 0 ? [note(ASSET_STATUSES.map(s => STATUS_LABEL[s]).join(' · ')), note('YYYY-MM-DD'), null] : [null, null, null])), null],
     ...assets.map(a => {
       const id = String(a.asset_id);
       return [
         id, String(a.uname), String(a.gname), String(a.rname), String(a.name), (a.code as string) ?? null, (a.bname as string) ?? null,
-        MODE[a.tier as Tier], (a.jira_key as string) ?? null,
+        MODE[a.tier as Tier], (a.due_date as string) ?? null, (a.jira_key as string) ?? null,
         ...parts.flatMap(p => {
           if (!passes.has(`${a.resource_type_id}|${p.id}`)) return [null, null, null];
           const s = states.get(`${id}|${p.id}`);
@@ -79,7 +79,7 @@ const date = (v: ReadCell): string | null | 'bad' => {
   const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(String(v).trim());
   if (!m) return 'bad';
   const d = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  return new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : 'bad';
+  return !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : 'bad';
 };
 
 /** 에셋 엑셀 넣기. 한 묶음(ctx.batchId). 맞지 않는 행은 건너뛰고 이유를 남긴다 */
@@ -140,7 +140,7 @@ export function importAssets(db: SqlDb, session: ProjectSession, sheets: Sheets,
     const col = {
       id: ci(/^(에셋id|assetid)$/), u: ci(/^(마일스톤|업데이트|milestone|update)$/), rt: ci(/^(리소스종류|리소스|resourcetype|resource)$/),
       name: ci(/^(에셋이름|에셋|이름|assetname|name)$/), code: ci(/^(코드|code)$/), batch: ci(/^(배치|batch)$/), tier: ci(/^(포함템플릿|템플릿|tier)$/),
-      jira: ci(/^(에셋jira|jira|jirakey)$/), note: ci(/^(메모|note)$/),
+      jira: ci(/^(에셋jira|jira|jirakey)$/), note: ci(/^(메모|설명|note)$/), due: ci(/^(마감일|due|duedate)$/),
     };
     if (col.u < 0 || col.rt < 0 || col.name < 0) throw new Error('"마일스톤", "리소스 종류", "에셋 이름" 칸을 찾지 못했습니다.');
     const partCols = parts.map(p => ({
@@ -184,6 +184,11 @@ export function importAssets(db: SqlDb, session: ProjectSession, sheets: Sheets,
         }
         for (const [f, c] of [['code', col.code], ['jira_key', col.jira], ['note', col.note]] as const) {
           if (c >= 0 && text(r[c]) != null) run({ kind: 'assetField', assetIds: [id], field: f, value: text(r[c]) });
+        }
+        if (col.due >= 0 && r[col.due] != null && r[col.due] !== '') {
+          const due = date(r[col.due]);
+          if (due === 'bad') throw new Error('마감일 형식이 올바르지 않습니다');
+          run({ kind: 'assetField', assetIds: [id], field: 'due_date', value: due });
         }
         const steps = new Set(db.all('SELECT part_id FROM resource_parts WHERE resource_type_id = ?', [rtId]).map(x => String(x.part_id)));
         for (const p of partCols) {

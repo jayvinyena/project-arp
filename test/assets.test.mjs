@@ -29,15 +29,15 @@ const ctx = () => ({ editor: '검사', batchId: `b${(n += 1)}` });
 const apply = (t, e) => applyEdit(t.db, t.session, e, ctx());
 const prog = (db, u, rt) => Object.fromEntries(db.all('SELECT part_id, completed_qty, as_of FROM progress WHERE update_id = ? AND resource_type_id = ?', [u, rt]).map(r => [r.part_id, [r.completed_qty, r.as_of]]));
 
-test('구조 전환: v1 파일 → 최신(v4), 에셋 표 4개가 생긴다', () => {
+test('구조 전환: v1 파일 → 최신(v5), 에셋 표 6개가 생긴다', () => {
   const path = `${OUT}/v1-copy.arp`;
   copyFileSync(`${OUT}/normal-v1.arp`, path);
   const raw = new DatabaseSync(path);
   const r = migrate(nodeDb(raw));
   assert.deepEqual([r.from, r.to], [1, LATEST_SCHEMA]);
-  assert.equal(LATEST_SCHEMA, 4);
+  assert.equal(LATEST_SCHEMA, 5);
   const tables = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(x => x.name);
-  for (const t of ['batches', 'assets', 'asset_parts', 'asset_thumbs']) assert.ok(tables.includes(t), t);
+  for (const t of ['batches', 'assets', 'asset_parts', 'asset_thumbs', 'asset_links', 'asset_comments']) assert.ok(tables.includes(t), t);
   raw.close();
 });
 
@@ -243,4 +243,72 @@ test('에셋 예시: 에셋 상태에서 다시 센 작업 진척 = 정상 예�
   assert.equal(v.batches.length, 2);
   assert.equal(v.totals.review, 1);
   a.raw.close(); b.raw.close();
+});
+
+test('칸반 단계 옮기기: 앞으로(지나친 파트 완료 · 옮긴 파트 진행) · 뒤로(수정 + 뒤 파트 대기) · 완료 · 대기 · 거치지 않는 파트는 거절 · 한 묶음 되돌리기', () => {
+  const t = open('assets');
+  const stage = id => assetsView(t.db, 'LAUNCH').assets.find(a => a.assetId === id);
+  const st = (id, p) => t.db.get('SELECT status, done_at, retakes FROM asset_parts WHERE asset_id = ? AND part_id = ?', [id, p]) ?? { status: 'TODO' };
+  const id = 'A00006'; // 좀비맛 쿠키: 모두 대기
+  assert.equal(stage(id).stage, 'TODO');
+  apply(t, { kind: 'moveStage', assetIds: [id], stage: 'MODELING' });
+  assert.equal(st(id, 'CONCEPT').status, 'DONE');
+  assert.ok(st(id, 'CONCEPT').done_at);
+  assert.equal(st(id, 'MODELING').status, 'WIP');
+  assert.equal(stage(id).stage, 'MODELING');
+  assert.equal(stage(id).sub, 'WIP');
+  // 뒤로: 원화는 수정(리테이크 1), 모델링은 대기
+  const back = ctx();
+  applyEdit(t.db, t.session, { kind: 'moveStage', assetIds: [id], stage: 'CONCEPT' }, back);
+  assert.equal(st(id, 'CONCEPT').status, 'RETAKE');
+  assert.equal(st(id, 'CONCEPT').retakes, 1);
+  assert.equal(st(id, 'MODELING').status, 'TODO');
+  assert.equal(stage(id).stage, 'CONCEPT');
+  undoBatch(t.db, t.session, back.batchId, ctx());
+  assert.equal(stage(id).stage, 'MODELING', '되돌리면 한 묶음으로 돌아온다');
+  apply(t, { kind: 'moveStage', assetIds: [id], stage: 'DONE' });
+  assert.equal(stage(id).stage, 'DONE');
+  assert.equal(stage(id).progress, 1);
+  apply(t, { kind: 'moveStage', assetIds: [id], stage: 'TODO' });
+  assert.equal(stage(id).stage, 'TODO');
+  // 코스튬은 FX를 거치지 않는다
+  assert.throws(() => apply(t, { kind: 'moveStage', assetIds: ['A00013'], stage: 'FX' }), /거치지 않는/);
+  // 여러 장: 거치지 않는 에셋은 건너뛴다
+  apply(t, { kind: 'moveStage', assetIds: ['A00007', 'A00015'], stage: 'FX' });
+  assert.equal(stage('A00007').stage, 'FX');
+  assert.equal(stage('A00015').stage, 'TODO', '코스튬(A00015)은 FX를 거치지 않아 그대로');
+  // 작업 진척: 원화 완료가 늘었다
+  assert.ok(t.db.get("SELECT completed_qty FROM progress WHERE update_id = 'LAUNCH' AND resource_type_id = 'CHAR_NEW' AND part_id = 'CONCEPT'").completed_qty >= 4);
+  t.raw.close();
+});
+
+test('카드: 열 안 순서 · 마감일 · 설명(여러 줄) · 링크 · 댓글 · 활동 · 에셋 지우기 되돌리면 링크 · 댓글도 돌아온다', async () => {
+  const { assetDetail } = await import('../core/assets.ts');
+  const t = open('assets');
+  apply(t, { kind: 'reorderAssets', assetIds: ['A00003', 'A00001', 'A00002'] });
+  const order = assetsView(t.db, 'LAUNCH').assets.filter(a => ['A00001', 'A00002', 'A00003'].includes(a.assetId)).map(a => a.assetId);
+  assert.deepEqual(order, ['A00003', 'A00001', 'A00002']);
+  apply(t, { kind: 'assetField', assetIds: ['A00001'], field: 'due_date', value: '2027-01-15' });
+  assert.throws(() => apply(t, { kind: 'assetField', assetIds: ['A00001'], field: 'due_date', value: '2027-13-01' }), /형식/);
+  apply(t, { kind: 'assetField', assetIds: ['A00001'], field: 'note', value: '첫 줄\n둘째 줄\n' });
+  assert.equal(t.db.get("SELECT note FROM assets WHERE asset_id = 'A00001'").note, '첫 줄\n둘째 줄');
+  apply(t, { kind: 'addLink', assetId: 'A00001', title: '컨셉 문서', url: 'https://wiki.example.com/cookie' });
+  assert.throws(() => apply(t, { kind: 'addLink', assetId: 'A00001', title: '', url: 'wiki' }), /http/);
+  apply(t, { kind: 'addComment', assetId: 'A00001', body: '  모델링 들어가기 전에 실루엣 확인 부탁  ' });
+  assert.throws(() => apply(t, { kind: 'addComment', assetId: 'A00001', body: '   ' }), /댓글 내용/);
+  const d = assetDetail(t.db, 'A00001');
+  assert.equal(d.links[0].title, '컨셉 문서');
+  assert.equal(d.comments[0].body, '모델링 들어가기 전에 실루엣 확인 부탁');
+  assert.equal(d.comments[0].author, '검사');
+  assert.ok(d.activity.some(a => a.text.startsWith('마감일')), d.activity.map(a => a.text).join(' / '));
+  assert.ok(d.activity.some(a => a.text === '댓글을 남김'));
+  const v = assetsView(t.db, 'LAUNCH').assets.find(a => a.assetId === 'A00001');
+  assert.deepEqual([v.dueDate, v.links, v.comments], ['2027-01-15', 1, 1]);
+  const del = ctx();
+  applyEdit(t.db, t.session, { kind: 'deleteAssets', assetIds: ['A00001'] }, del);
+  assert.equal(t.db.get("SELECT count(*) AS n FROM asset_links WHERE asset_id = 'A00001'").n, 0);
+  undoBatch(t.db, t.session, del.batchId, ctx());
+  assert.equal(assetDetail(t.db, 'A00001').links.length, 1);
+  assert.equal(assetDetail(t.db, 'A00001').comments.length, 1);
+  t.raw.close();
 });

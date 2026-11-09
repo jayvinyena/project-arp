@@ -84,7 +84,7 @@ function date(v: Cell): string | null {
   const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(String(v).trim());
   if (!m) return null;
   const d = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  return new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 2027-02-30 같은 날은 빈칸으로
+  return !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 2027-02-30 · 13월 같은 날은 빈칸으로
 }
 function month(v: Cell): string | null {
   if (v == null || v === '') return null;

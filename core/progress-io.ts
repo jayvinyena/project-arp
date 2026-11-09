@@ -68,7 +68,7 @@ const date = (v: ReadCell): string | null => {
   const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(String(v).trim());
   if (!m) return null;
   const d = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  return new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 달력에 없는 날은 버린다
+  return !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d ? d : null; // 달력에 없는 날(13월 포함)은 버린다
 };
 
 /** 엑셀 작업 진척을 넣는다. 한 묶음(ctx.batchId). 맞지 않는 행은 건너뛰고 이유를 남긴다 */
