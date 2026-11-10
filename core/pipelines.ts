@@ -15,6 +15,10 @@ export type PipelineEdit =
   | { kind: 'pipelineSteps'; pipelineId: string; partIds: string[] }
   /** 단계 겹침률(앞 단계와). null = 파트 쌍 → 기본 */
   | { kind: 'stepOverlap'; pipelineId: string; partId: string; rate: number | null }
+  /** 묶음 겹침률: 묶음 안 단계 모두 같은 값(docs/30) */
+  | { kind: 'groupOverlap'; pipelineId: string; partIds: string[]; rate: number | null }
+  /** 앞 단계와 같은 묶음(병렬)으로 · 풀기(docs/30) */
+  | { kind: 'stepParallel'; pipelineId: string; partId: string; withPrev: boolean }
   /** 리소스 파이프라인 고르기(null = 파트 표 순서). 새 파이프라인에 없는 파트의 공수는 moves대로 옮기거나 지운다 */
   | { kind: 'resourcePipeline'; resourceTypeIds: string[]; pipelineId: string | null; moves?: { fromPartId: string; toPartId: string | null }[] }
   /** 공수 · 재작업률 · 작업 진척 · 에셋 상태를 다른 파트로 */
@@ -29,19 +33,27 @@ export type PipelineEdit =
   | { kind: 'overlapPair'; fromPartId: string; toPartId: string; rate: number | null };
 
 export const PIPELINE_EDIT_KINDS = new Set<string>([
-  'createPipeline', 'renamePipeline', 'deletePipeline', 'pipelineSteps', 'stepOverlap', 'resourcePipeline',
+  'createPipeline', 'renamePipeline', 'deletePipeline', 'pipelineSteps', 'stepOverlap', 'groupOverlap', 'stepParallel', 'resourcePipeline',
   'moveResourcePart', 'dropResourcePart', 'reorderParts', 'reorderBatches', 'reorderPriority', 'overlapPair',
 ]);
 
-export interface PipelineInfo { pipelineId: string; name: string; steps: { partId: string; overlap: number | null }[]; resources: number }
+/** steps: 순서대로. withPrev = 앞 단계와 같은 묶음(병렬). groups: 묶음마다 파트(docs/30) */
+export interface PipelineInfo { pipelineId: string; name: string; steps: { partId: string; overlap: number | null; withPrev: boolean }[]; groups: string[][]; resources: number }
+
+/** 단계 목록 → 묶음(첫 단계 또는 with_prev = 0이면 새 묶음) */
+export function groupSteps<T extends { partId: string; withPrev: boolean }>(steps: T[]): string[][] {
+  const out: string[][] = [];
+  steps.forEach((s, i) => { if (i === 0 || !s.withPrev) out.push([]); out[out.length - 1].push(s.partId); });
+  return out;
+}
 
 export function pipelinesList(db: SqlDb): PipelineInfo[] {
   const steps = db.all('SELECT * FROM pipeline_steps ORDER BY pipeline_id, seq');
   const used = new Map(db.all('SELECT pipeline_id, count(*) AS n FROM resource_types WHERE pipeline_id IS NOT NULL GROUP BY pipeline_id').map(r => [String(r.pipeline_id), Number(r.n)]));
-  return db.all('SELECT * FROM pipelines ORDER BY sort_order, pipeline_id').map(p => ({
-    pipelineId: String(p.pipeline_id), name: String(p.name), resources: used.get(String(p.pipeline_id)) ?? 0,
-    steps: steps.filter(s => s.pipeline_id === p.pipeline_id).map(s => ({ partId: String(s.part_id), overlap: s.overlap_rate == null ? null : Number(s.overlap_rate) })),
-  }));
+  return db.all('SELECT * FROM pipelines ORDER BY sort_order, pipeline_id').map(p => {
+    const list = steps.filter(s => s.pipeline_id === p.pipeline_id).map(s => ({ partId: String(s.part_id), overlap: s.overlap_rate == null ? null : Number(s.overlap_rate), withPrev: Number(s.with_prev ?? 0) === 1 }));
+    return { pipelineId: String(p.pipeline_id), name: String(p.name), resources: used.get(String(p.pipeline_id)) ?? 0, steps: list, groups: groupSteps(list) };
+  });
 }
 
 /**
@@ -60,6 +72,38 @@ export function partOrderFor(db: SqlDb): (resourceTypeId: string) => string[] {
     const order = !p ? parts : parts.map((id, i) => ({ id, pos: seq.get(`${p}|${id}`) ?? 1e6 + i })).sort((a, b) => a.pos - b.pos).map(x => x.id);
     cache.set(key, order);
     return order;
+  };
+}
+
+/**
+ * 리소스마다 공정 묶음(엔진과 같은 규칙, docs/30): 파이프라인 단계 묶음 + 단계에 없는 파트는 뒤에 하나씩,
+ * 파이프라인이 없으면 파트마다 하나씩. 사용 중인 파트만(그 리소스가 거치는지는 보지 않는다).
+ */
+export function partGroupsFor(db: SqlDb): (resourceTypeId: string) => string[][] {
+  const order = partOrderFor(db);
+  const pipe = new Map(db.all('SELECT resource_type_id, pipeline_id FROM resource_types').map(r => [String(r.resource_type_id), (r.pipeline_id as string) ?? null]));
+  const grp = new Map<string, number>();
+  const byPipe = new Map<string, { part: string; w: number }[]>();
+  for (const r of db.all('SELECT pipeline_id, part_id, with_prev FROM pipeline_steps ORDER BY pipeline_id, seq')) {
+    const k = String(r.pipeline_id);
+    if (!byPipe.has(k)) byPipe.set(k, []);
+    byPipe.get(k)!.push({ part: String(r.part_id), w: Number(r.with_prev ?? 0) });
+  }
+  for (const [k, list] of byPipe) { let g = 0; list.forEach((s, i) => { if (i === 0 || !s.w) g += 1; grp.set(`${k}|${s.part}`, g); }); }
+  const cache = new Map<string, string[][]>();
+  return (rt: string) => {
+    const p = pipe.get(rt) ?? null;
+    const key = p ?? '';
+    if (cache.has(key)) return cache.get(key)!;
+    const out: string[][] = [];
+    let last: number | undefined;
+    for (const part of order(rt)) {
+      const g = p ? grp.get(`${p}|${part}`) : undefined;
+      if (g != null && g === last) out[out.length - 1].push(part); else out.push([part]);
+      last = g;
+    }
+    cache.set(key, out);
+    return out;
   };
 }
 
@@ -232,16 +276,27 @@ export function applyPipelineEdit(db: SqlDb, session: ProjectSession, edit: Pipe
         log(db, ctx, 'DELETE', 'pipeline_steps', `${edit.pipelineId}|${s.part_id}`, null, s, undefined);
         changed = true;
       }
+      // 묶음(docs/30): 예전에 같은 묶음이던 이웃끼리만 묶음을 이어 간다(묶음째 끌기 · 묶음 안 순서 바꾸기는 그대로, 빼거나 떼어 놓으면 풀림)
+      const oldGroup = new Map<string, number>();
+      { let g = 0; before.forEach((b, i) => { if (i === 0 || !Number(b.with_prev ?? 0)) g += 1; oldGroup.set(String(b.part_id), g); }); }
       ids.forEach((p, i) => {
         const cur = before.find(b => b.part_id === p);
+        const wp = i > 0 && oldGroup.has(p) && oldGroup.get(p) === oldGroup.get(ids[i - 1]) ? 1 : 0;
         if (!cur) {
-          const row = { pipeline_id: edit.pipelineId, part_id: p, seq: i + 1, overlap_rate: null };
-          db.run('INSERT INTO pipeline_steps (pipeline_id, part_id, seq, overlap_rate) VALUES (?, ?, ?, NULL)', [edit.pipelineId, p, i + 1]);
+          const row = { pipeline_id: edit.pipelineId, part_id: p, seq: i + 1, overlap_rate: null, with_prev: 0 };
+          db.run('INSERT INTO pipeline_steps (pipeline_id, part_id, seq, overlap_rate, with_prev) VALUES (?, ?, ?, NULL, 0)', [edit.pipelineId, p, i + 1]);
           log(db, ctx, 'INSERT', 'pipeline_steps', `${edit.pipelineId}|${p}`, null, undefined, row);
           changed = true;
-        } else if (Number(cur.seq) !== i + 1) {
+          return;
+        }
+        if (Number(cur.seq) !== i + 1) {
           db.run('UPDATE pipeline_steps SET seq = ? WHERE pipeline_id = ? AND part_id = ?', [i + 1, edit.pipelineId, p]);
           log(db, ctx, 'UPDATE', 'pipeline_steps', `${edit.pipelineId}|${p}`, 'seq', Number(cur.seq), i + 1);
+          changed = true;
+        }
+        if (Number(cur.with_prev ?? 0) !== wp) {
+          db.run('UPDATE pipeline_steps SET with_prev = ? WHERE pipeline_id = ? AND part_id = ?', [wp, edit.pipelineId, p]);
+          log(db, ctx, 'UPDATE', 'pipeline_steps', `${edit.pipelineId}|${p}`, 'with_prev', Number(cur.with_prev ?? 0), wp);
           changed = true;
         }
       });
@@ -255,6 +310,39 @@ export function applyPipelineEdit(db: SqlDb, session: ProjectSession, edit: Pipe
       if (old === edit.rate) return { changed: false };
       db.run('UPDATE pipeline_steps SET overlap_rate = ? WHERE pipeline_id = ? AND part_id = ?', [edit.rate, edit.pipelineId, edit.partId]);
       log(db, ctx, 'UPDATE', 'pipeline_steps', `${edit.pipelineId}|${edit.partId}`, 'overlap_rate', old, edit.rate);
+      dirty('pipeline_steps');
+      return { changed: true };
+    }
+    case 'groupOverlap': {
+      if (edit.rate != null && !(edit.rate >= 0 && edit.rate <= 1)) fail('겹침률은 0 ~ 100%입니다.');
+      let changed = false;
+      for (const partId of edit.partIds) {
+        if (applyPipelineEdit(db, session, { kind: 'stepOverlap', pipelineId: edit.pipelineId, partId, rate: edit.rate }, ctx).changed) changed = true;
+      }
+      return { changed };
+    }
+    case 'stepParallel': {
+      const list = db.all('SELECT * FROM pipeline_steps WHERE pipeline_id = ? ORDER BY seq', [edit.pipelineId]);
+      const i = list.findIndex(s => s.part_id === edit.partId);
+      if (i < 0) fail('파이프라인 단계가 아닙니다.');
+      if (i === 0) fail('첫 단계는 앞 단계가 없습니다.');
+      const want = edit.withPrev ? 1 : 0;
+      if (Number(list[i].with_prev ?? 0) === want) return { changed: false };
+      const key = (s: Record<string, unknown>) => `${edit.pipelineId}|${s.part_id}`;
+      db.run('UPDATE pipeline_steps SET with_prev = ? WHERE pipeline_id = ? AND part_id = ?', [want, edit.pipelineId, edit.partId]);
+      log(db, ctx, 'UPDATE', 'pipeline_steps', key(list[i]), 'with_prev', Number(list[i].with_prev ?? 0), want);
+      if (want) {
+        // 합쳐진 단계(이 단계와 뒤따르던 단계)는 묶음 첫 단계의 겹침률을 따른다 — 묶음 사이 겹침률은 하나
+        let h = i - 1;
+        while (h > 0 && Number(list[h].with_prev ?? 0) === 1) h -= 1;
+        const rate = list[h].overlap_rate == null ? null : Number(list[h].overlap_rate);
+        for (let j = i; j < list.length && (j === i || Number(list[j].with_prev ?? 0) === 1); j += 1) {
+          const old = list[j].overlap_rate == null ? null : Number(list[j].overlap_rate);
+          if (old === rate) continue;
+          db.run('UPDATE pipeline_steps SET overlap_rate = ? WHERE pipeline_id = ? AND part_id = ?', [rate, edit.pipelineId, list[j].part_id]);
+          log(db, ctx, 'UPDATE', 'pipeline_steps', key(list[j]), 'overlap_rate', old, rate);
+        }
+      }
       dirty('pipeline_steps');
       return { changed: true };
     }

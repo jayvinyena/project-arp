@@ -48,7 +48,7 @@
 
 ## 5. 구조 전환 (마이그레이션)
 
-> 구현: [core/migrate.ts](../core/migrate.ts). 지금 구조는 **v11**(v1 → v2: 시나리오 동작 묶음·반영 기록, v2 → v3: 실적의 실투입 공수, v3 → v4: 에셋 관리 표 4개, v4 → v5: 에셋 마감일 · 링크 · 댓글, v5 → v6: 에셋 세부 분류 · 속성 — [20-asset-management.md](20-asset-management.md), v6 → v7: 작업자 명단 — [24-people.md](24-people.md), v7 → v8: 소식 — [26-viewer.md](26-viewer.md), v8 → v9: 작업자 지원 팀 — [24-people.md](24-people.md), v9 → v10: 리소스별 파이프라인(공정 순서) — [28-resource-pipelines.md](28-resource-pipelines.md), v10 → v11: 파이프라인이 없는 리소스에 "기본" 파이프라인 — [29-pipeline-catalog.md](29-pipeline-catalog.md)). 자세한 내용은 [08-simulation.md](08-simulation.md).
+> 구현: [core/migrate.ts](../core/migrate.ts). 지금 구조는 **v12**(v1 → v2: 시나리오 동작 묶음·반영 기록, v2 → v3: 실적의 실투입 공수, v3 → v4: 에셋 관리 표 4개, v4 → v5: 에셋 마감일 · 링크 · 댓글, v5 → v6: 에셋 세부 분류 · 속성 — [20-asset-management.md](20-asset-management.md), v6 → v7: 작업자 명단 — [24-people.md](24-people.md), v7 → v8: 소식 — [26-viewer.md](26-viewer.md), v8 → v9: 작업자 지원 팀 — [24-people.md](24-people.md), v9 → v10: 리소스별 파이프라인(공정 순서) — [28-resource-pipelines.md](28-resource-pipelines.md), v10 → v11: 파이프라인이 없는 리소스에 "기본" 파이프라인 — [29-pipeline-catalog.md](29-pipeline-catalog.md), v11 → v12: 병렬 단계(`pipeline_steps.with_prev`) — [30-parallel-steps.md](30-parallel-steps.md)). 자세한 내용은 [08-simulation.md](08-simulation.md).
 
 
 - 앱에는 `v1 → v2`, `v2 → v3` 같은 단계별 전환 스크립트가 있다. 열 때 필요한 단계만 차례로 돈다.

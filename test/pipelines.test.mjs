@@ -127,11 +127,12 @@ test('파일 구조 v11: 파이프라인이 없던 리소스는 "기본"(그 리
   const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
   const loose = apply({ kind: 'createPart', name: '배경 원화' }).createdId;
   // v10처럼 되돌리기: 파이프라인 없음 · 리소스 파이프라인 비움
-  t.db.exec("DELETE FROM pipeline_steps; DELETE FROM pipelines; UPDATE resource_types SET pipeline_id = NULL; PRAGMA user_version = 10;");
+  t.db.exec("DELETE FROM pipeline_steps; DELETE FROM pipelines; UPDATE resource_types SET pipeline_id = NULL;");
   const before = calculate(t.db, { planMode: 'TARGET' }).result.stages.map(s => [s.updateId, s.resourceTypeId, s.partId, s.predecessorPartId, s.overlapRate, s.end]);
   assert.ok(validate(t.db).some(f => f.code === 'E10'), '파이프라인 없는 리소스는 주의');
+  t.db.exec('DROP VIEW IF EXISTS temp.step_pos; DROP VIEW IF EXISTS temp.step_grp; ALTER TABLE pipeline_steps DROP COLUMN with_prev; PRAGMA user_version = 10;'); // v10 구조(병렬 칸 없음, 점검용 임시 보기는 먼저 지움)
   const r = migrate(t.db);
-  assert.deepEqual([r.from, r.to], [10, 11]);
+  assert.deepEqual([r.from, r.to], [10, 12]);
   const lists = pipelinesList(t.db);
   assert.deepEqual(lists.map(p => [p.pipelineId, p.name, p.steps.map(s => s.partId), p.steps.every(s => s.overlap == null)]), [['L00', '기본', ['CONCEPT', 'MODELING', 'ANIMATION', 'FX'], true]]);
   assert.ok(!lists[0].steps.some(s => s.partId === loose), '아무도 거치지 않는 새 파트는 넣지 않는다');
@@ -155,4 +156,80 @@ test('파이프라인 이름은 20자까지(리소스 표 칸에 다 보이게)'
   assert.throws(() => apply({ kind: 'renamePipeline', pipelineId: pid, name: '나'.repeat(21) }), /20자 이하/);
   apply({ kind: 'renamePipeline', pipelineId: pid, name: '캐릭터 제작' });
   assert.equal(t.db.get('SELECT name FROM pipelines WHERE pipeline_id = ?', [pid]).name, '캐릭터 제작');
+});
+
+test('병렬 묶음(docs/30): 앞 단계와 합치기 · 겹침률 따르기 · 묶음째 끌기 · 빼면 풀림 · 되돌리기 · 계산', () => {
+  const t = open('normal');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  const groups = () => pipelinesList(t.db).find(p => p.pipelineId === 'L00').groups;
+  assert.deepEqual(groups(), [['CONCEPT'], ['MODELING'], ['ANIMATION'], ['FX']]);
+  assert.throws(() => apply({ kind: 'stepParallel', pipelineId: 'L00', partId: 'CONCEPT', withPrev: true }), /첫 단계/);
+  apply({ kind: 'stepOverlap', pipelineId: 'L00', partId: 'ANIMATION', rate: 0.3 });
+  // FX를 애니와 병렬로: FX는 애니 묶음의 겹침률(30%)을 따른다
+  const c1 = ctx();
+  apply({ kind: 'stepParallel', pipelineId: 'L00', partId: 'FX', withPrev: true }, c1);
+  assert.deepEqual(groups(), [['CONCEPT'], ['MODELING'], ['ANIMATION', 'FX']]);
+  assert.equal(pipelinesList(t.db)[0].steps.find(x => x.partId === 'FX').overlap, 0.3);
+  // 계산: FX의 앞 공정 = 모델링(애니가 아님), 애니와 FX는 서로 기다리지 않는다
+  const fx = stagesOf(t.db, 'CHAR_NEW').find(s => s.partId === 'FX');
+  assert.deepEqual([fx.predecessorPartIds, fx.overlapRate, fx.overlapSource], [['MODELING'], 0.3, 'STEP']);
+  // 묶음 겹침률은 묶음 단계 모두
+  apply({ kind: 'groupOverlap', pipelineId: 'L00', partIds: ['ANIMATION', 'FX'], rate: 0.5 });
+  assert.deepEqual(pipelinesList(t.db)[0].steps.filter(x => x.overlap === 0.5).map(x => x.partId), ['ANIMATION', 'FX']);
+  // 묶음째 앞으로 끌기(원화 앞) → 묶음 유지
+  apply({ kind: 'pipelineSteps', pipelineId: 'L00', partIds: ['ANIMATION', 'FX', 'CONCEPT', 'MODELING'] });
+  assert.deepEqual(groups(), [['ANIMATION', 'FX'], ['CONCEPT'], ['MODELING']]);
+  // 묶음 안 순서 바꾸기도 묶음 유지
+  apply({ kind: 'pipelineSteps', pipelineId: 'L00', partIds: ['FX', 'ANIMATION', 'CONCEPT', 'MODELING'] });
+  assert.deepEqual(groups(), [['FX', 'ANIMATION'], ['CONCEPT'], ['MODELING']]);
+  // 떼어 놓으면 풀림
+  apply({ kind: 'pipelineSteps', pipelineId: 'L00', partIds: ['FX', 'CONCEPT', 'ANIMATION', 'MODELING'] });
+  assert.deepEqual(groups(), [['FX'], ['CONCEPT'], ['ANIMATION'], ['MODELING']]);
+  // 풀기
+  apply({ kind: 'pipelineSteps', pipelineId: 'L00', partIds: ['CONCEPT', 'MODELING', 'ANIMATION', 'FX'] });
+  apply({ kind: 'stepParallel', pipelineId: 'L00', partId: 'FX', withPrev: true });
+  apply({ kind: 'stepParallel', pipelineId: 'L00', partId: 'FX', withPrev: false });
+  assert.deepEqual(groups(), [['CONCEPT'], ['MODELING'], ['ANIMATION'], ['FX']]);
+  // 되돌리기: 합치기 한 묶음(c1)을 되돌리면 with_prev · 겹침률 모두 원래대로
+  const u = open('normal');
+  const ap2 = (e, c = ctx()) => applyEdit(u.db, u.session, e, c);
+  const c2 = ctx();
+  ap2({ kind: 'stepParallel', pipelineId: 'L00', partId: 'FX', withPrev: true }, c2);
+  undoBatch(u.db, u.session, c2.batchId, ctx());
+  assert.deepEqual(pipelinesList(u.db)[0].groups, [['CONCEPT'], ['MODELING'], ['ANIMATION'], ['FX']]);
+});
+
+test('병렬 묶음: 같은 묶음 파트끼리는 앞 공정 경고(A04 · 작업 진척)가 없고, 에셋 단계 옮기기는 앞 묶음만 완료로', () => {
+  const t = open('normal');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  apply({ kind: 'stepParallel', pipelineId: 'L00', partId: 'FX', withPrev: true });
+  // 작업 진척: FX가 애니보다 많이 끝나도 병렬이라 경고 없음(앞 공정 = 모델링)
+  const upd = String(t.db.get("SELECT update_id FROM volumes WHERE resource_type_id = 'CHAR_NEW' LIMIT 1").update_id);
+  t.db.exec(`DELETE FROM progress WHERE resource_type_id = 'CHAR_NEW' AND update_id = '${upd}'`);
+  for (const [part, n] of [['CONCEPT', 5], ['MODELING', 5], ['ANIMATION', 1], ['FX', 3]]) {
+    t.db.run('INSERT INTO progress (update_id, resource_type_id, part_id, completed_qty, as_of) VALUES (?, ?, ?, ?, ?)', [upd, 'CHAR_NEW', part, n, '2026-11-01']);
+  }
+  t.session.markDirty('progress');
+  const a04 = validate(t.db).filter(f => f.code === 'A04' && f.key.startsWith(`${upd}|CHAR_NEW|`));
+  assert.deepEqual(a04, [], 'FX(3) > 애니(1)이지만 같은 묶음');
+  t.db.run("UPDATE progress SET completed_qty = 6 WHERE update_id = ? AND resource_type_id = 'CHAR_NEW' AND part_id = 'FX'", [upd]);
+  t.session.markDirty('progress');
+  assert.ok(validate(t.db).some(f => f.code === 'A04' && f.key === `${upd}|CHAR_NEW|FX`), 'FX(6) > 앞 묶음 모델링(5)이면 경고');
+  // 에셋(에셋 샘플): 병렬 묶음의 한 파트로 옮기면 앞 묶음만 완료, 같은 묶음 다른 파트는 그대로
+  const e = open('assets');
+  const ap = (x, c = ctx()) => applyEdit(e.db, e.session, x, c);
+  const pid = String(e.db.get("SELECT pipeline_id FROM resource_types WHERE resource_type_id = 'CHAR_NEW'").pipeline_id);
+  ap({ kind: 'stepParallel', pipelineId: pid, partId: 'FX', withPrev: true });
+  const asset = e.db.get("SELECT a.asset_id FROM assets a WHERE a.resource_type_id = 'CHAR_NEW' AND NOT EXISTS (SELECT 1 FROM asset_parts x WHERE x.asset_id = a.asset_id AND x.status <> 'TODO') LIMIT 1");
+  assert.ok(asset, '대기 에셋이 있다');
+  ap({ kind: 'moveStage', assetIds: [String(asset.asset_id)], stage: 'FX' });
+  const st = Object.fromEntries(e.db.all('SELECT part_id, status FROM asset_parts WHERE asset_id = ?', [asset.asset_id]).map(r => [r.part_id, r.status]));
+  assert.deepEqual([st.CONCEPT, st.MODELING, st.FX], ['DONE', 'DONE', 'WIP']);
+  assert.equal(st.ANIMATION ?? 'TODO', 'TODO', '같은 묶음(애니)은 완료로 바꾸지 않는다');
+  // 뒤로(모델링): 모델링은 수정, 뒤 묶음(애니 · FX)은 대기
+  ap({ kind: 'moveStage', assetIds: [String(asset.asset_id)], stage: 'MODELING' });
+  const st2 = Object.fromEntries(e.db.all('SELECT part_id, status FROM asset_parts WHERE asset_id = ?', [asset.asset_id]).map(r => [r.part_id, r.status]));
+  assert.deepEqual([st2.MODELING, st2.FX], ['RETAKE', 'TODO']);
+  // 보기: 파이프라인 묶음이 에셋 화면에 간다
+  assert.deepEqual(assetsView(e.db, null).pipelines.find(p => p.pipelineId === pid).groups.at(-1), ['ANIMATION', 'FX']);
 });

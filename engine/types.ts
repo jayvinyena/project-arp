@@ -21,7 +21,8 @@ export interface Part { part_id: string; name: string; sort_order: number; activ
 export interface PartOverlap { from_part_id: string; to_part_id: string; overlap_rate: number }
 export interface ResourceType { resource_type_id: string; group_id: string | null; name: string; sort_order: number; active: number; /** 고른 파이프라인(없으면 파트 표 순서) */ pipeline_id?: string | null }
 /** 파이프라인 단계: 순서(seq)와 앞 단계와의 겹침률(비우면 파트 쌍 → 기본) */
-export interface PipelineStep { pipeline_id: string; part_id: string; seq: number; overlap_rate: number | null }
+/** with_prev = 1이면 앞 단계와 같은 묶음(병렬, docs/30). 없으면 0 */
+export interface PipelineStep { pipeline_id: string; part_id: string; seq: number; overlap_rate: number | null; with_prev?: number }
 export interface ResourcePart { resource_type_id: string; part_id: string; rework_rate: number }
 export interface Effort { resource_type_id: string; part_id: string; profile_id: string; days: number }
 export interface EffortMix { part_id: string; profile_id: string; share: number }
@@ -102,7 +103,9 @@ export interface StageResult {
   updateId: string;
   resourceTypeId: string;
   partId: string;
+  /** 앞 공정(여럿이면 첫째). 병렬 묶음 뒤 단계는 predecessorPartIds에 모두 */
   predecessorPartId: string | null;
+  predecessorPartIds: string[];
   overlapRate: number | null;
   overlapSource: 'FIRST' | 'STEP' | 'PAIR' | 'DEFAULT';
   requiredDays: number;

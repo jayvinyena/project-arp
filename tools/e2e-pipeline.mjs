@@ -147,6 +147,14 @@ await withBrowser(async (cdp, base) => {
     return { t: s.selectedOptions[0]?.text ?? '', ok: c.measureText(s.selectedOptions[0]?.text ?? '').width <= room };
   })`);
   check('긴 파이프라인 이름도 리소스 표 칸에 다 보인다', fit.some(f => f.t === longName) && fit.every(f => f.ok), JSON.stringify(fit.filter(f => !f.ok)));
+  // 병렬 묶음(docs/30): FX의 ∥ 를 누르면 애니메이션과 같은 묶음(세로로 쌓임, 같은 번호), 다시 누르면 풀림
+  await cdp.eval(`document.querySelector('button.step-par[aria-label="FX 앞 단계와 병렬"]').click()`);
+  await cdp.waitUntil("!!document.querySelector('.step-group.multi')", 8000).catch(() => {});
+  const grp = await cdp.eval("[...document.querySelectorAll('.step-group.multi .step-chip')].map(c => c.textContent.trim()).join(',')");
+  const parPill = await cdp.eval(`!!document.querySelector('button.overlap-pill[aria-label*="모델링 → 애니메이션 · FX 겹침률"]')`);
+  const pressed = await cdp.eval(`document.querySelector('button.step-par[aria-label="FX 앞 단계와 병렬"]').getAttribute('aria-pressed')`);
+  check('∥ 로 FX를 애니메이션과 병렬(같은 묶음 · 같은 번호 · 묶음 사이 겹침률 하나)', grp === '3애니메이션,3FX' && parPill && pressed === 'true', `${grp} · ${parPill} · ${pressed}`);
+  await shot(cdp, 'pipeline-parallel-1440');
   check('기준 정보 390px 가로 넘침 없음', await shot(cdp, 'pipeline-setup-390', 390));
 
   // 5. 에셋 보드: 파이프라인을 고르면 그 파이프라인 에셋만, 열 = 단계
@@ -159,6 +167,11 @@ await withBrowser(async (cdp, base) => {
   const cards = await cdp.eval("document.querySelectorAll('.kb-card').length");
   check('보드 파이프라인: 열 = 대기 · 모델링 · 원화 · 완료, 그 파이프라인 에셋(신규 캐릭터 12)', cols === 'TODO,MODELING,CONCEPT,DONE' && cards === 12, `${cols} · ${cards}장`);
   await shot(cdp, 'pipeline-board-1440');
+  // 병렬 묶음이 있는 파이프라인: 열 = 묶음(애니메이션 ∥ FX 한 열)
+  await select(cdp, 'select[aria-label="보드 파이프라인"]', 'L00');
+  const gcols = await cdp.eval("[...document.querySelectorAll('.kb-col')].map(c => c.dataset.col).join(',')");
+  const ghead = await cdp.eval("[...document.querySelectorAll('.kb-col .kb-head b')].map(b => b.textContent).join(',')");
+  check('보드: 병렬 묶음은 한 열(애니메이션 ∥ FX)', gcols === 'TODO,CONCEPT,MODELING,ANIMATION,DONE' && ghead.includes('애니메이션 ∥ FX'), `${gcols} · ${ghead}`);
   await select(cdp, 'select[aria-label="보드 파이프라인"]', 'all');
   await cdp.eval("[...document.querySelectorAll('button[role=radio]')].find(b => b.textContent.includes('리스트')).click()");
 

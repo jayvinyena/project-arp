@@ -2,7 +2,7 @@
 import type { SqlDb } from './db.ts';
 import type { Person, TeamOption } from './people.ts';
 import { peopleList, teamOptions } from './people.ts';
-import { partOrderFor, pipelinesList } from './pipelines.ts';
+import { partGroupsFor, pipelinesList } from './pipelines.ts';
 import type { PipelineInfo } from './pipelines.ts';
 import type { PlanMode, PlanResult, UpdateStatus } from '../engine/types.ts';
 import { runPlan } from '../engine/index.ts';
@@ -299,7 +299,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
   if (!updateId) return empty;
 
   const passes = new Set(db.all('SELECT resource_type_id, part_id FROM resource_parts').map(r => `${r.resource_type_id}|${r.part_id}`));
-  const orderFor = partOrderFor(db);
+  const groupsFor = partGroupsFor(db);
   const base = new Map(db.all("SELECT resource_type_id, part_id, days FROM efforts WHERE profile_id = 'BASE'").map(r => [`${r.resource_type_id}|${r.part_id}`, Number(r.days)]));
   const done = new Map(db.all('SELECT * FROM progress WHERE update_id = ?', [updateId]).map(r => [`${r.resource_type_id}|${r.part_id}`, r]));
   // 실적 관련 주의(A02 확장 초과, A04 앞 공정보다 많이 끝남)를 칸에 붙인다
@@ -315,11 +315,11 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
     const outsource = Number(v.outsource_qty ?? 0);
     const need = Math.max(0, target - outsource);
     let last = 0;
-    // 앞 공정 = 이 리소스 공정 순서(파이프라인)에서 바로 앞에 거치는 파트
-    const chain = orderFor(rt).filter(pid => passes.has(`${rt}|${pid}`));
-    const prevOf = new Map(chain.map((pid, i) => [pid, i > 0 ? chain[i - 1] : null]));
+    // 앞 공정 = 이 리소스 공정 묶음(파이프라인)에서 바로 앞 묶음의 거치는 파트 모두(병렬 묶음이면 여럿, docs/30)
+    const chain = groupsFor(rt).map(g => g.filter(pid => passes.has(`${rt}|${pid}`))).filter(g => g.length);
+    const prevOf = new Map(chain.flatMap((g, i) => g.map(pid => [pid, i > 0 ? chain[i - 1] : null] as const)));
     const doneOf = (pid: string) => Number(done.get(`${rt}|${pid}`)?.completed_qty ?? 0);
-    if (chain.length) last = doneOf(chain[chain.length - 1]);
+    if (chain.length) last = Math.min(...chain[chain.length - 1].map(doneOf));
     const cells = parts.map(p => {
       const key = `${rt}|${p.partId}`;
       const on = passes.has(key);
@@ -330,7 +330,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
         const c = completed ?? 0;
         const before = prevOf.get(p.partId) ?? null;
         if (c > (vol.get(rt) ?? 0)) flag = '세 번째 템플릿 물량보다 많습니다';
-        else if (before !== null && c > doneOf(before)) flag = '앞 공정보다 많이 끝났습니다';
+        else if (before !== null && c > Math.min(...before.map(doneOf))) flag = '앞 공정보다 많이 끝났습니다';
         const days = base.get(key) ?? 0;
         const bp = byPart.get(p.partId)!;
         bp.totalDays += need * days;

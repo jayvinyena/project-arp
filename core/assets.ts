@@ -7,7 +7,7 @@ import type { PlanMode } from '../engine/types.ts';
 import type { EditContext, EditResult } from './edits.ts';
 import { log, nextId, DATE, fail } from './edits.ts';
 import { peopleList } from './people.ts';
-import { partOrderFor, pipelinesList } from './pipelines.ts';
+import { partOrderFor, partGroupsFor, pipelinesList } from './pipelines.ts';
 
 export type AssetStatus = 'TODO' | 'WIP' | 'REVIEW' | 'RETAKE' | 'DONE' | 'HOLD' | 'OMIT';
 export const ASSET_STATUSES: AssetStatus[] = ['TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD', 'OMIT'];
@@ -450,6 +450,8 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
         const a = assetRow(db, assetId);
         const pl = pipeline(db);
         const steps = partOrderFor(db)(String(a.resource_type_id)); // 그 리소스의 공정 순서(파이프라인)
+        const groups = partGroupsFor(db)(String(a.resource_type_id)); // 묶음(같은 묶음 = 병렬, docs/30)
+        const gi = (p: string) => groups.findIndex(g => g.includes(p));
         const status = new Map(db.all('SELECT part_id, status FROM asset_parts WHERE asset_id = ?', [assetId]).map(r => [String(r.part_id), r.status as AssetStatus]));
         const st = (p: string) => status.get(p) ?? defaultStatus(pl.passes.has(`${a.resource_type_id}|${p}`));
         const from = stageOf(steps, st);
@@ -460,18 +462,19 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
           if (st(partId) === s) return;
           if (applyAssetEdit(db, session, { kind: 'assetPart', assetIds: [assetId], partId, status: s }, ctx).changed) changed = true;
         };
-        const rank = (x: Stage) => (x === 'TODO' ? -1 : x === 'DONE' ? steps.length : steps.indexOf(x));
+        // 앞 · 뒤는 묶음 순서로(같은 묶음의 다른 파트는 병렬이라 건드리지 않는다)
+        const rank = (x: Stage) => (x === 'TODO' ? -1 : x === 'DONE' ? groups.length : gi(x));
         if (to === 'TODO') { for (const p of steps) if (st(p) !== 'OMIT') set(p, 'TODO'); continue; }
         if (to === 'DONE') { for (const p of steps) if (st(p) !== 'OMIT') set(p, 'DONE'); continue; }
-        const ti = steps.indexOf(to);
-        if (rank(to) > rank(from)) {
-          // 앞으로: 지나친 파트는 완료(해당 없음은 그대로), 옮긴 파트는 진행(이미 검수 요청 · 수정 · 보류면 그대로, 해당 없음이었으면 켜진다)
-          steps.slice(0, ti).forEach(p => { if (!COUNTS_AS_DONE.has(st(p))) set(p, 'DONE'); });
+        const tg = gi(to);
+        if (rank(to) >= rank(from)) {
+          // 앞으로(또는 같은 묶음의 다른 파트로): 앞 묶음 파트는 완료(해당 없음은 그대로), 옮긴 파트는 진행(이미 검수 요청 · 수정 · 보류면 그대로, 해당 없음이었으면 켜진다)
+          groups.slice(0, tg).flat().forEach(p => { if (!COUNTS_AS_DONE.has(st(p))) set(p, 'DONE'); });
           if (st(to) === 'TODO' || COUNTS_AS_DONE.has(st(to))) set(to, 'WIP');
         } else {
-          // 뒤로: 옮긴 파트는 수정(리테이크), 그 뒤 파트는 대기(해당 없음은 그대로)
+          // 뒤로: 옮긴 파트는 수정(리테이크), 뒤 묶음 파트는 대기(해당 없음은 그대로)
           set(to, 'RETAKE');
-          steps.slice(ti + 1).forEach(p => { if (st(p) !== 'OMIT') set(p, 'TODO'); });
+          groups.slice(tg + 1).flat().forEach(p => { if (st(p) !== 'OMIT') set(p, 'TODO'); });
         }
       }
       return finish({ changed });
@@ -669,7 +672,8 @@ export interface AssetsView {
   /** 담당 칸 제안: 참여 중인 작업자(이름 · 소속팀) */
   people: { name: string; team: string | null }[];
   /** 이름 붙인 파이프라인(보드 열 고르기) */
-  pipelines: { pipelineId: string; name: string; steps: string[] }[];
+  /** groups: 묶음마다 파트(같은 묶음 = 병렬, docs/30) */
+  pipelines: { pipelineId: string; name: string; steps: string[]; groups: string[][] }[];
   totals: { assets: number; done: number; progress: number; review: number; retake: number; hold: number };
 }
 
@@ -681,7 +685,7 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
   const parts = db.all('SELECT part_id, name FROM parts WHERE active = 1 ORDER BY sort_order').map(p => ({ partId: String(p.part_id), name: String(p.name) }));
   const jiraBase = db.get("SELECT value FROM meta WHERE key = 'jira_base_url'")?.value;
   const people = peopleList(db).filter(p => p.active).map(p => ({ name: p.name, team: p.team }));
-  const pipelines = pipelinesList(db).map(p => ({ pipelineId: p.pipelineId, name: p.name, steps: p.steps.map(x => x.partId) }));
+  const pipelines = pipelinesList(db).map(p => ({ pipelineId: p.pipelineId, name: p.name, steps: p.steps.map(x => x.partId), groups: p.groups }));
   const empty: AssetsView = { updates, updateId, parts, groups: [], batches: [], assets: [], jiraBase: jiraBase == null ? null : String(jiraBase), people, pipelines, totals: { assets: 0, done: 0, progress: 0, review: 0, retake: 0, hold: 0 } };
   if (!updateId) return empty;
 

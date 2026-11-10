@@ -20,12 +20,18 @@ CREATE TEMP VIEW IF NOT EXISTS horizon_months AS
     WHERE m.month < (SELECT horizon_end_month FROM settings) AND m.month < '9999-12'
   )
   SELECT month FROM m;
--- 리소스마다 거치는 파트의 공정 위치(docs/28): 고른 파이프라인 단계 순서, 단계에 없거나 파이프라인이 없으면 파트 표 순서
+-- 파이프라인 단계의 묶음 번호(docs/30): 첫 단계 또는 앞 단계와 같은 묶음이 아닌 단계마다 하나씩 는다(같은 묶음 = 병렬)
+CREATE TEMP VIEW IF NOT EXISTS step_grp AS
+  SELECT ps.pipeline_id, ps.part_id, ps.seq,
+    (SELECT count(*) FROM pipeline_steps g WHERE g.pipeline_id = ps.pipeline_id AND g.seq <= ps.seq
+      AND (g.with_prev = 0 OR g.seq = (SELECT min(m.seq) FROM pipeline_steps m WHERE m.pipeline_id = ps.pipeline_id))) AS grp
+  FROM pipeline_steps ps;
+-- 리소스마다 거치는 파트의 공정 위치(docs/28 · 30): 고른 파이프라인의 묶음 번호(같은 묶음 = 같은 위치), 단계에 없거나 파이프라인이 없으면 파트 표 순서
 CREATE TEMP VIEW IF NOT EXISTS step_pos AS
-  SELECT rp.resource_type_id, rp.part_id, CASE WHEN ps.seq IS NOT NULL THEN ps.seq ELSE 1000000 + p.sort_order END AS pos
+  SELECT rp.resource_type_id, rp.part_id, CASE WHEN ps.grp IS NOT NULL THEN ps.grp ELSE 1000000 + p.sort_order END AS pos
   FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id
   JOIN resource_types r ON r.resource_type_id = rp.resource_type_id
-  LEFT JOIN pipeline_steps ps ON ps.pipeline_id = r.pipeline_id AND ps.part_id = rp.part_id;
+  LEFT JOIN step_grp ps ON ps.pipeline_id = r.pipeline_id AND ps.part_id = rp.part_id;
 `;
 
 const q = s => s.replace(/\s+/g, ' ').trim();
@@ -117,7 +123,7 @@ export const RULES = [
     sql: q(`SELECT o.from_part_id || '>' || o.to_part_id AS key, '공정 순서와 반대이거나 쓰지 않는 파트입니다' AS detail
       FROM part_overlaps o JOIN parts a ON a.part_id = o.from_part_id JOIN parts b ON b.part_id = o.to_part_id
       WHERE a.active = 0 OR b.active = 0 OR (a.sort_order >= b.sort_order AND NOT EXISTS (
-        SELECT 1 FROM pipeline_steps x JOIN pipeline_steps y ON y.pipeline_id = x.pipeline_id AND y.seq > x.seq
+        SELECT 1 FROM step_grp x JOIN step_grp y ON y.pipeline_id = x.pipeline_id AND y.grp > x.grp
         WHERE x.part_id = o.from_part_id AND y.part_id = o.to_part_id))`),
   },
 

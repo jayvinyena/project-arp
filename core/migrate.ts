@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 11;
+export const LATEST_SCHEMA = 12;
 
 /**
  * 파이프라인이 없는(또는 없는 파이프라인을 고른) 리소스에 "기본" 파이프라인을 만들어 준다(docs/29).
@@ -205,6 +205,11 @@ const STEPS: { to: number; note: string; sql: string }[] = [
     to: 11,
     note: '파트 목록과 파이프라인 나누기: 파이프라인이 없는 리소스는 "기본" 파이프라인(그 리소스들이 거치는 파트만, 파트 표 순서)으로. 계산은 그대로(docs/29-pipeline-catalog.md)',
     sql: defaultPipelineSql(),
+  },
+  {
+    to: 12,
+    note: '병렬 단계: 파이프라인 단계에 "앞 단계와 같은 묶음" 칸. 지금 파일은 모두 한 줄이라 계산은 그대로(docs/30-parallel-steps.md)',
+    sql: 'ALTER TABLE pipeline_steps ADD COLUMN with_prev INTEGER NOT NULL DEFAULT 0 CHECK (with_prev IN (0, 1));',
   },
 ];
 

@@ -93,6 +93,61 @@ test('작업 진척 · 남은 일은 기준일 다음 날부터: 기준일 3/10 
   assert.equal(runPlan(zero).stages[0].startDate, days[0]);
 });
 
+/** 원화 10일 → (모델링 15일 ∥ 이펙트 원화 6일) → 애니 8일(docs/30 5.3). parallel이 false면 한 줄 */
+function tinyParallel(parallel, overlapRate = 0) {
+  const d = tinyData(overlapRate);
+  d.part_overlaps = [];
+  d.settings.default_overlap_rate = overlapRate;
+  d.parts.push({ part_id: 'C', name: '이펙트 원화', sort_order: 3, active: 1 }, { part_id: 'D', name: '애니', sort_order: 4, active: 1 });
+  d.resource_parts.push({ resource_type_id: 'R', part_id: 'C', rework_rate: 0 }, { resource_type_id: 'R', part_id: 'D', rework_rate: 0 });
+  d.efforts.push({ resource_type_id: 'R', part_id: 'C', profile_id: 'BASE', days: 6 }, { resource_type_id: 'R', part_id: 'D', profile_id: 'BASE', days: 8 });
+  d.capacity = ['2027-03', '2027-04', '2027-05'].flatMap(month => ['A', 'B', 'C', 'D'].map(part_id => ({ part_id, month, headcount: 1, utilization: 1, productivity: 1, outsource_days: 0, support_days: 0 })));
+  d.settings.horizon_end_month = '2027-05';
+  d.resource_types[0].pipeline_id = 'P';
+  d.pipeline_steps = [
+    { pipeline_id: 'P', part_id: 'A', seq: 1, overlap_rate: null, with_prev: 0 },
+    { pipeline_id: 'P', part_id: 'B', seq: 2, overlap_rate: null, with_prev: 0 },
+    { pipeline_id: 'P', part_id: 'C', seq: 3, overlap_rate: null, with_prev: parallel ? 1 : 0 },
+    { pipeline_id: 'P', part_id: 'D', seq: 4, overlap_rate: null, with_prev: 0 },
+  ];
+  return d;
+}
+
+test('손 계산(병렬 묶음, docs/30): 원화 10 → (모델링 15 ∥ 이펙트 원화 6) → 애니 8, 겹침 0%', () => {
+  const r = runPlan(tinyParallel(true));
+  const days = r.daily.dates;
+  const by = Object.fromEntries(r.stages.map(s => [s.partId, s]));
+  assert.equal(by.B.startDate, days[10], '모델링 11일째');
+  assert.equal(by.C.startDate, days[10], '이펙트 원화도 11일째(같은 앞 공정을 기다림)');
+  assert.deepEqual([by.B.predecessorPartIds, by.C.predecessorPartIds], [['A'], ['A']]);
+  assert.equal(by.C.workDoneDate, days[15], '이펙트 원화 16일째에 일을 마침');
+  assert.equal(by.C.completionDate, days[15], '같은 묶음끼리는 완료 제약 없음(원화보다 늦으면 그대로)');
+  assert.equal(by.B.completionDate, days[24]);
+  assert.deepEqual(by.D.predecessorPartIds, ['B', 'C'], '애니는 앞 묶음 모두를 기다린다');
+  assert.equal(by.D.startDate, days[25], '모델링이 끝난 다음 날(26일째)');
+  assert.equal(by.D.completionDate, days[32]);
+  // 한 줄이면: 이펙트 원화는 모델링(25일째)을 기다려 26일째, 애니는 32일째에 시작
+  const seq = runPlan(tinyParallel(false));
+  const sb = Object.fromEntries(seq.stages.map(s => [s.partId, s]));
+  assert.equal(sb.C.startDate, days[25]);
+  assert.equal(sb.D.startDate, days[31]);
+  assert.ok(r.updates[0].expectedCompletionDate < seq.updates[0].expectedCompletionDate, '병렬이 더 일찍 끝난다');
+  // 늦어진 이유: 애니의 완료를 정한 앞 공정 쪽으로 거슬러 간다(병렬 묶음에서도 깨지지 않음)
+  assert.ok(r.updates[0].reason);
+});
+
+test('손 계산(병렬 묶음): 앞 묶음 중 하나라도 겹침 조건을 못 채우면 시작하지 않는다', () => {
+  // 겹침 50%: 애니는 모델링(15일)이 50% · 이펙트 원화(6일)가 50% 진행돼야 시작 → 모델링 쪽이 늦다
+  const r = runPlan(tinyParallel(true, 0.5));
+  const days = r.daily.dates;
+  const by = Object.fromEntries(r.stages.map(s => [s.partId, s]));
+  assert.equal(by.B.startDate, days[5], '원화 50% 뒤 6일째');
+  assert.equal(by.C.startDate, days[5]);
+  // 모델링 7.5일 진행 = 6+7.5 → 13일째 저녁에 50% 넘음 → 14일째 아침
+  assert.equal(by.D.startDate, days[13]);
+  assert.ok(by.D.predecessorProgressAtStart >= 0.5 - 1e-9);
+});
+
 test('손 계산: 겹침 0% → 모델링 11일째 시작, 25일째 완료 (2영업일 늦음)', () => {
   const r = runPlan(tinyData(0));
   const days = r.daily.dates;

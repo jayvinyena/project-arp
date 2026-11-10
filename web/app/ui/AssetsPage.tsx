@@ -107,6 +107,15 @@ const partsInOrder = (a: AssetItem, parts: AssetsView['parts'], pipelines: Asset
   return parts.filter(p => a.parts[p.partId] && !(steps && !steps.includes(p.partId) && a.parts[p.partId].status === 'OMIT')).sort((x, y) => at(x.partId) - at(y.partId));
 };
 
+/** 이 에셋의 공정 묶음 번호(같은 묶음 = 병렬, docs/30): 파이프라인 묶음, 그 밖 파트는 뒤에 하나씩 */
+const groupRank = (a: AssetItem, partId: string, pipelines: AssetsView['pipelines']): number => {
+  const pl = a.pipelineId ? pipelines.find(x => x.pipelineId === a.pipelineId) : null;
+  const g = pl ? pl.groups.findIndex(x => x.includes(partId)) : -1;
+  if (g >= 0) return g;
+  const i = a.order.indexOf(partId);
+  return 1e3 + (i < 0 ? 1e3 : i);
+};
+
 /** 단계 고르기 칸: 대기 · 이 에셋 파이프라인 순서의 파트 · 완료 */
 const stagesOf = (a: AssetItem, parts: AssetsView['parts'], pipelines: AssetsView['pipelines']): { id: Stage; name: string }[] =>
   [{ id: 'TODO', name: '대기' }, ...partsInOrder(a, parts, pipelines).map(p => ({ id: p.partId, name: p.name })), { id: 'DONE', name: '완료' }];
@@ -243,7 +252,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
 
             <section class="cw-section">
               <h3 class="sub-h">파트 체크리스트 <span class="small faint">완료 {view.parts.filter(p => a.parts[p.partId]?.status === 'DONE').length} / {view.parts.filter(p => a.parts[p.partId] && a.parts[p.partId].status !== 'OMIT').length}</span></h3>
-              <p class="small faint cw-hint">{(() => { const pl = a.pipelineId ? view.pipelines.find(x => x.pipelineId === a.pipelineId) : null; const nm = new Map(view.parts.map(p => [p.partId, p.name])); return pl ? `${pl.name} 파이프라인(${pl.steps.map(x => nm.get(x) ?? x).join(' → ')})` : '파이프라인을 고르지 않은 리소스라 파트 표'; })()} 순서입니다. 하지 않는 파트는 "해당 없음", 나중에 하게 되면 "대기"로 바꿉니다.</p>
+              <p class="small faint cw-hint">{(() => { const pl = a.pipelineId ? view.pipelines.find(x => x.pipelineId === a.pipelineId) : null; const nm = new Map(view.parts.map(p => [p.partId, p.name])); return pl ? `${pl.name} 파이프라인(${pl.groups.map(g => g.map(x => nm.get(x) ?? x).join(' ∥ ')).join(' → ')})` : '파이프라인을 고르지 않은 리소스라 파트 표'; })()} 순서입니다(∥ 는 병렬). 하지 않는 파트는 "해당 없음", 나중에 하게 되면 "대기"로 바꿉니다.</p>
               <div class="cw-progress"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></div>
               <div class="table-wrap ref-wrap">
                 <table class="grid edit ref asset-parts-table">
@@ -466,14 +475,14 @@ export function AssetsPage(props: {
   const dueOf = (a: AssetItem) => a.dueDate ?? (a.batchId ? batchById.get(a.batchId)?.dueDate ?? null : null);
   const t0 = today();
 
-  /** 단계 옮기기: 뒤로 옮기면(되돌림) 먼저 묻는다. 앞 · 뒤는 그 에셋 파이프라인 순서로 */
+  /** 단계 옮기기: 뒤로 옮기면(되돌림) 먼저 묻는다. 앞 · 뒤는 그 에셋 파이프라인 묶음 순서로(같은 묶음 = 병렬이라 앞 · 뒤가 아님) */
   const move = (ids: string[], stage: Stage) => {
-    const rank = (s: Stage, a: AssetItem) => (s === 'TODO' ? -1 : s === 'DONE' ? 1e9 : (a.order.indexOf(s) + 1 || 1e6 + stages.findIndex(x => x.id === s)));
+    const rank = (s: Stage, a: AssetItem) => (s === 'TODO' ? -1 : s === 'DONE' ? 1e9 : groupRank(a, s, v.pipelines));
     const back = ids.map(id => v.assets.find(a => a.assetId === id)!).filter(a => a && rank(stage, a) < rank(a.stage, a));
     if (back.length) {
       setConfirm({ ids, stage, text: stage === 'TODO'
         ? `${back.length}개를 "대기"로 되돌리면 모든 파트 상태가 대기가 됩니다.`
-        : `${back.length}개를 "${stageName.get(stage)}"로 되돌리면 ${stageName.get(stage)}는 "수정"(리테이크 1회)이 되고 그 뒤 파트는 대기로 돌아갑니다.` });
+        : `${back.length}개를 "${stageName.get(stage)}"로 되돌리면 ${stageName.get(stage)}는 "수정"(리테이크 1회)이 되고 그 뒤 단계 파트는 대기로 돌아갑니다.` });
       return;
     }
     void apply({ kind: 'moveStage', assetIds: ids, stage });
@@ -481,14 +490,18 @@ export function AssetsPage(props: {
 
   // ───── 보드 ─────
   // 파이프라인을 고르면 그 파이프라인 에셋만, 열 = 그 단계(docs/28). "모두"면 전체 파트 순서
-  const pipeSel = pipe === 'all' ? null : pipe === 'base' ? { pipelineId: null as string | null, steps: v.parts.map(p => p.partId) } : v.pipelines.find(p => p.pipelineId === pipe) ?? null;
+  const pipeSel = pipe === 'all' ? null : pipe === 'base' ? { pipelineId: null as string | null, steps: v.parts.map(p => p.partId), groups: v.parts.map(p => [p.partId]) } : v.pipelines.find(p => p.pipelineId === pipe) ?? null;
   const boardShown = pipeSel ? shown.filter(a => a.pipelineId === pipeSel.pipelineId) : shown;
-  const boardStages = pipeSel ? stages.filter(s => s.id === 'TODO' || s.id === 'DONE' || pipeSel.steps.includes(s.id)).sort((x, y) => (x.id === 'TODO' ? -1 : y.id === 'TODO' ? 1 : x.id === 'DONE' ? 1 : y.id === 'DONE' ? -1 : pipeSel.steps.indexOf(x.id) - pipeSel.steps.indexOf(y.id))) : stages;
+  // 파이프라인을 고르면 열 = 묶음(병렬 단계는 한 열, 열 id = 묶음 첫 파트)
+  const colOf = (stage: Stage): string => (pipeSel ? pipeSel.groups.find(g => g.includes(stage))?.[0] ?? stage : stage);
+  const boardStages = pipeSel
+    ? [stages[0], ...pipeSel.groups.map(g => ({ id: g[0] as Stage, name: g.map(id => stageName.get(id) ?? id).join(' ∥ ') })), stages[stages.length - 1]]
+    : stages;
   const boardParts = pipeSel ? v.parts.filter(p => pipeSel.steps.includes(p.partId)) : v.parts;
   const partBoard = boardBy !== 'stage' ? boardParts.find(p => p.partId === boardBy) ?? null : null;
   const boardCols: { id: string; name: string; items: AssetItem[] }[] = partBoard
     ? (['TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD'] as AssetStatus[]).map(s => ({ id: s, name: LABEL[s], items: boardShown.filter(a => a.parts[partBoard.partId]?.status === s) }))
-    : boardStages.map(s => ({ id: s.id, name: s.name, items: boardShown.filter(a => a.stage === s.id) }));
+    : boardStages.map(s => ({ id: s.id, name: s.name, items: boardShown.filter(a => colOf(a.stage) === s.id) }));
   // 모든 에셋이 같은 파이프라인이라 어느 열에나 놓을 수 있다(해당 없음인 파트 열에 놓으면 그 파트가 켜진다)
   const canDrop = (col: string) => !!col;
   const onDrop = (col: string, index: number) => {

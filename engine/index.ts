@@ -53,7 +53,7 @@ export function runPlan(data: ProjectData, options: PlanOptions = {}): PlanResul
         // 못 끝낸 원인: 준비됐는데 인력이 모자라 일이 남은 스테이지 중 가장 오래 기다린 것(준비일이 가장 이른 것),
         // 같으면 가장 많이 남은 것. 없으면(앞 공정을 기다리는 중) 앞 공정이 끝난 미완료 스테이지.
         const starved = unfinished.filter(st => st.readyDay !== null && st.requiredDays - st.done > 1e-9);
-        const pool = starved.length ? starved : unfinished.filter(st => !st.predecessor || st.predecessor.completionDay !== null);
+        const pool = starved.length ? starved : unfinished.filter(st => st.predecessors.every(p => p.completionDay !== null));
         const remain = (st: Stage) => st.requiredDays - st.done;
         reasonStage = (pool.length ? pool : unfinished).reduce((a, b) => {
           const ar = a.readyDay ?? Infinity;
@@ -65,9 +65,12 @@ export function runPlan(data: ProjectData, options: PlanOptions = {}): PlanResul
         reasonStage = list.reduce((a, b) => (b.completionDay! > a.completionDay! ? b : a));
         completionDay = reasonStage.completionDay!;
         // 완료 제약 때문에 앞 공정 완료일에 맞춰진 경우, 실제로 늦게 만든 앞 공정으로 거슬러 간다
-        while (reasonStage.predecessor && reasonStage.workDoneDay !== null && reasonStage.workDoneDay < reasonStage.completionDay!
-          && reasonStage.predecessor.completionDay === reasonStage.completionDay) {
-          reasonStage = reasonStage.predecessor;
+        for (;;) {
+          const cur: Stage = reasonStage;
+          if (cur.workDoneDay === null || cur.workDoneDay >= cur.completionDay!) break;
+          const late = cur.predecessors.find(p => p.completionDay === cur.completionDay);
+          if (!late) break;
+          reasonStage = late;
         }
       }
       const expected = dateOf(completionDay);
@@ -136,7 +139,8 @@ export function runPlan(data: ProjectData, options: PlanOptions = {}): PlanResul
     updateId: st.updateId,
     resourceTypeId: st.resourceTypeId,
     partId: st.partId,
-    predecessorPartId: st.predecessor?.partId ?? null,
+    predecessorPartId: st.predecessors[0]?.partId ?? null,
+    predecessorPartIds: st.predecessors.map(p => p.partId),
     overlapRate: st.overlapRate,
     overlapSource: st.overlapSource,
     requiredDays: st.requiredDays,

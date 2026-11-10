@@ -1426,3 +1426,15 @@ tr.row:hover .eff-move, .eff-move:focus-visible { opacity: 1; }
 /* 파트 표 파이프라인 칸 · 파이프라인 알림(docs/29) */
 table.grid.setup-parts td.part-pipes { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pipe-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); }
+
+/* 병렬 단계 묶음(docs/30): 같은 묶음 칩은 세로로 쌓고 점선 테두리 */
+.step-group { display: inline-flex; flex-direction: column; gap: 4px; border-radius: 10px; }
+.step-group.multi { padding: 4px; border: 1px dashed var(--line-strong); background: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
+.step-group.dragging { opacity: .45; }
+.step-group.drop-before { box-shadow: -3px 0 0 var(--accent); }
+.step-group.drop-after { box-shadow: 3px 0 0 var(--accent); }
+.step-par { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text-3); cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1; }
+.step-par::before { content: '∥'; }
+.step-par:hover { background: var(--hover); color: var(--text-2); }
+.step-par.on { background: var(--accent-soft); color: var(--accent-ink); }
+.step-par:focus-visible { outline: none; box-shadow: var(--ring); }

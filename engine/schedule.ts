@@ -28,12 +28,9 @@ function morningProgress(p: Stage, day: number): number {
   return (p.preDoneDays + done) / (p.preDoneDays + p.requiredDays);
 }
 
-/** 아침 판정: 앞 공정이 어제까지 시작했고, 진행률이 1 − 겹침률 이상 */
+/** 아침 판정: 앞 공정 모두(병렬 묶음 뒤면 여럿, docs/30)가 어제까지 시작했고, 진행률이 1 − 겹침률 이상 */
 function isReady(s: Stage, day: number): boolean {
-  const p = s.predecessor;
-  if (!p) return true;
-  if (p.startDay === null || p.startDay >= day) return false;
-  return morningProgress(p, day) >= 1 - (s.overlapRate ?? 0) - EPS;
+  return s.predecessors.every((p, i) => p.startDay !== null && p.startDay < day && morningProgress(p, day) >= 1 - (s.overlaps[i] ?? 0) - EPS);
 }
 
 function insertSorted(queue: Stage[], s: Stage): void {
@@ -57,8 +54,11 @@ export function schedule(stages: Stage[], cal: Calendar, partCount: number, mont
   const monthEndRemaining = Array.from({ length: partCount }, () => new Array<number>(cal.months.length).fill(0));
 
   // 다음 스테이지 연결
-  const successor = new Map<Stage, Stage>();
-  for (const s of stages) if (s.predecessor) successor.set(s.predecessor, s);
+  const successors = new Map<Stage, Stage[]>();
+  for (const s of stages) for (const p of s.predecessors) {
+    if (!successors.has(p)) successors.set(p, []);
+    successors.get(p)!.push(s);
+  }
 
   // 필요 공수 0(이미 끝났거나 외주)인 스테이지는 계획 기간 전에 끝난 것으로 둔다.
   // 나머지는 업데이트 시작일에 들어온다.
@@ -76,7 +76,7 @@ export function schedule(stages: Stage[], cal: Calendar, partCount: number, mont
 
   const ready: Stage[][] = Array.from({ length: partCount }, () => []);
   const remainingByPart = new Array<number>(partCount).fill(0);
-  let toCheck: Stage[] = [];
+  let toCheck = new Set<Stage>();
 
   const markReady = (s: Stage, day: number): void => {
     s.readyDay = day;
@@ -93,9 +93,9 @@ export function schedule(stages: Stage[], cal: Calendar, partCount: number, mont
       }
     }
     // 2. 어제 진행된 스테이지의 다음 스테이지 확인
-    if (toCheck.length) {
+    if (toCheck.size) {
       for (const s of toCheck) if (s.readyDay === null && s.workDoneDay === null && isReady(s, day)) markReady(s, day);
-      toCheck = [];
+      toCheck = new Set();
     }
     // 3. 배정: 파트는 공정 순서대로. 뒤 파트의 오늘 판정은 이미 1·2에서 끝났다.
     const touchedToday: Stage[] = [];
@@ -109,7 +109,7 @@ export function schedule(stages: Stage[], cal: Calendar, partCount: number, mont
         if (s.touchDay !== day) { s.doneMorning = s.done; s.touchDay = day; }
         if (s.startDay === null) {
           s.startDay = day;
-          s.predecessorProgressAtStart = s.predecessor ? morningProgress(s.predecessor, day) : null;
+          s.predecessorProgressAtStart = s.predecessors.length ? morningProgress(s.predecessors[0], day) : null;
         }
         s.done += give;
         available -= give;
@@ -125,8 +125,7 @@ export function schedule(stages: Stage[], cal: Calendar, partCount: number, mont
       if (finished) ready[pi] = queue.filter(s => s.workDoneDay === null);
     }
     for (const s of touchedToday) {
-      const next = successor.get(s);
-      if (next && next.readyDay === null) toCheck.push(next);
+      for (const next of successors.get(s) ?? []) if (next.readyDay === null) toCheck.add(next);
     }
 
     if (cal.isMonthEnd[day]) {
@@ -135,12 +134,12 @@ export function schedule(stages: Stage[], cal: Calendar, partCount: number, mont
     }
   }
 
-  // 완료 제약: 다음 스테이지는 앞 스테이지보다 먼저 끝나지 않는다 (stages는 리소스마다 공정 순서로 들어 있다)
+  // 완료 제약: 다음 스테이지는 앞 스테이지(모두)보다 먼저 끝나지 않는다 (stages는 리소스마다 공정 순서로 들어 있다)
   for (const s of stages) {
     if (s.workDoneDay === null) { s.completionDay = null; continue; }
-    const p = s.predecessor;
-    if (!p) { s.completionDay = s.workDoneDay; continue; }
-    s.completionDay = p.completionDay === null ? null : Math.max(s.workDoneDay, p.completionDay);
+    let c: number | null = s.workDoneDay;
+    for (const p of s.predecessors) c = p.completionDay === null || c === null ? null : Math.max(c, p.completionDay);
+    s.completionDay = c;
   }
 
   return { dailyCapacity, dailyAssigned, monthEndRemaining };

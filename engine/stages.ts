@@ -17,7 +17,11 @@ export interface Stage {
   requiredDays: number;
   /** 이미 끝낸 수량의 공수(작업 진척). 앞 공정 진행률을 셀 때 전체 = 이미 끝낸 몫 + 남은 일 */
   preDoneDays: number;
-  predecessor: Stage | null;
+  /** 앞 공정: 앞 묶음에서 이 리소스가 거치는 단계 모두(docs/30). 한 줄 파이프라인이면 하나 */
+  predecessors: Stage[];
+  /** 앞 공정마다 겹침률(predecessors와 같은 순서) */
+  overlaps: number[];
+  /** 결과 표시용: 첫 앞 공정의 겹침률과 출처 */
   overlapRate: number | null;
   overlapSource: 'FIRST' | 'STEP' | 'PAIR' | 'DEFAULT';
   /** 배정 순서 비교용 */
@@ -82,8 +86,20 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
   }
   for (const list of resourceParts.values()) list.sort((a, b) => partOrder.get(a.part_id)! - partOrder.get(b.part_id)!);
   // 리소스별 파이프라인(docs/28): 고른 파이프라인이 있으면 그 단계 순서, 단계에 없는 파트는 뒤에(파트 표 순서). 없으면 파트 표 순서 그대로
-  const steps = new Map<string, { seq: number; overlap: number | null }>();
-  for (const st of data.pipeline_steps ?? []) steps.set(`${st.pipeline_id}|${st.part_id}`, { seq: st.seq, overlap: st.overlap_rate });
+  // 단계 묶음(docs/30): seq 순서로 보며 with_prev = 1이면 앞 단계와 같은 묶음 번호
+  const steps = new Map<string, { seq: number; overlap: number | null; group: number }>();
+  const byPipe = new Map<string, typeof data.pipeline_steps>();
+  for (const st of data.pipeline_steps ?? []) {
+    if (!byPipe.has(st.pipeline_id)) byPipe.set(st.pipeline_id, []);
+    byPipe.get(st.pipeline_id)!.push(st);
+  }
+  for (const list of byPipe.values()) {
+    let group = 0;
+    list!.sort((a, b) => a.seq - b.seq).forEach((st, i) => {
+      if (i === 0 || !st.with_prev) group += 1;
+      steps.set(`${st.pipeline_id}|${st.part_id}`, { seq: st.seq, overlap: st.overlap_rate, group });
+    });
+  }
   const pipelineOf = new Map(data.resource_types.map(r => [r.resource_type_id, r.pipeline_id ?? null]));
   const stepOf = (rt: string, part: string) => { const p = pipelineOf.get(rt); return p ? steps.get(`${p}|${part}`) : undefined; };
   for (const [rt, list] of resourceParts) {
@@ -115,8 +131,14 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
       if (qty > 0) throw new EngineInputError(`거치는 파트 없음: ${v.resource_type_id}`);
       continue;
     }
-    let prev: Stage | null = null;
+    // 묶음: 파이프라인 단계는 묶음 번호, 그 밖(파이프라인 밖 파트 · 파이프라인 없음)은 파트마다 따로
+    const groupOf = (part: string) => { const st = stepOf(v.resource_type_id, part); return st ? st.group : 1e6 + partOrder.get(part)!; };
+    let prevGroup: Stage[] = [];
+    let curGroup: Stage[] = [];
+    let curKey: number | null = null;
     for (const rp of chain) {
+      const g = groupOf(rp.part_id);
+      if (g !== curKey) { if (curGroup.length) prevGroup = curGroup; curGroup = []; curKey = g; }
       const completed = done.get(`${v.update_id}|${v.resource_type_id}|${rp.part_id}`) ?? 0;
       const own = Math.max(0, qty - v.outsource_qty);
       const remaining = Math.max(0, own - completed);
@@ -124,15 +146,15 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
         * Math.max(0, 1 - v.reuse_rate) * (1 + rp.rework_rate) * (1 + s.buffer_rate);
       const requiredDays = remaining * perUnit;
       const preDoneDays = legacyProgress ? 0 : Math.min(own, Math.max(0, completed)) * perUnit;
-      let overlapRate: number | null = null;
-      let overlapSource: Stage['overlapSource'] = 'FIRST';
-      if (prev) {
-        // 겹침률: 파이프라인 단계에 적은 값 → 파트 쌍 → 기본
-        const step = stepOf(v.resource_type_id, rp.part_id)?.overlap;
-        const pair = overlap.get(`${prev.partId}>${rp.part_id}`);
-        if (step != null) { overlapRate = step; overlapSource = 'STEP'; }
-        else { overlapRate = pair ?? s.default_overlap_rate; overlapSource = pair == null ? 'DEFAULT' : 'PAIR'; }
-      }
+      // 겹침률(앞 공정마다): 파이프라인 단계에 적은 값 → 파트 쌍 → 기본
+      const step = stepOf(v.resource_type_id, rp.part_id)?.overlap;
+      const links = prevGroup.map(p => {
+        if (step != null) return { rate: step, source: 'STEP' as const };
+        const pair = overlap.get(`${p.partId}>${rp.part_id}`);
+        return { rate: pair ?? s.default_overlap_rate, source: pair == null ? 'DEFAULT' as const : 'PAIR' as const };
+      });
+      const overlapRate: number | null = links[0]?.rate ?? null;
+      const overlapSource: Stage['overlapSource'] = links[0]?.source ?? 'FIRST';
       const stage: Stage = {
         index: stages.length,
         updateId: v.update_id,
@@ -141,7 +163,8 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
         partIndex: partIndex.get(rp.part_id)!,
         requiredDays: requiredDays < EPS ? 0 : requiredDays,
         preDoneDays,
-        predecessor: prev,
+        predecessors: prevGroup,
+        overlaps: links.map(l => l.rate),
         overlapRate,
         overlapSource,
         // 업데이트 우선순위 → 출시일(없으면 뒤) → 업데이트 표시 순서 → 필수 먼저 → 업데이트 안 순위 → 리소스 종류 순서
@@ -164,7 +187,7 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
         predecessorProgressAtStart: null,
       };
       stages.push(stage);
-      prev = stage;
+      curGroup.push(stage);
     }
   }
   return stages;
