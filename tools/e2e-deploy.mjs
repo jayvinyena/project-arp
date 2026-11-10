@@ -55,6 +55,15 @@ await withBrowser(async (cdp, base) => {
   let swOnline = false;
   try { await cdp.waitUntil("document.querySelector('table.grid.vol') && navigator.serviceWorker.controller", 15000); swOnline = true; } catch { /* 실패 */ }
   check('서비스 워커가 켜진 채 /app/index.html?sample=… 로 열어도 예시가 열린다', swOnline, await cdp.eval('location.pathname + location.search'));
+
+  // 7. 새 버전 알림 띠: 새 서비스 워커가 넘겨받았다는 신호(arp-update)를 받으면 띠, "나중에"로 닫힘, 가로 넘침 없음
+  await cdp.eval("window.dispatchEvent(new Event('arp-update'))");
+  await sleep(200);
+  const banner = await cdp.eval("document.querySelector('.update-banner')?.textContent ?? ''");
+  const fits = await cdp.eval("document.documentElement.scrollWidth <= window.innerWidth + 1");
+  await cdp.eval("[...document.querySelectorAll('.update-banner button')].find(b => b.textContent === '나중에').click()");
+  await sleep(150);
+  check('새 버전 알림 띠: 새로 고침 · 나중에(닫힘)', banner.includes('새 버전이 있습니다') && banner.includes('새로 고침') && fits && !(await cdp.eval("!!document.querySelector('.update-banner')")), banner.slice(0, 40));
 }, { build: !process.argv.includes('--no-build'), server: 'pages', port: Number(process.env.ARP_E2E_PORT) || 4318 });
 
 const failed = results.filter(x => !x).length;

@@ -38,7 +38,7 @@ export const IMPORT_SPEC: SpecSheet[] = [
     ],
   },
   {
-    key: '01_Part_Master', ko: '파트', required: true, desc: '작업 공정(원화 · 모델링 등). 순서가 곧 공정 순서입니다.',
+    key: '01_Part_Master', ko: '파트', required: true, desc: '작업 공정(원화 · 모델링 등) 목록. 순서는 화면에 보이는 순서입니다. 가져오면 리소스가 거치는 파트를 이 순서로 이은 "기본" 파이프라인이 만들어지고, 리소스마다 다른 공정 순서 · 병렬 단계는 앱의 기준 정보 › 공정 순서 · 파이프라인에서 정합니다.',
     columns: [
       { key: 'PART_ID', ko: '파트 ID', required: true, format: ID, desc: '다른 시트에서 파트를 가리키는 값(예: ART)' },
       { key: 'PART_NAME', ko: '파트 이름', required: true, format: '글자', desc: '화면에 표시할 이름' },
@@ -312,6 +312,9 @@ function exampleRows(now: Date): Record<string, Cell[][]> {
 }
 
 /** 양식 파일 시트(안내 + 데이터 시트). example = 예시 데이터를 채운다 */
+/** 편집용 엑셀(가져오기 양식)에 들어가지 않는 것(docs/32 2): 왕복하면 새 파일에서 빠진다 */
+export const TEMPLATE_LEAVES_OUT = '파이프라인(리소스별 공정 순서 · 병렬 단계 · 단계 겹침률) · 에셋 · 배치 · 작업자 명단 · 소식 · 시나리오 · 변경 이력은 들어 있지 않습니다(가져오면 파이프라인은 파트 순서의 "기본" 하나가 됩니다).';
+
 export function templateBook(options: {
   example?: boolean; now?: Date;
   /** 지금 프로젝트를 내보낼 때: 시트 키(01_Part_Master …) → 규격 칸 순서의 행 */
@@ -323,7 +326,7 @@ export function templateBook(options: {
   const freezeRows: Record<string, number> = { '안내': 0 };
   const guide: (Cell | StyledCell)[][] = [
     [{ v: 'ARP 가져오기 양식', s: 'title' }],
-    [options.data ? `프로젝트 "${options.source ?? ''}"에서 내보낸 양식입니다(${now.toISOString().slice(0, 10)}). 엑셀에서 수정한 뒤 다시 가져오면 새 프로젝트 파일이 됩니다. 시나리오 · 변경 이력은 들어 있지 않습니다.`
+    [options.data ? `프로젝트 "${options.source ?? ''}"에서 내보낸 양식입니다(${now.toISOString().slice(0, 10)}). 엑셀에서 수정한 뒤 다시 가져오면 새 프로젝트 파일이 됩니다. ${TEMPLATE_LEAVES_OUT}`
       : options.example ? '예시 데이터가 들어 있는 양식입니다. 값을 바꿔 그대로 가져올 수 있습니다.' : '빈 양식입니다. 시트마다 3행부터 데이터를 입력합니다.'],
     [],
     [{ v: '사용 방법', s: 'sub' }],

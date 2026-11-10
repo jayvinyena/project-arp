@@ -65,7 +65,8 @@ function nextScenarioId(db: SqlDb): string {
 interface Change { op: 'SET' | 'INSERT' | 'DELETE'; target: EngineTable; target_key: string; field: string | null; value: unknown }
 
 /** 동작 → 변경 줄과 사람이 읽는 이름. 지금 원본 값을 기준으로 계산한다(원본이 바뀌면 X02로 알린다) */
-function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[] } {
+/** 시나리오 동작 → 변경 목록(시험에서도 쓴다) */
+export function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[] } {
   const partName = (id: string) => String(db.get('SELECT name FROM parts WHERE part_id = ?', [id])?.name ?? fail('없는 파트입니다.'));
   const updateName = (id: string) => String(db.get('SELECT name FROM updates WHERE update_id = ?', [id])?.name ?? fail('없는 업데이트입니다.'));
   const months = (from: string, to: string) => {
@@ -221,23 +222,42 @@ function expand(db: SqlDb, a: ScenarioAction): { label: string; changes: Change[
     }
     case 'overlap': {
       if (!(a.rate >= 0 && a.rate <= 1)) fail('겹침률은 0–100%입니다.');
+      // 파이프라인 단계에 직접 적은 겹침률은 파트 쌍 · 기본보다 먼저라(docs/28 · 32) 그 단계 값도 함께 바꾼다
+      const stepSet = (rows: Record<string, unknown>[]) => rows.map(s => ({ op: 'SET' as const, target: 'pipeline_steps' as const, target_key: `${s.pipeline_id}|${s.part_id}`, field: 'overlap_rate', value: a.rate }));
+      const stepNote = (n: number) => (n ? ` · 파이프라인 단계 ${n}곳 포함` : '');
       if (a.fromPartId && a.toPartId) {
         const key = `${a.fromPartId}|${a.toPartId}`;
         const exists = db.get('SELECT 1 AS ok FROM part_overlaps WHERE from_part_id = ? AND to_part_id = ?', [a.fromPartId, a.toPartId]);
+        // 이 쌍을 쓰는 단계: 앞 묶음에 from이 있는 to 단계 중 겹침률을 직접 적은 것
+        const steps = db.all('SELECT pipeline_id, part_id, seq, with_prev, overlap_rate FROM pipeline_steps ORDER BY pipeline_id, seq');
+        const hit: Record<string, unknown>[] = [];
+        const byPipe = new Map<string, Record<string, unknown>[]>();
+        for (const s of steps) { const k = String(s.pipeline_id); if (!byPipe.has(k)) byPipe.set(k, []); byPipe.get(k)!.push(s); }
+        for (const list of byPipe.values()) {
+          const groups: Record<string, unknown>[][] = [];
+          list.forEach((s, i) => { if (i === 0 || !Number(s.with_prev ?? 0)) groups.push([]); groups[groups.length - 1].push(s); });
+          groups.forEach((g, gi) => {
+            if (gi === 0 || !groups[gi - 1].some(s => s.part_id === a.fromPartId)) return;
+            for (const s of g) if (s.part_id === a.toPartId && s.overlap_rate != null) hit.push(s);
+          });
+        }
         return {
-          label: `겹침률 ${partName(a.fromPartId)} → ${partName(a.toPartId)} ${Math.round(a.rate * 100)}%`,
+          label: `겹침률 ${partName(a.fromPartId)} → ${partName(a.toPartId)} ${Math.round(a.rate * 100)}%${stepNote(hit.length)}`,
           changes: [exists
             ? { op: 'SET', target: 'part_overlaps', target_key: key, field: 'overlap_rate', value: a.rate }
-            : { op: 'INSERT', target: 'part_overlaps', target_key: key, field: null, value: { from_part_id: a.fromPartId, to_part_id: a.toPartId, overlap_rate: a.rate } }],
+            : { op: 'INSERT', target: 'part_overlaps', target_key: key, field: null, value: { from_part_id: a.fromPartId, to_part_id: a.toPartId, overlap_rate: a.rate } },
+          ...stepSet(hit)],
         };
       }
-      // 모든 파트 쌍: 기본값과 따로 정한 쌍 모두
+      // 모든 겹침률: 기본값 · 따로 정한 파트 쌍 · 겹침률을 적은 파이프라인 단계 모두
       const pairs = db.all('SELECT from_part_id, to_part_id FROM part_overlaps');
+      const own = db.all('SELECT pipeline_id, part_id FROM pipeline_steps WHERE overlap_rate IS NOT NULL ORDER BY pipeline_id, seq');
       return {
-        label: `겹침률 모두 ${Math.round(a.rate * 100)}%`,
+        label: `겹침률 모두 ${Math.round(a.rate * 100)}%${stepNote(own.length)}`,
         changes: [
           { op: 'SET', target: 'settings', target_key: 'settings', field: 'default_overlap_rate', value: a.rate },
           ...pairs.map(p => ({ op: 'SET' as const, target: 'part_overlaps' as const, target_key: `${p.from_part_id}|${p.to_part_id}`, field: 'overlap_rate', value: a.rate })),
+          ...stepSet(own),
         ],
       };
     }

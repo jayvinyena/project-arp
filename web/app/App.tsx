@@ -1,4 +1,5 @@
 // 앱 틀: 시작 화면, 옆 메뉴, 파일 열기·저장(자동 저장, 편집 중 표시, 저장 전 충돌 확인)
+import { TEMPLATE_LEAVES_OUT } from '../../core/import-spec.ts';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { rpc, DEVICE } from './lib/rpc.ts';
@@ -502,7 +503,7 @@ export function App() {
       const { bytes } = await rpc.exportTemplate();
       const base = (view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_');
       download(bytes, `${base} 편집용 ${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      showToast('편집용 엑셀을 내려받았습니다. 수정한 뒤 시작 화면 "엑셀로 가져오기"로 가져오면 새 프로젝트 파일이 됩니다.');
+      showToast('편집용 엑셀을 내려받았습니다. 다시 가져오면 새 프로젝트 파일이 되고, 파이프라인 · 에셋 · 작업자 · 소식 · 이력은 빠집니다(엑셀 "안내" 시트 참고).');
     } catch (error) {
       showToast(`내보내지 못했습니다: ${(error as Error).message}`);
     }
@@ -878,7 +879,7 @@ export function App() {
             <button class="btn sm" title="이 파일을 닫고 시작 화면으로 돌아갑니다" onClick={() => void close()}>파일 닫기</button>
           </div>
           <button class="btn sm ghost" style="justify-content: flex-start" title="업데이트 전망 · 파트 부하 등 보고용 표(다시 가져올 수 없음)" onClick={() => void exportXlsx()}><IconDownload />보고용 엑셀 내보내기</button>
-          {!file.viewer && <button class="btn sm ghost" style="justify-content: flex-start" title="가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져올 수 있음" onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>}
+          {!file.viewer && <button class="btn sm ghost" style="justify-content: flex-start" title={`가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져오면 새 프로젝트 파일이 됩니다. ${TEMPLATE_LEAVES_OUT}`} onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>}
           <div class="small faint editor">{file.viewer ? `보는 사람 ${me}` : `편집자 ${me}`}</div>
         </div>
       </aside>

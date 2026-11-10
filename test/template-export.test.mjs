@@ -95,3 +95,10 @@ test('왕복(실제 운영 파일, 있으면): 같은 완료 예정', { skip: !e
   for (const m of ['MIN', 'TARGET', 'STRETCH']) assert.deepEqual(completions(back, m), completions(db, m), m);
   raw.close(); raw2.close();
 });
+
+test('편집용 엑셀 "안내" 시트에 빠지는 것(파이프라인 · 에셋 · 작업자 · 소식 · 이력)을 적는다(docs/32 2)', () => {
+  const { db } = open(samples.normal);
+  const guide = projectTemplateBook(db).sheets['안내'].flat().map(c => (c && typeof c === 'object' ? c.v : c)).join('\n');
+  for (const w of ['파이프라인', '에셋', '작업자 명단', '소식', '변경 이력']) assert.ok(guide.includes(w), w);
+  assert.ok(!guide.includes('순서가 곧 공정 순서'), '파트 순서는 보기 순서(docs/29)');
+});

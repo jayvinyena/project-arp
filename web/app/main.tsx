@@ -3,6 +3,7 @@ import './styles.css';
 import { render, Component } from 'preact';
 import type { ComponentChildren } from 'preact';
 import { App } from './App.tsx';
+import { UpdateBanner } from './ui/UpdateBanner.tsx';
 
 // 캡처·확인용: ?theme=dark|light
 const theme = new URLSearchParams(location.search).get('theme');
@@ -38,9 +39,19 @@ const report = (message: string) => window.dispatchEvent(new CustomEvent('arp:er
 window.addEventListener('error', e => report(e.message || '알 수 없는 오류'));
 window.addEventListener('unhandledrejection', e => report(String((e.reason as Error)?.message ?? e.reason)));
 
-render(<ErrorBoundary><App /></ErrorBoundary>, document.getElementById('root')!);
+render(<ErrorBoundary><App /><UpdateBanner /></ErrorBoundary>, document.getElementById('root')!);
 
 // 설치형 앱: 배포 빌드에서만 서비스 워커를 등록한다(개발 서버에서는 캐시가 방해된다)
 if (import.meta.env.PROD && 'serviceWorker' in navigator && !new URLSearchParams(location.search).has('nosw')) {
-  window.addEventListener('load', () => { void navigator.serviceWorker.register('./sw.js').catch(e => console.warn('[ARP] 서비스 워커 등록 실패', e)); });
+  // 새 버전 알림(docs/32 5): 처음 설치가 아니라(이미 서비스 워커가 있던 탭) 새 서비스 워커가 넘겨받으면 띠를 띄운다
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) window.dispatchEvent(new Event('arp-update')); });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      // 탭을 오래 열어 두어도 새 버전을 알 수 있게: 30분마다 · 탭으로 돌아올 때 확인
+      const check = () => { void reg.update().catch(() => { /* 오프라인 */ }); };
+      window.setInterval(check, 30 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    }).catch(e => console.warn('[ARP] 서비스 워커 등록 실패', e));
+  });
 }

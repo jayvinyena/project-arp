@@ -233,3 +233,17 @@ test('병렬 묶음: 같은 묶음 파트끼리는 앞 공정 경고(A04 · 작�
   // 보기: 파이프라인 묶음이 에셋 화면에 간다
   assert.deepEqual(assetsView(e.db, null).pipelines.find(p => p.pipelineId === pid).groups.at(-1), ['ANIMATION', 'FX']);
 });
+
+test('시뮬레이션 겹침률 바꾸기는 파이프라인 단계에 적은 겹침률에도 닿는다(docs/32 1)', async () => {
+  const { expand: buildAction } = await import('../core/scenarios.ts');
+  const t = open('normal');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  apply({ kind: 'stepOverlap', pipelineId: 'L00', partId: 'ANIMATION', rate: 0.1 });
+  const all = buildAction(t.db, { kind: 'overlap', rate: 0.6 });
+  assert.match(all.label, /파이프라인 단계 1곳 포함/);
+  assert.ok(all.changes.some(c => c.target === 'pipeline_steps' && c.target_key === 'L00|ANIMATION' && c.value === 0.6));
+  const pair = buildAction(t.db, { kind: 'overlap', rate: 0.6, fromPartId: 'MODELING', toPartId: 'ANIMATION' });
+  assert.ok(pair.changes.some(c => c.target === 'pipeline_steps' && c.target_key === 'L00|ANIMATION'), '모델링 → 애니 쌍을 쓰는 단계');
+  const other = buildAction(t.db, { kind: 'overlap', rate: 0.6, fromPartId: 'CONCEPT', toPartId: 'MODELING' });
+  assert.ok(!other.changes.some(c => c.target === 'pipeline_steps'), '단계 값이 없는 쌍은 파트 쌍만');
+});

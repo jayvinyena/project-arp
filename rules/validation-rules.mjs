@@ -58,7 +58,7 @@ export const RULE_TABLES = {
   C01: ['parts', 'capacity', 'settings'], C02: ['capacity'],
   C03: ['parts', 'resource_parts', 'volumes', 'updates', 'capacity', 'settings'],
   T01: ['type_templates'],
-  X01: ['scenario_changes', 'part_overlaps', 'resource_parts', 'efforts', 'effort_mix', 'updates', 'volumes', 'capacity'],
+  X01: ['scenario_changes', 'part_overlaps', 'pipeline_steps', 'resource_parts', 'efforts', 'effort_mix', 'updates', 'volumes', 'capacity'],
   X02: ['scenarios', 'change_log'],
 };
 
@@ -360,6 +360,7 @@ export const RULES = [
       FROM scenario_changes sc WHERE sc.op IN ('SET', 'DELETE') AND NOT (
            sc.target = 'settings'
         OR (sc.target = 'part_overlaps'  AND EXISTS (SELECT 1 FROM part_overlaps  x WHERE x.from_part_id || '|' || x.to_part_id = sc.target_key))
+        OR (sc.target = 'pipeline_steps' AND EXISTS (SELECT 1 FROM pipeline_steps x WHERE x.pipeline_id || '|' || x.part_id = sc.target_key))
         OR (sc.target = 'resource_parts' AND EXISTS (SELECT 1 FROM resource_parts x WHERE x.resource_type_id || '|' || x.part_id = sc.target_key))
         OR (sc.target = 'efforts'        AND EXISTS (SELECT 1 FROM efforts        x WHERE x.resource_type_id || '|' || x.part_id || '|' || x.profile_id = sc.target_key))
         OR (sc.target = 'effort_mix'     AND EXISTS (SELECT 1 FROM effort_mix     x WHERE x.part_id || '|' || x.profile_id = sc.target_key))

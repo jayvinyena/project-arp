@@ -88,8 +88,8 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
 npm run check                             # 형식 검사(TypeScript, 오류 0)
-npm test                                  # 검사 172개
-npm run e2e                               # 크롬 시험 255개(동시 3개, 1분 안팎): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 21 · 보기 모드 · 소식 11 · 업데이트 계획 14 · 작업 진척 5 · 에셋 24 · 제작 리스트 가져오기 · 거르기 32 · 현황판 15 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 공정 순서 · 파이프라인 21 · 배포 11
+npm test                                  # 검사 174개
+npm run e2e                               # 크롬 시험 256개(동시 3개, 1분 안팎, 시간 초과로 멈춘 묶음은 혼자 한 번 더): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 21 · 보기 모드 · 소식 11 · 업데이트 계획 14 · 작업 진척 5 · 에셋 24 · 제작 리스트 가져오기 · 거르기 32 · 현황판 15 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 공정 순서 · 파이프라인 21 · 배포 12
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)
