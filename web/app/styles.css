@@ -1438,3 +1438,16 @@ table.grid.setup-parts td.part-pipes { color: var(--text-2); white-space: nowrap
 .step-par:hover { background: var(--hover); color: var(--text-2); }
 .step-par.on { background: var(--accent-soft); color: var(--accent-ink); }
 .step-par:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* 작업자 가져오기(docs/31): 담당에서 찾기 · 붙여넣기 판 */
+.people-head-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.people-head-tools .btn .people-chip-n { margin-left: 4px; }
+.people-import { margin: 4px 0 12px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-2); display: grid; gap: 10px; }
+.people-import-head { display: flex; align-items: flex-start; gap: 10px; }
+.people-import-head > b { white-space: nowrap; padding-top: 4px; }
+.people-import-head > .small { flex: 1; padding-top: 5px; }
+.people-paste { width: 100%; height: auto; min-height: 96px; padding: 8px 10px; font-family: var(--mono, ui-monospace, monospace); font-size: 12px; resize: vertical; }
+table.grid.people-import-table tr.row.off td { opacity: .55; }
+table.grid.people-import-table td .field.ghost-field { width: 100%; }
+.people-team-miss, .people-problem { display: block; margin-top: 2px; }
+@media (max-width: 640px) { .people-head-tools { justify-content: flex-start; } .people-import-head { flex-wrap: wrap; } }

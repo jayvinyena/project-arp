@@ -1,7 +1,8 @@
 // 3단계 요약: 업데이트 계획(모든 업데이트 · 같은 인력 · 전망 범위), 유형 템플릿, 인력, 업데이트 상세.
 import type { SqlDb } from './db.ts';
 import type { Person, TeamOption } from './people.ts';
-import { peopleList, teamOptions } from './people.ts';
+import { peopleList, teamOptions, assigneeCandidates } from './people.ts';
+import type { AssigneeCandidate } from './people.ts';
 import { partGroupsFor, pipelinesList } from './pipelines.ts';
 import type { PipelineInfo } from './pipelines.ts';
 import type { PlanMode, PlanResult, UpdateStatus } from '../engine/types.ts';
@@ -239,6 +240,8 @@ export interface CapacityView {
   horizon: { start: string; end: string };
   /** 작업자 명단(계산에는 쓰지 않음) */
   people: Person[];
+  /** 명단에 없는 에셋 담당(담당에서 찾기, docs/31) */
+  candidates: AssigneeCandidate[];
   /** 소속팀 목록: 파트 + 지원 팀 */
   teams: TeamOption[];
   months: string[];
@@ -260,7 +263,7 @@ export function capacityView(db: SqlDb): CapacityView {
       } : null;
     }),
   }));
-  return { people: peopleList(db), teams: teamOptions(db), horizon: { start: String(s.a ?? ''), end: String(s.b ?? '') }, months, parts };
+  return { people: peopleList(db), candidates: assigneeCandidates(db), teams: teamOptions(db), horizon: { start: String(s.a ?? ''), end: String(s.b ?? '') }, months, parts };
 }
 
 // ───────── 실적 ─────────

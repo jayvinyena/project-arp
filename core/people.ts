@@ -3,16 +3,21 @@
 import type { SqlDb } from './db.ts';
 import type { EditContext, EditResult } from './edits.ts';
 import { log, nextId, fail } from './edits.ts';
+import { nameKey } from './people-paste.ts';
 
 export type PersonField = 'name' | 'team' | 'email' | 'note' | 'active';
+export interface NewPerson { name: string; team?: string | null; email?: string | null; note?: string | null }
 export type PeopleEdit =
   | { kind: 'createPerson'; name: string; team?: string | null; email?: string | null; note?: string | null }
-  | { kind: 'personField'; personId: string; field: PersonField; value: string | null }
+  /** 여러 명 한 번에(담당에서 찾기 · 붙여넣기, docs/31). 이미 있는 이름은 건너뛴다. newTeams = 먼저 만들 지원 팀, fillEmails = 이미 있는 사람의 빈 이메일 채우기 */
+  | { kind: 'createPeople'; people: NewPerson[]; newTeams?: string[]; fillEmails?: { personId: string; email: string }[] }
+  /** alsoAssignee: 이름을 바꿀 때 같은 이름의 에셋 담당도 함께(docs/31) */
+  | { kind: 'personField'; personId: string; field: PersonField; value: string | null; alsoAssignee?: boolean }
   | { kind: 'deletePerson'; personId: string }
   /** 지원 팀(PM · 기획 등 파트가 아닌 팀). 파트는 기준 정보에서 */
   | { kind: 'createTeam'; name: string }
   | { kind: 'deleteTeam'; teamId: string };
-export const PEOPLE_EDIT_KINDS = new Set<string>(['createPerson', 'personField', 'deletePerson', 'createTeam', 'deleteTeam']);
+export const PEOPLE_EDIT_KINDS = new Set<string>(['createPerson', 'createPeople', 'personField', 'deletePerson', 'createTeam', 'deleteTeam']);
 
 /** 소속팀으로 고를 수 있는 것: 파트(공정 순) + 지원 팀. used = 그 팀 작업자 수 */
 export interface TeamOption { name: string; kind: 'part' | 'support'; teamId: string | null; active: boolean; used: number }
@@ -30,18 +35,54 @@ function checkTeam(db: SqlDb, team: string | null): string | null {
   return team;
 }
 
-export interface Person { personId: string; name: string; team: string | null; email: string | null; note: string | null; active: boolean }
+/** assigned = 이 이름이 담당으로 적힌 에셋 칸 수(이름 바꾸기 때 함께 바꿀지 묻는다) */
+export interface Person { personId: string; name: string; team: string | null; email: string | null; note: string | null; active: boolean; assigned: number }
+
+/** 에셋 담당 이름별 칸 수(이름 같음 판정 키로) */
+function assigneeCounts(db: SqlDb): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of db.all('SELECT assignee, count(*) AS n FROM asset_parts WHERE assignee IS NOT NULL GROUP BY assignee')) {
+    const k = nameKey(String(r.assignee));
+    if (k) out.set(k, (out.get(k) ?? 0) + Number(r.n));
+  }
+  return out;
+}
+
+/** 명단에 없는 에셋 담당(docs/31 A): 이름(가장 많이 쓴 표기) · 소속팀 제안(가장 많이 맡은 사용 중 파트) · 맡은 칸 수 · 파트별 수 */
+export interface AssigneeCandidate { name: string; team: string | null; assets: number; parts: { name: string; n: number }[] }
+export function assigneeCandidates(db: SqlDb): AssigneeCandidate[] {
+  const known = new Set(db.all('SELECT name FROM people').map(r => nameKey(String(r.name))));
+  const by = new Map<string, { spell: Map<string, number>; parts: Map<string, number>; n: number }>();
+  for (const r of db.all(`SELECT ap.assignee, p.name AS part, p.active, count(*) AS n FROM asset_parts ap JOIN parts p ON p.part_id = ap.part_id
+      WHERE ap.assignee IS NOT NULL GROUP BY ap.assignee, p.part_id ORDER BY p.sort_order`)) {
+    const raw = String(r.assignee).trim().replace(/\s+/g, ' ');
+    const k = nameKey(raw);
+    if (!k || known.has(k)) continue;
+    if (!by.has(k)) by.set(k, { spell: new Map(), parts: new Map(), n: 0 });
+    const x = by.get(k)!;
+    const n = Number(r.n);
+    x.n += n;
+    x.spell.set(raw, (x.spell.get(raw) ?? 0) + n);
+    if (Number(r.active) === 1) x.parts.set(String(r.part), (x.parts.get(String(r.part)) ?? 0) + n);
+  }
+  const top = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return [...by.values()].map(x => ({
+    name: top(x.spell)!, team: top(x.parts), assets: x.n,
+    parts: [...x.parts].map(([name, n]) => ({ name, n })),
+  })).sort((a, b) => b.assets - a.assets || a.name.localeCompare(b.name, 'ko'));
+}
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const clean = (v: string | null | undefined) => { const t = (v ?? '').trim(); return t ? t : null; };
 
 /** 소속팀 순: 파트(공정 순) → 지원 팀(더한 순) → 목록에 없는 값 → 소속팀 없음. 팀 안에서는 더한 순 */
 export function peopleList(db: SqlDb): Person[] {
+  const counts = assigneeCounts(db);
   return db.all(`SELECT x.* FROM people x LEFT JOIN parts p ON p.name = x.team LEFT JOIN teams t ON t.name = x.team
       ORDER BY CASE WHEN x.team IS NULL OR x.team = '' THEN 3 WHEN p.part_id IS NOT NULL THEN 0 WHEN t.team_id IS NOT NULL THEN 1 ELSE 2 END,
         p.sort_order, t.sort_order, x.team, x.sort_order, x.person_id`).map(r => ({
     personId: String(r.person_id), name: String(r.name), team: (r.team as string) ?? null, email: (r.email as string) ?? null,
-    note: (r.note as string) ?? null, active: Number(r.active) === 1,
+    note: (r.note as string) ?? null, active: Number(r.active) === 1, assigned: counts.get(nameKey(String(r.name))) ?? 0,
   }));
 }
 
@@ -62,6 +103,34 @@ export function applyPeopleEdit(db: SqlDb, edit: PeopleEdit, ctx: EditContext): 
       log(db, ctx, 'INSERT', 'people', id, null, undefined, row);
       return { changed: true, createdId: id };
     }
+    case 'createPeople': {
+      // 지원 팀 먼저(이미 있거나 파트 이름이면 건너뜀), 그다음 사람(이미 있는 이름 · 겹친 이름은 건너뜀), 마지막으로 빈 이메일 채우기
+      let teams = 0;
+      for (const t of edit.newTeams ?? []) {
+        const name = clean(t);
+        if (!name || db.get('SELECT 1 AS ok FROM parts WHERE name = ?', [name]) || db.get('SELECT 1 AS ok FROM teams WHERE name = ?', [name])) continue;
+        applyPeopleEdit(db, { kind: 'createTeam', name }, ctx);
+        teams += 1;
+      }
+      const known = new Set(db.all('SELECT name FROM people').map(r => nameKey(String(r.name))));
+      let added = 0;
+      let skipped = 0;
+      for (const p of edit.people) {
+        const k = nameKey(p.name ?? '');
+        if (!k || known.has(k)) { skipped += 1; continue; }
+        applyPeopleEdit(db, { kind: 'createPerson', ...p, name: p.name.trim().replace(/\s+/g, ' ') }, ctx);
+        known.add(k);
+        added += 1;
+      }
+      let filled = 0;
+      for (const f of edit.fillEmails ?? []) {
+        const cur = db.get('SELECT email FROM people WHERE person_id = ?', [f.personId]);
+        if (!cur || cur.email) continue;
+        if (applyPeopleEdit(db, { kind: 'personField', personId: f.personId, field: 'email', value: f.email }, ctx).changed) filled += 1;
+      }
+      const note = [added ? `${added}명 더함` : '', filled ? `이메일 ${filled}명 채움` : '', teams ? `지원 팀 ${teams}개 만듦` : '', skipped ? `이미 있는 ${skipped}명 건너뜀` : ''].filter(Boolean).join(' · ');
+      return { changed: added + filled + teams > 0, ...(note ? { note } : {}) } as EditResult;
+    }
     case 'personField': {
       const before = db.get('SELECT * FROM people WHERE person_id = ?', [edit.personId]) ?? fail('없는 작업자입니다.');
       let value: string | number | null;
@@ -77,6 +146,15 @@ export function applyPeopleEdit(db: SqlDb, edit: PeopleEdit, ctx: EditContext): 
       if (old === value || (old != null && value != null && String(old) === String(value))) return { changed: false };
       db.run(`UPDATE people SET ${edit.field} = ? WHERE person_id = ?`, [value, edit.personId]);
       log(db, ctx, 'UPDATE', 'people', edit.personId, edit.field, old, value);
+      if (edit.field === 'name' && edit.alsoAssignee && old) {
+        // 같은 이름(공백 · 대소문자 무시)의 에셋 담당도 새 이름으로 — 같은 이력 묶음이라 한 번에 되돌린다
+        const k = nameKey(String(old));
+        for (const r of db.all('SELECT asset_id, part_id, assignee FROM asset_parts WHERE assignee IS NOT NULL')) {
+          if (nameKey(String(r.assignee)) !== k || r.assignee === value) continue;
+          db.run('UPDATE asset_parts SET assignee = ? WHERE asset_id = ? AND part_id = ?', [value, r.asset_id, r.part_id]);
+          log(db, ctx, 'UPDATE', 'asset_parts', `${r.asset_id}|${r.part_id}`, 'assignee', r.assignee, value);
+        }
+      }
       return { changed: true };
     }
     case 'deletePerson': {

@@ -1,5 +1,6 @@
 // 팀 제작 리스트 형식 가져오기(docs/20-asset-management.md 19절) · 에셋 세부 분류 · 속성.
 // 시트는 가상의 예시다(실제 사내 자료는 넣지 않는다).
+import { assigneeCandidates } from '../core/people.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFileSync } from 'node:fs';
@@ -100,6 +101,7 @@ test('가져오기: 에셋 · 세부 분류 · 리소스명 · Jira · 기획서
   assert.equal(r.volumesAdded, 1, '미니 1에 신규 캐릭터 물량을 더함');
   assert.equal(r.jiraBaseSet, true);
   assert.deepEqual(r.skipped.map(x => [x.sheet, x.row, x.reason]), [['캐릭터', 6, '마일스톤을 고르지 않음']]);
+  assert.equal(r.newAssignees, assigneeCandidates(t.db).length, '명단에 없는 담당 수(작업자 › 담당에서 찾기, docs/31)');
 
   const v = assetsView(t.db, 'LAUNCH');
   const wind = v.assets.find(a => a.name === '바람 기사');

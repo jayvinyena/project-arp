@@ -107,3 +107,80 @@ test('구조 v9: 지금 적힌 소속팀 중 파트가 아닌 것은 지원 팀�
   assert.deepEqual(teamOptions(t.db).map(x => x.name), ['원화', '모델링', '애니메이션', 'FX', 'PM', '기획']);
 });
 
+
+// ───────── 작업자 가져오기(docs/31) ─────────
+import { parsePeopleText, splitTable } from '../core/people-paste.ts';
+import { assigneeCandidates } from '../core/people.ts';
+
+test('붙여넣기 해석: 머리글로 열 맞추기 · 머리글 없으면 순서대로 · CSV 따옴표 · 상태(새로 · 있음 · 이메일 채움 · 겹침 · 고칠 것)', () => {
+  const teams = ['원화', '모델링', 'PM'];
+  const people = [{ personId: 'P001', name: '김원화', email: null }, { personId: 'P002', name: '박모델', email: 'park@example.com' }];
+  // 엑셀 · 시트 복사(탭), 머리글 순서가 다름 · 영문 머리글
+  const a = parsePeopleText('Email\tName\tTeam\tNotes\nhana@example.com\t 김하나 \t원화\t신규\nwon@example.com\t김원화\t원화\t\nx@y\t최틀림\t\t\n\t김하나\t\t\n\t정기획\t기획\t', teams, people);
+  assert.equal(a.header, true);
+  assert.deepEqual(a.columns, { name: 1, team: 2, email: 0, note: 3 });
+  assert.deepEqual(a.rows.map(r => [r.line, r.name, r.status, r.team, r.teamKnown]), [
+    [2, '김하나', 'new', '원화', true],
+    [3, '김원화', 'fill', '원화', true],
+    [4, '최틀림', 'bad', null, true],
+    [5, '김하나', 'dup', null, true],
+    [6, '정기획', 'new', '기획', false],
+  ]);
+  assert.equal(a.rows[1].personId, 'P001');
+  // 머리글 없음: 이름 · 팀 · 이메일 · 메모, 공백 · 대소문자 무시로 이미 있음
+  const b = parsePeopleText('박모델\t모델링\nlee  one\tpm', teams, people);
+  assert.equal(b.header, false);
+  assert.deepEqual(b.rows.map(r => [r.name, r.status, r.team]), [['박모델', 'exists', '모델링'], ['lee one', 'new', 'PM']]);
+  // CSV(Jira 내보내기를 그대로): 쉼표 · 따옴표 안 쉼표 · 줄바꿈
+  assert.deepEqual(splitTable('Assignee,Summary\n"Kim, Hana","a\nb"\n'), [['Assignee', 'Summary'], ['Kim, Hana', 'a\nb']]);
+  assert.deepEqual(parsePeopleText('Assignee,Summary\n"Kim, Hana",x\n"Kim, Hana",y', teams, people).rows.map(r => [r.name, r.status]), [['Kim, Hana', 'new'], ['Kim, Hana', 'dup']]);
+});
+
+test('담당에서 찾기: 명단에 없는 담당 · 가장 많이 맡은 파트를 소속팀으로 제안 · 여러 명 한 번에 더하고 한 번에 되돌림', () => {
+  const t = open('assets');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  assert.deepEqual(assigneeCandidates(t.db), [], '예시 파일은 담당이 모두 명단에 있다');
+  // 명단에 없는 담당: 정모델(모델링 2 · 원화 1), " 정모델 " 표기도 같은 사람
+  const ap = t.db.all("SELECT asset_id, part_id FROM asset_parts ORDER BY asset_id, part_id").map(r => [String(r.asset_id), String(r.part_id)]);
+  const assetsOf = part => [...new Set(ap.filter(x => x[1] === part).map(x => x[0]))];
+  const mod = assetsOf('MODELING'); const con = assetsOf('CONCEPT');
+  apply({ kind: 'assetPart', assetIds: [mod[0]], partId: 'MODELING', assignee: '정모델' });
+  apply({ kind: 'assetPart', assetIds: [mod[1]], partId: 'MODELING', assignee: ' 정모델 ' });
+  apply({ kind: 'assetPart', assetIds: [con[0]], partId: 'CONCEPT', assignee: '정모델' });
+  const c = assigneeCandidates(t.db);
+  assert.deepEqual(c.map(x => [x.name, x.team, x.assets]), [['정모델', '모델링', 3]]);
+  assert.deepEqual(capacityView(t.db).candidates.length, 1);
+  // 여러 명 한 번에: 새 지원 팀 · 이미 있는 이름은 건너뜀 · 빈 이메일 채우기
+  const before = capacityView(t.db).people.length;
+  const kim = capacityView(t.db).people.find(p => p.name === '김원화');
+  const c1 = ctx();
+  const r = apply({ kind: 'createPeople', newTeams: ['기획'], people: [{ name: '정모델', team: '모델링' }, { name: '한기획', team: '기획', email: 'han@example.com' }, { name: '김원화' }],
+    fillEmails: kim.email ? [] : [{ personId: kim.personId, email: 'kim@example.com' }] }, c1);
+  assert.match(r.note, /2명 더함/);
+  assert.match(r.note, /이미 있는 1명 건너뜀/);
+  const after = capacityView(t.db);
+  assert.equal(after.people.length, before + 2);
+  assert.equal(after.people.find(p => p.name === '한기획').team, '기획');
+  assert.deepEqual(after.candidates, [], '더하면 후보에서 빠진다');
+  assert.equal(after.people.find(p => p.name === '정모델').assigned, 3);
+  undoBatch(t.db, t.session, c1.batchId, ctx());
+  assert.equal(capacityView(t.db).people.length, before);
+  assert.ok(!teamOptions(t.db).some(x => x.name === '기획'), '지원 팀도 함께 되돌린다');
+});
+
+test('이름 바꾸기: "담당도 바꾸기"면 같은 이름의 에셋 담당도 함께(한 묶음으로 되돌림), 아니면 명단만', () => {
+  const t = open('assets');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  const kim = capacityView(t.db).people.find(p => p.name === '김원화');
+  assert.equal(kim.assigned, 4);
+  const c1 = ctx();
+  apply({ kind: 'personField', personId: kim.personId, field: 'name', value: '김원화A', alsoAssignee: true }, c1);
+  const n = name => Number(t.db.get('SELECT count(*) AS n FROM asset_parts WHERE assignee = ?', [name]).n);
+  assert.deepEqual([n('김원화'), n('김원화A')], [0, 4]);
+  assert.equal(capacityView(t.db).people.find(p => p.personId === kim.personId).assigned, 4);
+  undoBatch(t.db, t.session, c1.batchId, ctx());
+  assert.deepEqual([n('김원화'), n('김원화A')], [4, 0]);
+  apply({ kind: 'personField', personId: kim.personId, field: 'name', value: '김원화B' });
+  assert.deepEqual([n('김원화'), n('김원화B')], [4, 0], '명단만 바꾸면 담당은 그대로');
+  assert.deepEqual(assigneeCandidates(t.db).map(x => x.name), ['김원화'], '그러면 옛 이름이 담당 후보로 보인다');
+});

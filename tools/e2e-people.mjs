@@ -116,6 +116,34 @@ await withBrowser(async (cdp, base) => {
   await sleep(500);
   check('지우기', !(await names(cdp)).includes('정이펙트'));
 
+  // 작업자 가져오기(docs/31): 담당에서 찾기 · 붙여넣기 · 이름 바꾸기 때 담당도 함께
+  const clickBtn = text => cdp.eval(`[...document.querySelectorAll('.people-card button')].find(b => b.textContent.trim().startsWith(${JSON.stringify(text)})).click()`);
+  await clickBtn('담당에서 찾기');
+  await cdp.waitUntil("!!document.querySelector('.people-import')", 5000);
+  check('담당에서 찾기: 예시 파일은 담당이 모두 명단에 있어 안내만', (await cdp.eval("document.querySelector('.people-import').textContent")).includes('명단에 없는 담당이 없습니다'));
+  await clickBtn('붙여넣기');
+  await cdp.waitUntil("!!document.querySelector('textarea.people-paste')", 5000);
+  await cdp.eval(`(() => { const t = document.querySelector('textarea.people-paste'); t.value = ${JSON.stringify('이름\t소속팀\t이메일\n한기획\t기획\than@example.com\n김원화\t원화\t\n최틀림\t원화\tbad-mail')}; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(300);
+  const st = await cdp.eval("[...document.querySelectorAll('table.people-import-table tbody tr')].map(r => r.querySelector('b').textContent + ':' + r.querySelector('.pill').textContent).join(',')");
+  check('붙여넣기 미리보기: 새로 더함 · 이미 있음 · 고칠 것', st === '한기획:새로 더함,김원화:이미 있음,최틀림:고칠 것', st);
+  const okPaste390 = await shot(cdp, 'people-paste-390', 390);
+  await pick(cdp, '한기획 소속팀', '\u0001new');
+  await sleep(200);
+  await clickBtn('1명 더하기');
+  await cdp.waitUntil("!document.querySelector('.people-import')", 8000).catch(() => {});
+  const hanRow = await cdp.eval("(() => { const r = [...document.querySelectorAll('table.people-table tr.row')].find(r => r.querySelector('input').value === '한기획'); return r ? r.querySelector('select').value + '|' + r.querySelectorAll('input')[1].value : null; })()");
+  check('붙여넣기로 더함: 목록에 없던 팀은 지원 팀으로 만들어 소속', hanRow === '기획|han@example.com', hanRow);
+  check('붙여넣기 판 390px 가로 넘침 없음', okPaste390);
+  await typeIn(cdp, '김원화 이름', '김원화2');
+  await cdp.waitUntil("!!document.querySelector('[aria-label=\"작업자 이름 바꾸기\"]')", 5000).catch(() => {});
+  const dlg = await cdp.eval("document.querySelector('[aria-label=\"작업자 이름 바꾸기\"]')?.textContent ?? ''");
+  check('담당에 적힌 이름을 바꾸면 담당도 바꿀지 묻는다(4칸)', dlg.includes('4칸'), dlg.slice(0, 60));
+  await cdp.eval("[...document.querySelectorAll('[aria-label=\"작업자 이름 바꾸기\"] button')].find(b => b.textContent === '담당도 바꾸기').click()");
+  await sleep(700);
+  const cand = await cdp.eval("document.querySelector('.people-card button[title^=\"에셋 담당 칸\"]').textContent");
+  check('담당도 바꾸면 명단과 담당이 계속 맞다(담당에서 찾기 후보 0)', (await names(cdp)).includes('김원화2') && cand === '담당에서 찾기', `${await names(cdp)} · ${cand}`);
+
   // 에셋 담당 칸: 참여 중인 작업자만 제안
   await cdp.eval("[...document.querySelectorAll('.sidebar .nav-item')].find(b => b.textContent.includes('에셋 제작 현황')).click()");
   await cdp.waitUntil("document.querySelector('#asset-people')", 10000);

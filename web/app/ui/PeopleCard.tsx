@@ -2,7 +2,8 @@
 // 소속팀은 목록(파트 + 지원 팀)에서만 고른다. 지원 팀은 "팀" 단추로 더하고, 파트는 기준 정보에서 더한다.
 // 칸은 눌러서 바로 고치고(벗어나면 저장), 모든 고치기는 변경 이력에서 되돌린다.
 import { useState } from 'preact/hooks';
-import type { Person, TeamOption } from '../../../core/people.ts';
+import type { AssigneeCandidate, Person, TeamOption } from '../../../core/people.ts';
+import { AssigneeFinder, PeoplePaste } from './PeopleImport.tsx';
 import type { Edit } from '../../../core/edits.ts';
 import { Field } from './SetupPage.tsx';
 import { IconPlus, IconX } from './icons.tsx';
@@ -27,8 +28,12 @@ function TeamSelect(props: { value: string; teams: TeamOption[]; label: string; 
   );
 }
 
-export function PeopleCard(props: { people: Person[]; teams: TeamOption[]; readOnly: boolean; apply: (e: Edit) => Promise<boolean> }) {
+export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandidate[]; teams: TeamOption[]; readOnly: boolean; apply: (e: Edit) => Promise<boolean> }) {
   const { people, readOnly: ro, apply } = props;
+  const [panel, setPanel] = useState<'find' | 'paste' | null>(null);
+  /** 이름 바꾸기: 그 이름이 에셋 담당에 있으면 함께 바꿀지 묻는다(docs/31) */
+  const [rename, setRename] = useState<{ person: Person; to: string } | null>(null);
+  const doRename = (also: boolean) => { const r = rename!; setRename(null); void apply({ kind: 'personField', personId: r.person.personId, field: 'name', value: r.to, alsoAssignee: also }); };
   const [q, setQ] = useState('');
   const [team, setTeam] = useState('all');
   const [add, setAdd] = useState({ name: '', team: '', email: '', note: '' });
@@ -63,7 +68,15 @@ export function PeopleCard(props: { people: Person[]; teams: TeamOption[]; readO
       <div class="card-head people-head">
         <div><h2>작업자 명단</h2>
           <p class="small muted" style="margin-top: 2px">참여 중 <b>{active.length}명</b> · 에셋 담당 칸에서 이름을 고를 때 씁니다. 계산하는 인원은 "파트 × 달 인력" 탭의 숫자입니다.</p></div>
-        <input class="field people-search" type="search" aria-label="작업자 찾기" placeholder="이름 · 팀 · 이메일 · 특이사항 찾기" value={q} onInput={e => setQ((e.target as HTMLInputElement).value)} />
+        <div class="people-head-tools">
+          {!ro && <>
+            <button type="button" class={`btn sm${panel === 'find' ? ' on' : ''}`} aria-expanded={panel === 'find'} title="에셋 담당 칸에 적힌 이름 중 명단에 없는 사람을 찾아 더합니다"
+              onClick={() => setPanel(p => (p === 'find' ? null : 'find'))}>담당에서 찾기{props.candidates.length > 0 && <span class="people-chip-n">{props.candidates.length}</span>}</button>
+            <button type="button" class={`btn sm${panel === 'paste' ? ' on' : ''}`} aria-expanded={panel === 'paste'} title="엑셀 · 구글 시트에서 복사한 표를 붙여넣어 여러 명을 더합니다"
+              onClick={() => setPanel(p => (p === 'paste' ? null : 'paste'))}>붙여넣기</button>
+          </>}
+          <input class="field people-search" type="search" aria-label="작업자 찾기" placeholder="이름 · 팀 · 이메일 · 특이사항 찾기" value={q} onInput={e => setQ((e.target as HTMLInputElement).value)} />
+        </div>
       </div>
       <div class="card-body" style="padding-top: 4px">
         {people.length > 0 && (
@@ -86,6 +99,9 @@ export function PeopleCard(props: { people: Person[]; teams: TeamOption[]; readO
             <button type="button" class="btn sm primary" disabled={!add.name.trim()} onClick={() => void create()}><IconPlus />작업자 더하기</button>
           </div>
         )}
+
+        {!ro && panel === 'find' && <AssigneeFinder candidates={props.candidates} teams={props.teams} apply={apply} onClose={() => setPanel(null)} />}
+        {!ro && panel === 'paste' && <PeoplePaste people={people} teams={props.teams} apply={apply} onClose={() => setPanel(null)} />}
 
         {!ro && teamPanel && (
           <div class="people-teams" role="group" aria-label="소속팀 관리">
@@ -130,7 +146,8 @@ export function PeopleCard(props: { people: Person[]; teams: TeamOption[]; readO
                     {g.rows.map(p => (
                       <tr class={`row${p.active ? '' : ' off'}`}>
                         <td><span class="people-name"><span class={`people-av ${hue(p.team, teams)}`} aria-hidden="true">{p.name.slice(0, 1)}</span>
-                          <Field class="field ghost-field" value={p.name} label={`${p.name} 이름`} disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'name', value: t })} /></span></td>
+                          <Field class="field ghost-field" value={p.name} label={`${p.name} 이름`} disabled={ro}
+                            onCommit={t => { if (p.assigned > 0 && t.trim() && t.trim() !== p.name) { setRename({ person: p, to: t.trim() }); return false; } return apply({ kind: 'personField', personId: p.personId, field: 'name', value: t }); }} /></span></td>
                         <td><TeamSelect class="field ghost-field" value={p.team ?? ''} teams={props.teams} label={`${p.name} 소속팀`} disabled={ro} onChange={v => void apply({ kind: 'personField', personId: p.personId, field: 'team', value: v })} /></td>
                         <td><Field class="field ghost-field" value={p.email ?? ''} label={`${p.name} 이메일`} placeholder="name@company.com" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'email', value: t })} /></td>
                         <td><Field class="field ghost-field" value={p.note ?? ''} label={`${p.name} 특이사항`} placeholder="예: 12월 휴가 · 신규 입사 · 외주" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'note', value: t })} /></td>
@@ -151,6 +168,20 @@ export function PeopleCard(props: { people: Person[]; teams: TeamOption[]; readO
           </div>
         )}
       </div>
+
+      {rename && (
+        <div class="overlay" onClick={e => { if (e.target === e.currentTarget) setRename(null); }}>
+          <div class="card dialog confirm-dialog" role="dialog" aria-label="작업자 이름 바꾸기">
+            <h2 style="font-size: 16px">에셋 담당 이름도 바꿀까요?</h2>
+            <p class="small muted" style="margin: 8px 0 14px">"{rename.person.name}"이(가) 에셋 담당 <b>{rename.person.assigned}칸</b>에 적혀 있습니다. 함께 "{rename.to}"(으)로 바꾸면 담당 이름과 명단이 계속 맞습니다. 변경 이력에서 한 번에 되돌릴 수 있습니다.</p>
+            <div class="inline" style="justify-content: flex-end">
+              <button type="button" class="btn sm ghost" onClick={() => setRename(null)}>그만두기</button>
+              <button type="button" class="btn sm" onClick={() => doRename(false)}>명단만 바꾸기</button>
+              <button type="button" class="btn sm primary" onClick={() => doRename(true)}>담당도 바꾸기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

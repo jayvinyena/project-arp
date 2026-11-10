@@ -3,6 +3,7 @@
 //    가져오기 창에서 고를 것(마일스톤 → 업데이트, 시트 · 분류 → 리소스 종류, 모르는 상태 말)을 모은다.
 // 2) importSheetBook: 고른 대응대로 에셋을 만들거나 고친다. 한 묶음이라 변경 이력에서 한 번에 되돌린다.
 import { PIPELINE_NAME_MAX } from './limits.ts';
+import { assigneeCandidates } from './people.ts';
 import type { SqlDb } from './db.ts';
 import type { ProjectSession } from './pipeline.ts';
 import type { Cell, Sheets, SheetLinks } from './xlsx.ts';
@@ -148,6 +149,8 @@ export interface SheetImportReport {
   /** 새로 만든 리소스 종류(공수 0 — 데이터 점검 E08에서 채운다) */
   resourcesCreated: string[];
   skipped: { sheet: string; row: number; reason: string }[];
+  /** 가져온 뒤 작업자 명단에 없는 담당 이름 수(인력 › 작업자 › 담당에서 찾기, docs/31) */
+  newAssignees: number;
 }
 
 const NO_MS = '(비어 있음)';
@@ -250,7 +253,7 @@ export function scanSheetBook(db: SqlDb, sheets: Sheets): SheetScan {
 export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Sheets, links: SheetLinks, plan: SheetPlan,
   ctx: { editor: string; batchId: string }): SheetImportReport {
   if (!DATE.test(plan.doneDate)) throw new Error('완료일 형식은 YYYY-MM-DD입니다.');
-  const report: SheetImportReport = { created: 0, changed: 0, unchanged: 0, volumesAdded: 0, jiraBaseSet: false, resourcesCreated: [], skipped: [] };
+  const report: SheetImportReport = { created: 0, changed: 0, unchanged: 0, volumesAdded: 0, jiraBaseSet: false, resourcesCreated: [], skipped: [], newAssignees: 0 };
   const parts = partsOf(db);
   const run = (edit: Parameters<typeof applyEdit>[2]) => applyEdit(db, session, edit, ctx);
   const added = new Set<string>(); // 물량에 새로 더한 업데이트|리소스
@@ -387,5 +390,6 @@ export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Shee
     db.exec('RELEASE import_sheet');
     throw error;
   }
+  report.newAssignees = assigneeCandidates(db).length;
   return report;
 }
