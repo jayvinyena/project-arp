@@ -28,7 +28,7 @@ function OverlapPill(props: { own: number | null; inherited: number; label: stri
   }
   return (
     <button type="button" class={`overlap-pill${props.own == null ? ' inherited' : ''}`} aria-label={`${props.label} ${pct(shown)}`} disabled={props.disabled}
-      title={props.own == null ? `겹침률 ${pct(shown)}(물려받은 값). 눌러서 이 단계만 바꿉니다. 앞 공정이 이만큼 끝나면 다음 공정을 시작합니다` : `겹침률 ${pct(shown)}. 비우면 물려받은 값으로 돌아갑니다`}
+      title={props.own == null ? `겹침률 ${pct(shown)}(물려받은 값). 눌러서 이 단계만 바꿉니다. 20%면 앞 공정이 80% 진행됐을 때, 100%면 앞 공정이 시작한 다음 영업일에 시작합니다` : `겹침률 ${pct(shown)}. 비우면 물려받은 값으로 돌아갑니다`}
       onClick={() => { setText(props.own == null ? '' : String(Math.round(props.own * 100))); setEdit(true); }}>
       <span class="overlap-arrow" aria-hidden="true">→</span>{pct(shown)}
     </button>
@@ -66,7 +66,7 @@ export function PipelineSection(props: { v: SetupView; readOnly: boolean; apply:
     <section class="card" aria-label="공정 순서 · 파이프라인">
       <div class="card-head">
         <div><h2>공정 순서 · 파이프라인</h2>
-          <p class="small muted" style="margin-top: 2px">리소스는 파이프라인 하나의 단계 순서대로 작업합니다(리소스 · 공수 표의 "파이프라인"). 파트를 더해도 파이프라인은 바뀌지 않습니다. 단계 칩은 끌어서 순서를 바꾸고, 단계 사이 % 는 겹침률(앞 공정이 이만큼 끝나면 다음 공정 시작, 점선은 물려받은 값)입니다.</p></div>
+          <p class="small muted" style="margin-top: 2px">리소스는 파이프라인 하나의 단계 순서대로 작업합니다(리소스 · 공수 표의 "파이프라인"). 파트를 더해도 파이프라인은 바뀌지 않습니다. 단계 칩은 끌어서 순서를 바꾸고, 단계 사이 % 는 겹침률입니다. 20%면 앞 공정이 80% 진행됐을 때 다음 공정을 시작하고, 100%면 앞 공정이 시작한 다음 영업일에 시작합니다(점선은 물려받은 값).</p></div>
       </div>
       <div class="card-body pipelines">
         {loose.length > 0 && (
