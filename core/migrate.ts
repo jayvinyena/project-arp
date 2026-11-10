@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 8;
+export const LATEST_SCHEMA = 9;
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -134,6 +134,20 @@ const STEPS: { to: number; note: string; sql: string }[] = [
         important INTEGER NOT NULL DEFAULT 0 CHECK (important IN (0, 1))
       ) STRICT;
       CREATE INDEX news_by_at ON news(at);
+    `,
+  },
+  {
+    to: 9,
+    note: '작업자 소속팀은 목록에서만: 파트 + 지원 팀(PM · 기획 등). 지금 적힌 소속팀 중 파트가 아닌 것은 지원 팀으로 옮긴다(docs/24-people.md)',
+    sql: `
+      CREATE TABLE teams (
+        team_id    TEXT PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      INSERT INTO teams (team_id, name, sort_order)
+        SELECT printf('T%02d', row_number() OVER (ORDER BY min(sort_order), team)), team, row_number() OVER (ORDER BY min(sort_order), team)
+        FROM people WHERE team IS NOT NULL AND team <> '' AND team NOT IN (SELECT name FROM parts) GROUP BY team;
     `,
   },
 ];

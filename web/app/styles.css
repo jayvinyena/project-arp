@@ -1344,4 +1344,21 @@ table.grid.people-table tr.row:hover .people-del, .people-del:focus-visible { op
 .switch input:disabled + .switch-track { opacity: .5; }
 .switch-text { min-width: 2.4em; }
 @media (max-width: 860px) { .people-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .people-add .btn { grid-column: 1 / -1; } .people-search { width: 100%; } }
+.people-team-pick { display: flex; gap: 6px; min-width: 0; }
+.people-team-pick select { flex: 1; min-width: 0; }
+.people-team-pick .btn { flex: none; height: 34px; }
+.people-teams { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; margin: -4px 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.people-teams-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.people-teams-row > .small.faint:first-child { width: 52px; font-weight: 700; }
+.people-teams-row .field { width: 200px; height: 30px; }
+.people-teams-note { margin-left: 4px; }
+.team-tag { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 10px; border-radius: 999px; background: var(--hover); font-size: 12.5px; font-weight: 600; }
+.team-tag.part { padding-right: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); }
+.team-tag-n { font-size: 11px; color: var(--text-3); }
+.team-tag-x { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: var(--text-3); cursor: pointer; padding: 0; }
+.team-tag-x .icon { width: 12px; height: 12px; }
+.team-tag-x:hover:not(:disabled) { background: var(--bad-soft); color: var(--bad); }
+.team-tag-x:disabled { opacity: .35; cursor: default; }
+table.grid.edit select.field.ghost-field { border-color: transparent; background-color: transparent; }
+table.grid.edit tr.row:hover select.field.ghost-field, table.grid.edit select.field.ghost-field:focus { border-color: var(--line-strong); background-color: var(--surface); }
 

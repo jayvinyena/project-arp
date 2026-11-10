@@ -40,7 +40,7 @@ test('구조 전환: v1 파일을 최신으로(동작 묶음은 줄마다 하나
   assert.deepEqual(raw.prepare('SELECT group_no FROM scenario_changes ORDER BY seq').all().map(x => x.group_no), [1, 2]);
   assert.equal(raw.prepare('PRAGMA user_version').get().user_version, LATEST_SCHEMA);
   assert.deepEqual(migrate(db).notes, []);
-  raw.exec('PRAGMA user_version = 9');
+  raw.exec(`PRAGMA user_version = ${LATEST_SCHEMA + 1}`); // 앱보다 새 구조
   assert.throws(() => migrate(db), /더 새 구조/);
   raw.close();
 });

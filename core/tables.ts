@@ -47,6 +47,7 @@ export const TABLES: TableInfo[] = [
   { name: 'asset_attrs', label: '에셋 속성', keys: ['asset_id', 'name'], since: 6, childKey: 'asset_attrs', sample: true },
   { name: 'people', label: '작업자', keys: ['person_id'], since: 7, sample: true },
   { name: 'news', label: '소식', keys: ['news_id'], since: 8, sample: true },
+  { name: 'teams', label: '지원 팀', keys: ['team_id'], since: 9, sample: true },
   { name: 'change_log', label: '변경 이력', keys: null, since: 1, sample: true },
 ];
 

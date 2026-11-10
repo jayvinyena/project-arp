@@ -501,8 +501,14 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       if (!old) fail('없는 파트입니다.');
       if (old!.name === name) return { changed: false };
       if (db.get('SELECT 1 AS ok FROM parts WHERE name = ? AND part_id <> ?', [name, edit.partId])) fail('같은 이름의 파트가 있습니다.');
+      if (db.get('SELECT 1 AS ok FROM teams WHERE name = ?', [name])) fail('같은 이름의 지원 팀이 있습니다(인력 › 작업자 › 팀).');
       db.run('UPDATE parts SET name = ? WHERE part_id = ?', [name, edit.partId]);
       log(db, ctx, 'UPDATE', 'parts', edit.partId, 'name', old!.name, name);
+      // 작업자 소속팀은 파트 이름으로 적혀 있다: 함께 바꾼다
+      for (const p of db.all('SELECT person_id FROM people WHERE team = ?', [old!.name])) {
+        db.run('UPDATE people SET team = ? WHERE person_id = ?', [name, p.person_id]);
+        log(db, ctx, 'UPDATE', 'people', String(p.person_id), 'team', old!.name, name);
+      }
       dirty('parts');
       return { changed: true };
     }
@@ -544,6 +550,11 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const capacity = db.all('SELECT * FROM capacity WHERE part_id = ?', [edit.partId]);
       const overlaps = db.all('SELECT * FROM part_overlaps WHERE from_part_id = ? OR to_part_id = ?', [edit.partId, edit.partId]);
       const mix = db.all('SELECT * FROM effort_mix WHERE part_id = ?', [edit.partId]);
+      // 그 파트 소속 작업자는 소속팀 없음으로(되돌리면 돌아온다)
+      for (const p of db.all('SELECT person_id FROM people WHERE team = ?', [old.name])) {
+        db.run('UPDATE people SET team = NULL WHERE person_id = ?', [p.person_id]);
+        log(db, ctx, 'UPDATE', 'people', String(p.person_id), 'team', old.name, null);
+      }
       db.run('DELETE FROM parts WHERE part_id = ?', [edit.partId]);
       log(db, ctx, 'DELETE', 'parts', edit.partId, null, { ...old, capacity, part_overlaps: overlaps, effort_mix: mix }, undefined);
       dirty('parts', 'capacity', 'part_overlaps', 'effort_mix');

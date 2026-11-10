@@ -81,7 +81,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
         <button type="button" role="tab" aria-selected={tab === 'people'} class={tab === 'people' ? 'on' : ''} onClick={() => setTab('people')}>작업자 <span class="tab-n">{view.people.length}</span></button>
       </nav>
 
-      {tab === 'people' && <PeopleCard people={view.people} parts={view.parts.map(p => p.name)} readOnly={props.readOnly} apply={apply} />}
+      {tab === 'people' && <PeopleCard people={view.people} teams={view.teams} readOnly={props.readOnly} apply={apply} />}
 
       {tab === 'capacity' && <section class="card">
         <div class="card-head">

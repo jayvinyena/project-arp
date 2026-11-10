@@ -1,7 +1,8 @@
 // 작업자 명단(docs/24-people.md): 팀별로 묶어 보기 · 찾기 · 팀 거르기 · 한 번에 더하기 · 참여 스위치.
+// 소속팀은 목록(파트 + 지원 팀)에서만 고른다. 지원 팀은 "팀" 단추로 더하고, 파트는 기준 정보에서 더한다.
 // 칸은 눌러서 바로 고치고(벗어나면 저장), 모든 고치기는 변경 이력에서 되돌린다.
 import { useState } from 'preact/hooks';
-import type { Person } from '../../../core/people.ts';
+import type { Person, TeamOption } from '../../../core/people.ts';
 import type { Edit } from '../../../core/edits.ts';
 import { Field } from './SetupPage.tsx';
 import { IconPlus, IconX } from './icons.tsx';
@@ -11,14 +12,30 @@ const OFF = '\u0000off';
 /** 팀마다 같은 색(이름 머리글자 동그라미). 6색을 돌려 쓴다 */
 const hue = (team: string | null, teams: string[]) => `av-${Math.max(0, teams.indexOf(team ?? NO_TEAM)) % 6}`;
 
-export function PeopleCard(props: { people: Person[]; parts: string[]; readOnly: boolean; apply: (e: Edit) => Promise<boolean> }) {
+/** 소속팀 고르기: 파트 · 지원 팀 묶음. 목록에 없는 옛 값은 그대로 보여 주고 고치게 한다 */
+function TeamSelect(props: { value: string; teams: TeamOption[]; label: string; disabled?: boolean; class?: string; onChange: (v: string) => void }) {
+  const parts = props.teams.filter(t => t.kind === 'part');
+  const support = props.teams.filter(t => t.kind === 'support');
+  const known = props.teams.some(t => t.name === props.value);
+  return (
+    <select class={props.class ?? 'field'} aria-label={props.label} value={props.value} disabled={props.disabled} onChange={e => props.onChange((e.target as HTMLSelectElement).value)}>
+      <option value="">소속팀 없음</option>
+      {props.value && !known && <option value={props.value}>{props.value} (목록에 없음)</option>}
+      <optgroup label="파트">{parts.map(t => <option value={t.name}>{t.name}{t.active ? '' : ' (사용 안 함)'}</option>)}</optgroup>
+      {support.length > 0 && <optgroup label="지원 팀">{support.map(t => <option value={t.name}>{t.name}</option>)}</optgroup>}
+    </select>
+  );
+}
+
+export function PeopleCard(props: { people: Person[]; teams: TeamOption[]; readOnly: boolean; apply: (e: Edit) => Promise<boolean> }) {
   const { people, readOnly: ro, apply } = props;
   const [q, setQ] = useState('');
   const [team, setTeam] = useState('all');
   const [add, setAdd] = useState({ name: '', team: '', email: '', note: '' });
+  const [teamPanel, setTeamPanel] = useState(false);
+  const [newTeam, setNewTeam] = useState('');
   const teamOf = (p: Person) => p.team ?? NO_TEAM;
   const teams = [...new Set(people.map(teamOf))];
-  const suggest = [...new Set([...props.parts, ...people.map(p => p.team).filter(Boolean) as string[]])];
   const active = people.filter(p => p.active);
   const off = people.length - active.length;
   const query = q.trim().toLowerCase();
@@ -31,6 +48,12 @@ export function PeopleCard(props: { people: Person[]; parts: string[]; readOnly:
     if (await apply({ kind: 'createPerson', name: add.name, team: add.team || null, email: add.email || null, note: add.note || null })) setAdd(a => ({ name: '', team: a.team, email: '', note: '' }));
   };
   const enter = (e: KeyboardEvent) => { if (e.key === 'Enter') void create(); };
+  const addTeam = async () => {
+    const name = newTeam.trim();
+    if (!name) return;
+    if (await apply({ kind: 'createTeam', name })) { setNewTeam(''); setAdd(a => ({ ...a, team: name })); }
+  };
+  const support = props.teams.filter(t => t.kind === 'support');
   const chip = (key: string, label: string, n: number) => (
     <button type="button" role="radio" aria-checked={team === key} class={`people-chip${team === key ? ' on' : ''}`} onClick={() => setTeam(key)}>{label}<span class="people-chip-n">{n}</span></button>
   );
@@ -53,12 +76,37 @@ export function PeopleCard(props: { people: Person[]; parts: string[]; readOnly:
 
         {!ro && (
           <div class="people-add" role="group" aria-label="작업자 더하기">
-            <datalist id="people-teams">{suggest.map(t => <option value={t} />)}</datalist>
             <input class="field" aria-label="새 작업자 이름" placeholder="이름 *" value={add.name} onInput={set('name')} onKeyDown={enter} />
-            <input class="field" aria-label="새 작업자 소속팀" placeholder="소속팀(예: 원화)" list="people-teams" value={add.team} onInput={set('team')} onKeyDown={enter} />
+            <span class="people-team-pick">
+              <TeamSelect value={add.team} teams={props.teams} label="새 작업자 소속팀" onChange={v => setAdd(a => ({ ...a, team: v }))} />
+              <button type="button" class={`btn sm${teamPanel ? ' on' : ''}`} aria-expanded={teamPanel} title="목록에 없는 팀(PM · 기획 등)을 더합니다" onClick={() => setTeamPanel(x => !x)}><IconPlus />팀</button>
+            </span>
             <input class="field" type="email" aria-label="새 작업자 이메일" placeholder="이메일(선택)" value={add.email} onInput={set('email')} onKeyDown={enter} />
             <input class="field" aria-label="새 작업자 특이사항" placeholder="특이사항(선택, 예: 12월 휴가)" value={add.note} onInput={set('note')} onKeyDown={enter} />
             <button type="button" class="btn sm primary" disabled={!add.name.trim()} onClick={() => void create()}><IconPlus />작업자 더하기</button>
+          </div>
+        )}
+
+        {!ro && teamPanel && (
+          <div class="people-teams" role="group" aria-label="소속팀 관리">
+            <div class="people-teams-row">
+              <span class="small faint">파트</span>
+              {props.teams.filter(t => t.kind === 'part').map(t => <span class="team-tag part">{t.name}</span>)}
+              <span class="small faint people-teams-note">파트는 기준 정보 › 프로젝트·파트·리소스에서 더합니다(제작 공정 · 계산에 들어감).</span>
+            </div>
+            <div class="people-teams-row">
+              <span class="small faint">지원 팀</span>
+              {support.length === 0 && <span class="small faint">아직 없습니다</span>}
+              {support.map(t => (
+                <span class="team-tag">{t.name}<span class="team-tag-n">{t.used}</span>
+                  <button type="button" class="team-tag-x" aria-label={`${t.name} 팀 지우기`} disabled={t.used > 0}
+                    title={t.used > 0 ? `이 팀에 작업자가 ${t.used}명 있어 지울 수 없습니다` : '팀 지우기'} onClick={() => void apply({ kind: 'deleteTeam', teamId: t.teamId! })}><IconX /></button>
+                </span>
+              ))}
+              <input class="field" aria-label="새 지원 팀 이름" placeholder="새 팀 이름(예: PM · 기획)" maxLength={30} value={newTeam}
+                onInput={e => setNewTeam((e.target as HTMLInputElement).value)} onKeyDown={e => { if (e.key === 'Enter') void addTeam(); }} />
+              <button type="button" class="btn sm" disabled={!newTeam.trim()} onClick={() => void addTeam()}>팀 추가</button>
+            </div>
           </div>
         )}
 
@@ -83,7 +131,7 @@ export function PeopleCard(props: { people: Person[]; parts: string[]; readOnly:
                       <tr class={`row${p.active ? '' : ' off'}`}>
                         <td><span class="people-name"><span class={`people-av ${hue(p.team, teams)}`} aria-hidden="true">{p.name.slice(0, 1)}</span>
                           <Field class="field ghost-field" value={p.name} label={`${p.name} 이름`} disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'name', value: t })} /></span></td>
-                        <td><Field class="field ghost-field" value={p.team ?? ''} label={`${p.name} 소속팀`} list="people-teams" placeholder="소속팀" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'team', value: t })} /></td>
+                        <td><TeamSelect class="field ghost-field" value={p.team ?? ''} teams={props.teams} label={`${p.name} 소속팀`} disabled={ro} onChange={v => void apply({ kind: 'personField', personId: p.personId, field: 'team', value: v })} /></td>
                         <td><Field class="field ghost-field" value={p.email ?? ''} label={`${p.name} 이메일`} placeholder="name@company.com" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'email', value: t })} /></td>
                         <td><Field class="field ghost-field" value={p.note ?? ''} label={`${p.name} 특이사항`} placeholder="예: 12월 휴가 · 신규 입사 · 외주" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'note', value: t })} /></td>
                         <td>
