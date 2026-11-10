@@ -5,23 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { validate as coreValidate } from '../../core/pipeline.ts';
 import { nodeDb } from './pipeline.mjs';
 import { migrate, LATEST_SCHEMA } from '../../core/migrate.ts';
+import { sampleOrder } from '../../core/tables.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 export const SCHEMA_SQL = readFileSync(`${ROOT}schema/schema-v1.sql`, 'utf8');
 export const APP_ID = 1095913521;
 export const SCHEMA_VERSION = LATEST_SCHEMA;
 
-// 참조 순서대로 넣어야 외래 키가 통과한다
-export const TABLE_ORDER = [
-  'meta', 'settings', 'holidays',
-  'parts', 'part_overlaps',
-  'resource_groups', 'resource_types', 'resource_parts', 'effort_profiles', 'efforts', 'effort_mix',
-  'update_types', 'type_templates', 'updates', 'volumes', 'progress',
-  'capacity',
-  'scenarios', 'scenario_changes',
-  'batches', 'assets', 'asset_parts', 'asset_links', 'asset_comments', 'asset_attrs', 'people',
-  'change_log',
-];
+// 참조 순서대로 넣어야 외래 키가 통과한다(표 목록: core/tables.ts)
+export const TABLE_ORDER = sampleOrder();
 
 /** data: { 표 이름: [행 객체, ...] } → 새 .arp 파일 */
 export function createProjectFile(path, data) {

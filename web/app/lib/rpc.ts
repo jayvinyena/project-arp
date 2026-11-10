@@ -17,8 +17,9 @@ import type { AssetImportReport } from '../../../core/asset-io.ts';
 import type { SheetScan, SheetPlan, SheetImportReport } from '../../../core/sheet-import.ts';
 import type { DashboardView } from '../../../core/dashboard.ts';
 import type { SetupStatus } from '../../../core/onboarding.ts';
+import type { NewsItem, NewsSummary } from '../../../core/news.ts';
 
-export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null>; setup: SetupStatus }
+export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null>; setup: SetupStatus; /** 소식 시각(최근 순) — 새 소식 수 */ newsTimes: string[] }
 
 const worker = new Worker(new URL('../worker.ts', import.meta.url), { type: 'module' });
 let seq = 0;
@@ -74,6 +75,7 @@ export const rpc = {
   progress: (updateId: string | null) => call<ProgressView>('progress', { updateId }),
   dashboard: (updateId: string | null, planMode: PlanMode) => call<DashboardView & { forecast: { completion: string | null; status: string } | null }>('dashboard', { updateId, planMode }),
   assets: (updateId: string | null) => call<AssetsView>('assets', { updateId }),
+  news: (since: string | null) => call<{ items: NewsItem[]; summary: NewsSummary }>('news', { since }),
   assetDetail: (assetId: string) => call<AssetDetail>('assetDetail', { assetId }),
   thumbs: (assetIds: string[]) => call<{ items: { assetId: string; mime: string; data: Uint8Array; updatedAt: string }[] }>('thumbs', { assetIds }),
   assetBook: (updateId: string | null) => call<{ bytes: ArrayBuffer }>('assetBook', { updateId }),

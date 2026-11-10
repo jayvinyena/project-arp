@@ -1,0 +1,15 @@
+# 줄 끝 문자 통일(docs/25-maintenance-review.md C): 저장소 · 작업 폴더 모두 LF.
+# 윈도 더블클릭 실행 파일(.cmd)과 PowerShell 5.1 스크립트(.ps1)만 CRLF.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 바이너리(줄 끝을 바꾸지 않는다)
+*.arp binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.xlsx binary
+*.wasm binary
+*.woff2 binary

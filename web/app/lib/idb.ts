@@ -44,12 +44,12 @@ export async function rememberRecent(handle: FileSystemFileHandle, name: string)
 }
 
 /** 파일 핸들을 다시 쓸 권한(브라우저가 사용자에게 한 번 묻는다) */
-export async function ensurePermission(handle: FileSystemFileHandle): Promise<boolean> {
+export async function ensurePermission(handle: FileSystemFileHandle, mode: 'read' | 'readwrite' = 'readwrite'): Promise<boolean> {
   const h = handle as FileSystemFileHandle & {
     queryPermission?: (o: unknown) => Promise<PermissionState>;
     requestPermission?: (o: unknown) => Promise<PermissionState>;
   };
   if (!h.queryPermission) return true;
-  if ((await h.queryPermission({ mode: 'readwrite' })) === 'granted') return true;
-  return (await h.requestPermission?.({ mode: 'readwrite' })) === 'granted';
+  if ((await h.queryPermission({ mode })) === 'granted') return true;
+  return (await h.requestPermission?.({ mode })) === 'granted';
 }

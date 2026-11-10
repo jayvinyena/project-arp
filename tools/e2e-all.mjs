@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process';
 import { run, ROOT } from './lib/cdp.mjs';
 
-const SUITES = ['save', 'new', 'flow', 'people', 'plan', 'progress', 'assets', 'sheet', 'dashboard', 'sim', 'import', 'stable', 'ext', 'advisor', 'setup', 'deploy'];
+const SUITES = ['save', 'new', 'flow', 'people', 'viewer', 'plan', 'progress', 'assets', 'sheet', 'dashboard', 'sim', 'import', 'stable', 'ext', 'advisor', 'setup', 'deploy'];
 const args = process.argv.slice(2);
 const jobsAt = args.indexOf('--jobs');
 const jobs = Math.max(1, Number(jobsAt >= 0 ? args[jobsAt + 1] : 0) || 3);

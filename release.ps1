@@ -1,12 +1,14 @@
 ﻿<#
-  ARP 한 번에 실행: 준비 확인 → 검사 → 배포용 빌드 → 운영 시트 대조 → (선택) Cloudflare Pages 올리기
+  ARP 한 번에 실행: 준비 확인 → 형식 검사 · 검사 → 배포용 빌드 → 운영 시트 대조 → (선택) Cloudflare Pages 올리기 → (선택) GitHub 올리기
 
   더블클릭:      release.cmd          (검사 · 빌드 · 대조)
                  release-deploy.cmd   (위 + Cloudflare Pages 올리기)
-  PowerShell:    powershell -ExecutionPolicy Bypass -File .\release.ps1 [-E2E] [-Deploy] [-SkipTests] [-ProjectName arp]
+  PowerShell:    powershell -ExecutionPolicy Bypass -File .\release.ps1 [-E2E] [-Deploy] [-Push] [-SkipTests] [-ProjectName arp]
 
   -E2E          크롬 시험까지(1분 안팎, 크롬 필요)
   -Deploy       빌드 결과(dist-web)를 Cloudflare Pages에 올림. 처음 한 번은 브라우저로 Cloudflare 로그인
+  -Push         앞 단계가 모두 통과하면 이 폴더의 커밋을 GitHub(원격 project-arp의 arp-next 브랜치)에 올림.
+                부모 저장소에서 subtree split → private 파일 0개 확인 → push. 커밋하지 않은 변경이 있으면 올리지 않음
   -SkipTests    검사를 건너뜀(급할 때만)
   -ProjectName  Cloudflare Pages 프로젝트 이름(기본 arp → https://arp-32g.pages.dev, 2026-11-05 만듦)
   -AccountId    올릴 Cloudflare 계정 ID. 초대받은 팀원처럼 계정이 여럿이면 넣는다(대시보드 주소 dash.cloudflare.com/<계정 ID>/...)
@@ -14,6 +16,7 @@
 param(
   [switch]$E2E,
   [switch]$Deploy,
+  [switch]$Push,
   [switch]$SkipTests,
   [string]$ProjectName = 'arp',
   [string]$AccountId = ''
@@ -55,7 +58,7 @@ Write-Host 'ARP 한 번에 실행' -ForegroundColor Cyan
 Write-Host "폴더: $root"
 
 # 1. 준비 확인 ------------------------------------------------------------
-Write-Step '1/5' '준비 확인(Node · 패키지)'
+Write-Step '1/6' '준비 확인(Node · 패키지)'
 $nodeVersion = $null
 try { $nodeVersion = (& node -v) 2>$null } catch { $nodeVersion = $null }
 if (-not $nodeVersion) {
@@ -78,10 +81,17 @@ if (-not (Test-Path (Join-Path $root 'node_modules'))) {
 Add-Result '준비 확인' '통과' "Node $nodeVersion"
 
 # 2. 검사 ------------------------------------------------------------------
-Write-Step '2/5' '검사'
+Write-Step '2/6' '형식 검사 · 검사'
 if ($SkipTests) {
   Add-Result '검사' '건너뜀' '-SkipTests'
 } else {
+  # 형식 검사(TypeScript): 칸 이름 · 화면과 계산 사이 모양이 어긋나면 여기서 멈춘다(docs/25-maintenance-review.md A)
+  & npm run check
+  if ($LASTEXITCODE -ne 0) {
+    Add-Result '형식 검사' '실패' 'npm run check 실패(위 출력 참고)'
+    Stop-Run '형식 검사가 실패해서 빌드하지 않았어요.'
+  }
+  Add-Result '형식 검사' '통과' 'npm run check'
   & npm test
   if ($LASTEXITCODE -ne 0) {
     Add-Result '검사' '실패' 'npm test 실패(위 출력 참고)'
@@ -100,7 +110,7 @@ if ($SkipTests) {
 }
 
 # 3. 배포용 빌드 -----------------------------------------------------------
-Write-Step '3/5' '배포용 빌드(dist-web)'
+Write-Step '3/6' '배포용 빌드(dist-web)'
 & npm run build
 $dist = Join-Path $root 'dist-web'
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $dist 'app\index.html'))) {
@@ -111,7 +121,7 @@ $size = (Get-ChildItem $dist -Recurse -File | Measure-Object -Property Length -S
 Add-Result '빌드' '통과' ("{0} ({1:N1}MB)" -f $dist, ($size / 1MB))
 
 # 4. 운영 시트 대조 --------------------------------------------------------
-Write-Step '4/5' '운영 시트 대조(private\*.xlsx ↔ 옛 엔진)'
+Write-Step '4/6' '운영 시트 대조(private\*.xlsx ↔ 옛 엔진)'
 $private = Join-Path $root 'private'
 $sheets = @()
 if (Test-Path $private) { $sheets = @(Get-ChildItem $private -Filter *.xlsx -File | Where-Object { -not $_.Name.StartsWith('~$') }) }
@@ -135,7 +145,7 @@ if ($sheets.Count -eq 0) {
 }
 
 # 5. Cloudflare Pages 올리기 -----------------------------------------------
-Write-Step '5/5' 'Cloudflare Pages 올리기'
+Write-Step '5/6' 'Cloudflare Pages 올리기'
 if (-not $Deploy) {
   Add-Result '올리기' '건너뜀' "직접 올리려면 Cloudflare 대시보드 → Pages → Upload assets → $dist (또는 release-deploy.cmd)"
 } elseif ($failed) {
@@ -153,6 +163,40 @@ if (-not $Deploy) {
     $detail = '운영 주소 https://arp-32g.pages.dev'
     if ($urls) { $detail = "$detail · 이번 배포 $($urls -join ', ')" }
     Add-Result '올리기' '통과' $detail
+  }
+}
+
+# 6. GitHub 올리기 ---------------------------------------------------------
+Write-Step '6/6' 'GitHub 올리기(project-arp · arp-next 브랜치)'
+if (-not $Push) {
+  Add-Result 'GitHub' '건너뜀' '올리려면 -Push'
+} elseif ($failed) {
+  Add-Result 'GitHub' '건너뜀' '앞 단계에 실패가 있어 올리지 않았어요'
+} else {
+  $dirty = (& git -C $root status --porcelain -- . | Out-String).Trim()
+  $remotes = (& git -C $root remote | Out-String)
+  if ($dirty) {
+    Add-Result 'GitHub' '실패' '커밋하지 않은 변경이 있어요. 먼저 커밋해 주세요'
+  } elseif ($remotes -notmatch 'project-arp') {
+    Add-Result 'GitHub' '실패' "원격 project-arp가 없어요(git remote add project-arp https://github.com/<계정>/project-arp.git)"
+  } else {
+    $top = (& git -C $root rev-parse --show-toplevel | Out-String).Trim()
+    $prefix = (& git -C $root rev-parse --show-prefix | Out-String).Trim().TrimEnd('/')
+    Push-Location $top
+    # subtree split · push는 진행 메시지를 오류 출력으로 낸다: cmd 안에서 합쳐 받는다
+    & cmd /c "git subtree split --prefix=$prefix -b arp-split 2>&1" | Out-Host
+    $splitOk = ($LASTEXITCODE -eq 0)
+    $privateCount = @(& git ls-tree -r --name-only arp-split | Where-Object { $_ -like 'private/*' }).Count
+    if (-not $splitOk) {
+      Add-Result 'GitHub' '실패' 'subtree split 실패(위 출력 참고)'
+    } elseif ($privateCount -gt 0) {
+      Add-Result 'GitHub' '실패' "private 파일 $privateCount 개가 들어 있어 올리지 않았어요(.gitignore 확인)"
+    } else {
+      & cmd /c "git push project-arp arp-split:refs/heads/arp-next 2>&1" | Out-Host
+      if ($LASTEXITCODE -ne 0) { Add-Result 'GitHub' '실패' 'git push 실패(위 출력 참고)' }
+      else { Add-Result 'GitHub' '통과' 'project-arp · arp-next 브랜치(private 0개)' }
+    }
+    Pop-Location
   }
 }
 

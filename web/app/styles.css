@@ -1283,3 +1283,28 @@ table.grid.people-table tr.row.off td { opacity: .55; }
 /* 빈 칸의 예시 글이 값처럼 보이지 않게: 줄에 올리거나 칸을 눌렀을 때만 흐리게 */
 .people-table .field.ghost-field::placeholder { color: transparent; }
 .people-table tr.row:hover .field.ghost-field::placeholder, .people-table .field.ghost-field:focus::placeholder { color: var(--text-3); opacity: .7; }
+
+/* ───────── 보기 모드 · 소식(docs/26-viewer.md) ───────── */
+.recent-row { display: flex; align-items: stretch; gap: 6px; }
+.recent-row .recent-item { flex: 1; min-width: 0; }
+.recent-row .btn { flex: none; height: auto; }
+.save-state .dot.accent { background: var(--accent); }
+.banner.viewer-banner { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface)); align-items: center; }
+.banner.viewer-banner > .icon { color: var(--accent); }
+.news-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.news-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.news-stats b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.news-stats .unit { font-size: 12px; font-weight: 600; color: var(--text-3); margin-left: 2px; }
+.news-forecasts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.news-forecasts li { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; align-items: center; gap: 10px; min-height: 32px; border-bottom: 1px solid var(--line); }
+.news-forecasts .num { text-align: right; font-variant-numeric: tabular-nums; }
+.news-form { display: flex; flex-direction: column; gap: 8px; }
+.news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.news-item { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.news-item.fresh { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface)); }
+.news-item.important { box-shadow: inset 3px 0 0 var(--bad); }
+.news-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.news-title { font-size: 14px; }
+.news-body { margin: 6px 0 0; white-space: pre-wrap; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+@media (max-width: 640px) { .news-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .news-forecasts li { grid-template-columns: minmax(0, 1fr) auto; } .news-forecasts li .pill { grid-column: 2; } }
+

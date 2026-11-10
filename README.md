@@ -78,7 +78,8 @@ PowerShell에서 옵션을 줄 수도 있다.
 powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName arp
 ```
 
-- `-E2E` 크롬 시험까지(1분 안팎) · `-Deploy` 올리기 · `-SkipTests` 검사 건너뜀 · `-ProjectName` Cloudflare 프로젝트 이름(기본 `arp`)
+- `-E2E` 크롬 시험까지(1분 안팎) · `-Deploy` 올리기 · `-Push` GitHub(project-arp · arp-next 브랜치)까지 올리기(커밋된 것만, private 0개 확인) · `-SkipTests` 검사 건너뜀 · `-ProjectName` Cloudflare 프로젝트 이름(기본 `arp`)
+- 검사 단계는 형식 검사(`npm run check`, TypeScript) → `npm test` 순서입니다
 - 마지막에 단계별 통과·실패·건너뜀 요약이 나온다. 검사나 빌드가 실패하면 그 자리에서 멈추고, 앞 단계에 실패가 있으면 올리지 않는다.
 - 대조는 "옛 계산 방식 흉내"에서 모두 같아야 통과다(`compare-legacy --check`).
 
@@ -86,8 +87,9 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 
 ```bash
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
-npm test                                  # 검사 148개
-npm run e2e                               # 크롬 시험 211개(동시 3개, 40초 안팎): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 9 · 업데이트 계획 14 · 작업 진척 5 · 에셋 20 · 제작 리스트 가져오기 · 거르기 32 · 현황판 15 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
+npm run check                             # 형식 검사(TypeScript, 오류 0)
+npm test                                  # 검사 155개
+npm run e2e                               # 크롬 시험 222개(동시 3개, 40초 안팎): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 9 · 보기 모드 · 소식 11 · 업데이트 계획 14 · 작업 진척 5 · 에셋 20 · 제작 리스트 가져오기 · 거르기 32 · 현황판 15 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 13 · 배포 11
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)

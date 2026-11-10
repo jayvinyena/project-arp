@@ -1,0 +1,17 @@
+{
+  // 형식 검사 전용(npm run check). 실행 · 빌드는 Node · Vite가 형식을 지우고 돌린다(docs/25-maintenance-review.md A)
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "types": ["vite/client"]
+  },
+  "include": ["core/**/*.ts", "engine/**/*.ts", "web/app/**/*.ts", "web/app/**/*.tsx", "rules/*.d.mts"]
+}

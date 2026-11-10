@@ -4,7 +4,7 @@ import { useEffect } from 'preact/hooks';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { IconX, IconHelp } from './icons.tsx';
 
-export type HelpPage = 'dashboard' | 'launch' | 'plan' | 'assets' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
+export type HelpPage = 'news' | 'dashboard' | 'launch' | 'plan' | 'assets' | 'progress' | 'simulation' | 'advisor' | 'setup' | 'templates' | 'capacity' | 'calibration' | 'history' | 'check';
 
 interface HelpDoc {
   /** 메뉴 이름 */
@@ -74,6 +74,25 @@ export function helpDoc(page: HelpPage): HelpDoc {
         { page: 'templates', why: '유형별 기본 물량을 바꿀 때' },
         { page: 'simulation', why: '우선순위 · 인원을 바꿔 보고 싶을 때(원본은 그대로)' },
         { page: 'advisor', why: '늦는 업데이트를 맞출 방법을 찾을 때' },
+      ],
+    };
+    case 'news': return {
+      name: '소식',
+      short: '편집자가 남긴 소식과 지난번 본 뒤 바뀐 것을 보고, 알리기 문구를 복사합니다',
+      what: '많은 사람에게 최신 내용을 알리는 곳입니다. 편집하는 사람이 바뀐 계획 · 결정 · 부탁을 짧게 남기고, 지난번 본 뒤 바뀐 것(변경 · 완료된 에셋 작업 · 완료 예정)은 자동으로 요약합니다. 보기 모드로 열면 새 소식이 있을 때 이 화면부터 열립니다.',
+      steps: [
+        '"지난번 본 뒤 바뀐 것"에서 변경 수 · 완료된 에셋 작업 · 완료 예정을 확인합니다.',
+        '편집하는 사람은 "소식 쓰기"에 제목(필수) · 내용 · 중요 표시를 넣고 "소식 올리기"를 누릅니다.',
+        '"알리기 문구 복사"로 소식이나 요약을 메신저 · 메일에 붙여 넣어 알립니다.',
+      ],
+      tips: [
+        '보는 사람은 시작 화면 "보기로 열기"(또는 주소 ?view)로 같은 공유 파일을 엽니다. 파일에 아무것도 쓰지 않아 편집하는 사람을 막지 않습니다.',
+        '"새 소식"은 이 브라우저에서 이 화면을 마지막으로 본 뒤 올라온 소식입니다.',
+      ],
+      terms: [['보기 모드', '고치지 않고 보기만 하는 열기. 편집자가 저장하면 1분 안에 최신으로 다시 읽습니다.']],
+      related: [
+        { page: 'dashboard', why: '진행률 · 계획선 대비를 자세히 볼 때' },
+        { page: 'plan', why: '업데이트 일정을 볼 때' },
       ],
     };
     case 'dashboard': return {

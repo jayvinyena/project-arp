@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "check": "tsc -p tsconfig.json",
     "samples": "node tools/build-samples.mjs",
     "validate": "node tools/validate.mjs",
     "rules-doc": "node tools/gen-rules-doc.mjs",
@@ -29,6 +30,7 @@
     "pretendard": "1.3.9"
   },
   "devDependencies": {
+    "typescript": "5.9.3",
     "vite": "7.3.7"
   }
 }

@@ -10,7 +10,7 @@
 |---|---|---|
 | 확장자 | `.arp` | 파일 선택 창 필터 |
 | `PRAGMA application_id` | `1095913521` (`'ARP1'`) | ARP 파일인지 확인. 다르면 열지 않는다 |
-| `PRAGMA user_version` | 구조 버전, 지금 `7` | 옛 파일을 새 구조로 바꿀지 판단 |
+| `PRAGMA user_version` | 구조 버전, 지금 `8` | 옛 파일을 새 구조로 바꿀지 판단 |
 | `meta.saved_by_app` | 저장한 앱 버전 | 문제 추적 |
 
 ## 3. 열기
@@ -48,7 +48,7 @@
 
 ## 5. 구조 전환 (마이그레이션)
 
-> 구현: [core/migrate.ts](../core/migrate.ts). 지금 구조는 **v7**(v1 → v2: 시나리오 동작 묶음·반영 기록, v2 → v3: 실적의 실투입 공수, v3 → v4: 에셋 관리 표 4개, v4 → v5: 에셋 마감일 · 링크 · 댓글, v5 → v6: 에셋 세부 분류 · 속성 — [20-asset-management.md](20-asset-management.md), v6 → v7: 작업자 명단 — [24-people.md](24-people.md)). 자세한 내용은 [08-simulation.md](08-simulation.md).
+> 구현: [core/migrate.ts](../core/migrate.ts). 지금 구조는 **v8**(v1 → v2: 시나리오 동작 묶음·반영 기록, v2 → v3: 실적의 실투입 공수, v3 → v4: 에셋 관리 표 4개, v4 → v5: 에셋 마감일 · 링크 · 댓글, v5 → v6: 에셋 세부 분류 · 속성 — [20-asset-management.md](20-asset-management.md), v6 → v7: 작업자 명단 — [24-people.md](24-people.md), v7 → v8: 소식 — [26-viewer.md](26-viewer.md)). 자세한 내용은 [08-simulation.md](08-simulation.md).
 
 
 - 앱에는 `v1 → v2`, `v2 → v3` 같은 단계별 전환 스크립트가 있다. 열 때 필요한 단계만 차례로 돈다.

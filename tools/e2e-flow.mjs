@@ -21,7 +21,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(500);
   const menu = await cdp.eval(`(() => { const out = []; for (const el of document.querySelectorAll('.sidebar .nav > *')) out.push(el.classList.contains('nav-label') ? '#' + el.textContent : el.textContent.replace(/\\d+$/, '').trim()); return out.join(','); })()`);
   check('메뉴 4묶음 · 순서(현황 → 계획 → 기준 정보 → 기록 · 점검)',
-    menu === '#현황,제작 현황판,에셋 제작 현황,작업 진척,#계획,런칭 물량 설계,업데이트 계획,시뮬레이션,마감 맞추기,#기준 정보,프로젝트·파트·리소스,인력,유형 템플릿,공수 보정,#기록 · 점검,데이터 점검,변경 이력', menu);
+    menu === '#현황,제작 현황판,에셋 제작 현황,작업 진척,소식,#계획,런칭 물량 설계,업데이트 계획,시뮬레이션,마감 맞추기,#기준 정보,프로젝트·파트·리소스,인력,유형 템플릿,공수 보정,#기록 · 점검,데이터 점검,변경 이력', menu);
   check('제작 기록이 있는 파일은 현황판으로 열린다', (await h1(cdp)) === '제작 현황판', await h1(cdp));
   check('필수 설정이 끝난 파일은 처음 할 일 안내가 없다', !(await cdp.eval("!!document.querySelector('.setup-guide')")));
   // 메뉴 묶음이 늘어도 화면 높이 안에 저장 · 내보내기가 보인다(1440 × 900, 1440 × 700)

@@ -43,6 +43,11 @@ export function build() {
     if (i < 2) data.asset_parts.push({ asset_id: id, part_id: 'CONCEPT', status: 'WIP', started_at: '2026-11-04', done_at: null, retakes: 0, assignee: '이원화', jira_key: null });
   });
   data.meta.push({ key: 'jira_base_url', value: 'https://example.atlassian.net/browse/' });
+  // 소식(가상): 보기 모드 첫 화면 시험용
+  data.news = [
+    { news_id: 'N0001', at: '2026-11-03T09:00:00.000Z', author: '김피엠', title: '런칭 1차 납품 범위 확정', body: '신규 캐릭터 6종 · 코스튬 4종을 1차 납품에 넣습니다.', important: 0 },
+    { news_id: 'N0002', at: '2026-11-06T09:00:00.000Z', author: '김피엠', title: '원화 검수 일정 하루 당김', body: null, important: 1 },
+  ];
   // 작업자 명단(가상): 에셋 담당 이름과 같게
   data.people = [
     { person_id: 'P001', name: '김원화', team: '원화', email: 'kim@example.com', note: null, active: 1, sort_order: 1 },

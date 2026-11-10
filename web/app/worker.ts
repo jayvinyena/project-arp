@@ -30,6 +30,7 @@ import { isArpAssetBook, scanSheetBook, importSheetBook } from '../../core/sheet
 import type { SheetPlan } from '../../core/sheet-import.ts';
 import { dashboardView } from '../../core/dashboard.ts';
 import { setupStatus } from '../../core/onboarding.ts';
+import { newsView } from '../../core/news.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
@@ -66,7 +67,8 @@ function setMeta(s: SqlDb, key: string, value: string | null) {
 
 function view() {
   const { sql: s, session: ss } = need();
-  return { snapshot: launchSnapshot(s), compare: compareLaunchModes(s, ss), meta: meta(s), setup: setupStatus(s) };
+  return { snapshot: launchSnapshot(s), compare: compareLaunchModes(s, ss), meta: meta(s), setup: setupStatus(s),
+    newsTimes: s.all('SELECT at FROM news ORDER BY at DESC LIMIT 100').map(r => String(r.at)) };
 }
 
 const handlers: Record<string, (payload: any) => unknown> = {
@@ -179,6 +181,12 @@ const handlers: Record<string, (payload: any) => unknown> = {
   // ───────── 에셋 관리 ─────────
   assets(p: { updateId: string | null }) {
     return assetsView(need().sql, p.updateId);
+  },
+
+  /** 소식 화면: 소식 + since 뒤 자동 요약 */
+  news(p: { since: string | null }) {
+    const { sql: s, session: ss } = need();
+    return newsView(s, ss, p.since);
   },
 
   assetDetail(p: { assetId: string }) {

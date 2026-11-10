@@ -8,6 +8,8 @@ import type { AssetEdit } from './assets.ts';
 import { applyAssetEdit, ASSET_EDIT_KINDS, assetDriven } from './assets.ts';
 import type { PeopleEdit } from './people.ts';
 import { applyPeopleEdit, PEOPLE_EDIT_KINDS } from './people.ts';
+import type { NewsEdit } from './news.ts';
+import { applyNewsEdit, NEWS_EDIT_KINDS } from './news.ts';
 
 export type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 export type UpdateField = 'name' | 'update_type_id' | 'start_date' | 'freeze_date' | 'release_date' | 'status';
@@ -67,7 +69,8 @@ export type Edit =
   | { kind: 'aiShare'; partId: string; share: number }
   // 에셋 관리(core/assets.ts)
   | AssetEdit
-  | PeopleEdit;
+  | PeopleEdit
+  | NewsEdit;
 
 export interface EditContext { editor: string; batchId: string; reason?: string }
 export interface EditResult { changed: boolean; createdId?: string }
@@ -118,6 +121,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
   const dirty = (...t: EngineTable[]) => session.markDirty(...t);
   if (ASSET_EDIT_KINDS.has(edit.kind)) return applyAssetEdit(db, session, edit as AssetEdit, ctx);
   if (PEOPLE_EDIT_KINDS.has(edit.kind)) return applyPeopleEdit(db, edit as PeopleEdit, ctx);
+  if (NEWS_EDIT_KINDS.has(edit.kind)) return applyNewsEdit(db, edit as NewsEdit, ctx);
 
   switch (edit.kind) {
     // ───────── 업데이트 ─────────
@@ -699,6 +703,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       return { changed: true };
     }
   }
+  return fail(`알 수 없는 고치기입니다: ${(edit as { kind: string }).kind}`);
 }
 
 /** 분류 이름 → 분류 ID(없으면 만든다). 빈 이름이면 분류 없음 */

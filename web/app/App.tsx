@@ -7,6 +7,7 @@ import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveI
 import { ImportReport } from './ui/ImportReport.tsx';
 import { SheetImportDialog } from './ui/SheetImport.tsx';
 import { SetupGuide, setupDone } from './ui/SetupGuide.tsx';
+import { NewsPage } from './ui/NewsPage.tsx';
 import type { SheetScan, SheetPlan } from '../../core/sheet-import.ts';
 import { ImportGuide } from './ui/ImportGuide.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
@@ -38,17 +39,25 @@ import { SimulationPage } from './ui/SimulationPage.tsx';
 import type { ScenarioOp } from '../../core/scenarios.ts';
 import type { Edit } from '../../core/edits.ts';
 import type { NewProjectInput } from '../../core/new-project.ts';
-import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage, IconChart, IconWiden, IconNarrow } from './ui/icons.tsx';
+import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder, IconSave, IconAlert, IconLock, IconLayers, IconUsers, IconProgress, IconHistory, IconDownload, IconTune, IconX, IconTarget, IconSettings, IconImage, IconChart, IconWiden, IconNarrow, IconBell, IconEye } from './ui/icons.tsx';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 type Page = HelpPage;
-const PAGES: Page[] = ['dashboard', 'assets', 'progress', 'launch', 'plan', 'simulation', 'advisor', 'setup', 'capacity', 'templates', 'calibration', 'history'];
+/** 보기 모드에서 보이는 화면 */
+const VIEWER_PAGES: Page[] = ['news', 'dashboard', 'assets', 'plan'];
+const PAGES: Page[] = ['news', 'dashboard', 'assets', 'progress', 'launch', 'plan', 'simulation', 'advisor', 'setup', 'capacity', 'templates', 'calibration', 'history'];
 /** 파일마다 마지막으로 본 화면(이 브라우저). 데이터 점검은 열 때마다 다시 보는 화면이 아니라 빼 둔다 */
 const lastPageOf = (name: string): Page | null => { try { const p = localStorage.getItem(`arp.lastPage.${name}`) as Page | null; return p && PAGES.includes(p) ? p : null; } catch { return null; } };
 const rememberPage = (name: string, page: Page) => { try { if (PAGES.includes(page)) localStorage.setItem(`arp.lastPage.${name}`, page); } catch { /* 없어도 된다 */ } };
 const readGuideHidden = (name: string) => { try { return localStorage.getItem(`arp.setupGuide.hidden.${name}`) === '1'; } catch { return false; } };
+const readNewsSeen = (name: string) => { try { return localStorage.getItem(`arp.newsSeen.${name}`); } catch { return null; } };
+const writeNewsSeen = (name: string, at: string) => { try { localStorage.setItem(`arp.newsSeen.${name}`, at); } catch { /* 없어도 된다 */ } };
 const writeGuideHidden = (name: string) => { try { localStorage.setItem(`arp.setupGuide.hidden.${name}`, '1'); } catch { /* 없어도 된다 */ } };
-interface FileState { name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean }
+interface FileState {
+  name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean;
+  /** 보기 모드(docs/26-viewer.md): 파일에 아무것도 쓰지 않고, 바뀌면 다시 읽는다 */
+  viewer?: boolean;
+}
 
 const LOCK_FRESH_MS = 30 * 60 * 1000;
 const HEARTBEAT_MS = 5 * 60 * 1000;
@@ -69,6 +78,8 @@ export function App() {
   // 지금 업데이트(마일스톤): 현황판 · 에셋 · 작업 진척 · 시뮬레이션이 함께 쓴다(docs/23-ux-review.md 6.3). 파일을 열면 비운다
   const [curUpdate, setCurUpdate] = useState<string | null>(null);
   const [guideHidden, setGuideHidden] = useState(false);
+  /** 이 브라우저에서 소식 화면을 마지막으로 본 시각(새 소식 수) */
+  const [newsSeen, setNewsSeen] = useState<string | null>(null);
   const pageRef = useRef(page);
   pageRef.current = page;
   const [save, setSave] = useState<{ state: SaveState; at?: number; message?: string }>({ state: 'saved' });
@@ -116,6 +127,32 @@ export function App() {
   const setFileNow = (next: FileState) => { fileRef.current = next; setFile(next); };
   // 파일마다 마지막으로 본 화면을 기억(되살리기 · 다시 열기도 그 화면으로)
   useEffect(() => { if (file) rememberPage(file.name, page); }, [page, file?.name]);
+  // 보기 모드: 보이는 화면만(다른 화면으로 가는 단추를 눌러도 현황판으로)
+  useEffect(() => { if (file?.viewer && !VIEWER_PAGES.includes(page)) setPage('dashboard'); }, [file?.viewer, page]);
+  // 보기 모드: 편집하는 사람이 저장하면(파일 수정 시각이 바뀌면) 다시 읽는다 — 1분마다 · 창으로 돌아올 때(docs/26-viewer.md 3절)
+  useEffect(() => {
+    if (!file?.viewer || !file.handle) return undefined;
+    let stop = false;
+    const check = async () => {
+      try {
+        const cur = fileRef.current;
+        if (stop || !cur?.viewer || !cur.handle) return;
+        const disk = await cur.handle.getFile();
+        if (disk.lastModified <= cur.lastModified) return;
+        const v = await rpc.open(await disk.arrayBuffer());
+        if (stop || fileRef.current !== cur) return;
+        setFileNow({ ...cur, lastModified: disk.lastModified });
+        setView(v);
+        setVersion(x => x + 1);
+        showToast(`최신 저장본으로 바꿨습니다(${new Date(disk.lastModified).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 저장)`);
+      } catch { /* 다음 확인 때 다시 */ }
+    };
+    const t = window.setInterval(() => void check(), 60000);
+    const onFocus = () => { if (document.visibilityState !== 'hidden') void check(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { stop = true; window.clearInterval(t); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+  }, [file?.handle, file?.viewer]);
   const projectKey = (v: View | null) => (v ? `${v.meta.project_name ?? ''}|${v.meta.created_at ?? ''}` : '');
 
   /** 이 프로젝트의 복구 사본만 지운다(다른 프로젝트 사본은 남긴다) */
@@ -260,7 +297,8 @@ export function App() {
   }, [save.state]);
 
   // ───────── 열기 ─────────
-  const open = async (opened: OpenedFile, isSample: boolean) => {
+  const open = async (opened: OpenedFile, isSample: boolean, opts: { view?: boolean } = {}) => {
+    const asViewer = opts.view ?? new URLSearchParams(location.search).has('view');
     setBusy(true);
     try {
       // SQLite 머리(60–63바이트) = 구조 버전. 옛 구조면 바꾸기 전 원본을 남겨 둔다
@@ -279,7 +317,7 @@ export function App() {
       const lockedByOther = !!holder && (holder !== me || otherDevice) && Date.now() - beat < LOCK_FRESH_MS;
       const state: FileState = {
         name: opened.name, handle: opened.handle, lastModified: opened.lastModified,
-        readOnly: lockedByOther, lockedBy: lockedByOther ? holder : null, isSample,
+        readOnly: lockedByOther || asViewer, lockedBy: lockedByOther ? holder : null, isSample, viewer: asViewer,
       };
       fileGen.current += 1;
       window.clearTimeout(saveTimer.current);
@@ -291,12 +329,16 @@ export function App() {
       setVersion(x => x + 1);
       setCurUpdate(null);
       setGuideHidden(readGuideHidden(opened.name));
-      // 처음 화면: 주소의 page → 이 파일에서 마지막으로 본 화면 → 제작 기록이 있으면 현황판, 없으면 런칭(docs/23 6.2)
+      const seen = readNewsSeen(opened.name);
+      setNewsSeen(seen);
+      // 처음 화면: 주소의 page → 보기 모드면 새 소식이 있을 때 소식, 아니면 현황판 →
+      //   이 파일에서 마지막으로 본 화면 → 제작 기록이 있으면 현황판, 없으면 런칭(docs/23 6.2)
       const forced = new URLSearchParams(location.search).get('page') as Page | null;
-      setPage(forced || lastPageOf(opened.name) || (v.setup.records ? 'dashboard' : 'launch'));
-      // 편집 중 표시를 쓰고 저장할 때까지는 "저장 중"
-      setSave({ state: opened.handle && !lockedByOther ? 'saving' : 'saved' });
-      if (opened.handle && !lockedByOther) {
+      if (asViewer) setPage(forced && VIEWER_PAGES.includes(forced) ? forced : v.newsTimes.some(t => !seen || t > seen) ? 'news' : 'dashboard');
+      else setPage(forced || lastPageOf(opened.name) || (v.setup.records ? 'dashboard' : 'launch'));
+      // 편집 중 표시를 쓰고 저장할 때까지는 "저장 중"(보기 모드는 파일에 쓰지 않는다)
+      setSave({ state: opened.handle && !lockedByOther && !asViewer ? 'saving' : 'saved' });
+      if (opened.handle && !lockedByOther && !asViewer) {
         await rpc.lock(me);
         await writeNow();
       }
@@ -419,11 +461,20 @@ export function App() {
     showToast('저장하지 않았던 작업을 복구했습니다. 다른 이름으로 저장하십시오.');
   };
 
-  const openRecent = async (r: RecentFile) => {
+  /** 보기 모드 → 편집으로 다시 열기(쓰기 권한을 묻는다. 다른 사람이 편집 중이면 읽기 전용) */
+  const editInstead = async () => {
+    const f = fileRef.current;
+    if (!f?.handle) return;
+    if (!(await ensurePermission(f.handle, 'readwrite'))) { showToast('파일을 쓸 권한을 받지 못했습니다.'); return; }
+    const disk = await f.handle.getFile();
+    await open({ name: disk.name, bytes: await disk.arrayBuffer(), handle: f.handle, lastModified: disk.lastModified }, false, { view: false });
+  };
+
+  const openRecent = async (r: RecentFile, asViewer = false) => {
     try {
-      if (!(await ensurePermission(r.handle))) { showToast('파일을 쓸 권한을 받지 못했습니다.'); return; }
+      if (!(await ensurePermission(r.handle, asViewer ? 'read' : 'readwrite'))) { showToast(asViewer ? '파일을 읽을 권한을 받지 못했습니다.' : '파일을 쓸 권한을 받지 못했습니다.'); return; }
       const f = await r.handle.getFile();
-      await open({ name: f.name, bytes: await f.arrayBuffer(), handle: r.handle, lastModified: f.lastModified }, false);
+      await open({ name: f.name, bytes: await f.arrayBuffer(), handle: r.handle, lastModified: f.lastModified }, false, { view: asViewer });
     } catch (error) {
       showToast(`열지 못했습니다(옮겼거나 삭제한 파일일 수 있습니다): ${(error as Error).message}`);
     }
@@ -704,9 +755,12 @@ export function App() {
             <div class="recent">
               <span class="small muted">최근 파일</span>
               {recent.map(r => (
-                <button type="button" class="recent-item" onClick={() => void openRecent(r)}>
-                  <IconFolder /><span>{r.name}</span><span class="small faint">{new Date(r.at).toLocaleDateString('ko-KR')}</span>
-                </button>
+                <div class="recent-row">
+                  <button type="button" class="recent-item" onClick={() => void openRecent(r)}>
+                    <IconFolder /><span>{r.name}</span><span class="small faint">{new Date(r.at).toLocaleDateString('ko-KR')}</span>
+                  </button>
+                  <button type="button" class="btn sm" aria-label={`${r.name} 보기로 열기`} title="고치지 않고 보기만(파일에 쓰지 않음)" onClick={() => void openRecent(r, true)}><IconEye />보기</button>
+                </div>
               ))}
             </div>
           )}
@@ -716,6 +770,7 @@ export function App() {
           </label>
           <div class="actions">
             <button class="btn primary lg" disabled={busy} onClick={async () => { const f = await pickFile(); if (f) await open(f, false); }}><IconFolder />프로젝트 파일 열기</button>
+            <button class="btn lg" disabled={busy} title="고치지 않고 보기만 합니다. 파일에 아무것도 쓰지 않아 편집하는 사람을 막지 않습니다" onClick={async () => { const f = await pickFile(); if (f) await open(f, false, { view: true }); }}><IconEye />보기로 열기</button>
             <button class="btn lg" disabled={busy} onClick={() => setCreating(true)}>새 프로젝트 만들기</button>
             <button class="btn lg" disabled={busy} onClick={() => setImporting(true)}>엑셀로 가져오기</button>
             <button class="btn ghost lg" disabled={busy} onClick={async () => open(await fetchSample('normal'), true)}>예시 프로젝트로 둘러보기</button>
@@ -754,6 +809,13 @@ export function App() {
     ...(view.snapshot.launch ? [[view.snapshot.launch.updateId, view.snapshot.launch.name]] : []),
   ]);
 
+  // 소식: 이 브라우저에서 마지막으로 본 뒤 올라온 수
+  const unread = view.newsTimes.filter(t => !newsSeen || t > newsSeen).length;
+  const newsNav = (
+    <button class={`nav-item${page === 'news' ? ' active' : ''}`} title={helpDoc('news').short} aria-current={page === 'news' ? 'page' : undefined} onClick={() => setPage('news')}>
+      <IconBell />소식{unread > 0 && <span class="end pill accent" aria-label={`새 소식 ${unread}`}>{unread}</span>}
+    </button>
+  );
   const navItem = (p: Page, icon: JSX.Element) => (
     <button class={`nav-item${page === p ? ' active' : ''}`} title={helpDoc(p).short} aria-current={page === p ? 'page' : undefined} onClick={() => setPage(p)}>{icon}{helpDoc(p).name}</button>
   );
@@ -772,11 +834,21 @@ export function App() {
           <div class="small faint" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{file.name}</div>
         </div>
         <nav class="nav" aria-label="메뉴">
+          {file.viewer ? (
+            <>
+              <div class="nav-label">보기</div>
+              {newsNav}
+              {navItem('dashboard', <IconChart />)}
+              {navItem('assets', <IconImage />)}
+              {navItem('plan', <IconCalendar />)}
+            </>
+          ) : (<>
           {/* 메뉴 4묶음(docs/23-ux-review.md 6.1): 매일 보는 현황 → 결정할 때 계획 → 처음 한 번 기준 정보 → 기록 · 점검 */}
           <div class="nav-label">현황</div>
           {navItem('dashboard', <IconChart />)}
           {navItem('assets', <IconImage />)}
           {navItem('progress', <IconProgress />)}
+          {newsNav}
           <div class="nav-label">계획</div>
           {navItem('launch', <IconLaunch />)}
           {navItem('plan', <IconCalendar />)}
@@ -793,22 +865,33 @@ export function App() {
             {(errors > 0 || warns > 0) && <span class={`end pill ${errors ? 'bad' : 'warn'}`}>{errors || warns}</span>}
           </button>
           {navItem('history', <IconHistory />)}
+          </>)}
         </nav>
         <div class="sidebar-foot">
-          <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>
-          {!file.handle && <div class="small faint editor">수정한 내용을 남기려면 다른 이름으로 저장하십시오</div>}
+          {file.viewer
+            ? <div class="save-state"><span class="dot accent" />보기 모드</div>
+            : <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>}
+          {!file.handle && !file.viewer && <div class="small faint editor">수정한 내용을 남기려면 다른 이름으로 저장하십시오</div>}
           <div style="display: flex; gap: 6px">
-            <button class="btn sm" disabled={file.readOnly || save.state === 'saving'} onClick={() => void writeNow()} title="저장 (Ctrl+S)"><IconSave />{file.handle ? '저장' : '다른 이름으로 저장'}</button>
+            {!file.viewer && <button class="btn sm" disabled={file.readOnly || save.state === 'saving'} onClick={() => void writeNow()} title="저장 (Ctrl+S)"><IconSave />{file.handle ? '저장' : '다른 이름으로 저장'}</button>}
             {file.handle && !file.readOnly && (save.state === 'conflict' || save.state === 'error') && <button class="btn sm" onClick={() => void saveAsNew()}>다른 이름으로</button>}
             <button class="btn sm" title="이 파일을 닫고 시작 화면으로 돌아갑니다" onClick={() => void close()}>파일 닫기</button>
           </div>
           <button class="btn sm ghost" style="justify-content: flex-start" title="업데이트 전망 · 파트 부하 등 보고용 표(다시 가져올 수 없음)" onClick={() => void exportXlsx()}><IconDownload />보고용 엑셀 내보내기</button>
-          <button class="btn sm ghost" style="justify-content: flex-start" title="가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져올 수 있음" onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>
-          <div class="small faint editor">편집자 {me}</div>
+          {!file.viewer && <button class="btn sm ghost" style="justify-content: flex-start" title="가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져올 수 있음" onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>}
+          <div class="small faint editor">{file.viewer ? `보는 사람 ${me}` : `편집자 ${me}`}</div>
         </div>
       </aside>
       <main class="main">
-        {file.readOnly && (
+        {file.viewer && (
+          <div class="page" style="margin-bottom: 16px">
+            <div class="banner viewer-banner" role="status"><IconEye /><div style="flex: 1"><b>보기 모드</b>
+              <p class="small muted">마지막 저장 {new Date(file.lastModified).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{view.meta.lock_holder && Date.now() - Date.parse(view.meta.lock_heartbeat_at ?? '') < LOCK_FRESH_MS ? ` · 지금 ${view.meta.lock_holder}님이 편집 중` : ''}{file.handle ? ' · 저장되면 1분 안에 최신으로 바뀝니다' : ''}</p></div>
+              {file.handle && canSaveInPlace && <button type="button" class="btn sm" onClick={() => void editInstead()}>편집으로 열기</button>}
+            </div>
+          </div>
+        )}
+        {file.readOnly && !file.viewer && (
           <div class="page" style="margin-bottom: 16px">
             <div class="banner warn"><IconLock /><div><b>{file.lockedBy}님이 편집 중이라 읽기 전용으로 열었습니다</b><p class="small muted">편집을 마치거나 30분 동안 저장이 없으면 수정할 수 있습니다.</p></div></div>
           </div>
@@ -849,13 +932,15 @@ export function App() {
           </div>
         )}
         {/* 처음 할 일 안내: 화면 맨 위(docs/23-ux-review.md 6.4) */}
-        {(page === 'dashboard' || page === 'launch') && !guideHidden && !setupDone(view.setup) && (
+        {(page === 'dashboard' || page === 'launch') && !file.viewer && !guideHidden && !setupDone(view.setup) && (
           <div class="page" style="margin-bottom: 16px">
             <SetupGuide status={view.setup} onGo={p => setPage(p)} onHide={() => { setGuideHidden(true); writeGuideHidden(file.name); }} />
           </div>
         )}
         {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} />}
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
+        {page === 'news' && <NewsPage version={version} readOnly={file.readOnly} project={view.snapshot.projectName} seenAt={newsSeen}
+          onSeen={() => { const at = new Date().toISOString(); writeNewsSeen(file.name, at); setNewsSeen(at); }} onApply={onApply} onToast={showToast} />}
         {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} updateId={curUpdate} onUpdate={setCurUpdate} />}

@@ -1,6 +1,7 @@
 // 샘플 프로젝트 파일 만들기: samples/*.mjs → samples/out/*.arp
 //   node tools/build-samples.mjs
 import { mkdirSync } from 'node:fs';
+import { downgradeToV1Sql } from '../core/tables.ts';
 import { fileURLToPath } from 'node:url';
 import { createProjectFile } from './lib/project-db.mjs';
 import { writeFileSync, copyFileSync } from 'node:fs';
@@ -21,11 +22,11 @@ export async function buildSamples(outDir = `${ROOT}samples/out`) {
     createProjectFile(path, mod.build()).close();
     built.push({ name, path, expect: mod.expect });
   }
-  // 옛 구조(v1) 예시: 구조 전환 시험용. 정상 샘플에서 v2 칸을 빼고 버전을 1로 되돌린다
+  // 옛 구조(v1) 예시: 구조 전환 시험용. 정상 샘플에서 v1 뒤에 생긴 표 · 칸을 빼고 버전을 1로 되돌린다
   const v1 = `${outDir}/normal-v1.arp`;
   copyFileSync(`${outDir}/normal.arp`, v1);
   const old = new DatabaseSync(v1);
-  old.exec('DROP TABLE people; DROP TABLE asset_attrs; DROP TABLE asset_comments; DROP TABLE asset_links; DROP TABLE asset_thumbs; DROP TABLE asset_parts; DROP TABLE assets; DROP TABLE batches; ALTER TABLE progress DROP COLUMN spent_days; ALTER TABLE scenario_changes DROP COLUMN group_no; ALTER TABLE scenario_changes DROP COLUMN label; ALTER TABLE scenarios DROP COLUMN applied_at; PRAGMA user_version = 1;');
+  old.exec(downgradeToV1Sql()); // 나중에 생긴 표 · 칸은 core/tables.ts 목록에서
   old.close();
 
   // 옛 도구 시트 예시(.xlsx): 가져오기 화면 시험용

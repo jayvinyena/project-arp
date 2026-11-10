@@ -34,4 +34,6 @@ export const IconChart = () => base(<><path d="M4 19h16" /><path d="M6 16l4-5 3 
 /** 넓게 보기(양옆으로 펼침) · 기본 폭(가운데로 모음) */
 export const IconWiden = () => base(<><path d="M4 5v14M20 5v14" /><path d="M8 12h8M10.5 9.5L8 12l2.5 2.5M13.5 9.5L16 12l-2.5 2.5" /></>);
 export const IconNarrow = () => base(<><path d="M4 5v14M20 5v14" /><path d="M7 12h3.5M13.5 12H17M8.5 9.5L11 12l-2.5 2.5M15.5 9.5L13 12l2.5 2.5" /></>);
+export const IconBell = () => base(<><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></>);
+export const IconEye = () => base(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.8" /></>);
 export const IconHelp = () => base(<><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7" /><path d="M12 16.9v.01" /></>);

@@ -41,7 +41,7 @@ function requestThumb(assetId: string, at: string, done: (url: string | null) =>
       for (const k of keys) {
         const [id] = k.split('@');
         const it = got.get(id);
-        const url = it ? URL.createObjectURL(new Blob([it.data], { type: it.mime })) : null;
+        const url = it ? URL.createObjectURL(new Blob([it.data as BlobPart], { type: it.mime })) : null;
         if (url) thumbCache.set(k, url);
         for (const cb of cbs.get(k) ?? []) cb(url);
       }
