@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 6;
+export const LATEST_SCHEMA = 7;
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -103,6 +103,21 @@ const STEPS: { to: number; note: string; sql: string }[] = [
         value      TEXT NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (asset_id, name)
+      ) STRICT;
+    `,
+  },
+  {
+    to: 7,
+    note: '작업자 명단: 이름 · 소속팀 · 이메일 · 특이사항 · 참여(docs/24-people.md)',
+    sql: `
+      CREATE TABLE people (
+        person_id  TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        team       TEXT,
+        email      TEXT,
+        note       TEXT,
+        active     INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+        sort_order INTEGER NOT NULL DEFAULT 0
       ) STRICT;
     `,
   },

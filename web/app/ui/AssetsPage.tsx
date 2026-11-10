@@ -247,7 +247,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                           <td>{s.status === 'DONE'
                             ? <input class="field" type="date" aria-label={`${p.name} 완료일`} value={s.doneAt ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, doneAt: (e.target as HTMLInputElement).value || null })} />
                             : <span class="faint small">{s.startedAt ? `시작 ${s.startedAt}` : '—'}</span>}</td>
-                          <td><Field value={s.assignee ?? ''} label={`${p.name} 담당`} placeholder="이름" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, assignee: t })} /></td>
+                          <td><Field value={s.assignee ?? ''} label={`${p.name} 담당`} placeholder="이름" list="asset-people" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, assignee: t })} /></td>
                           <td><span class="inline nowrap"><Field value={s.jiraKey ?? ''} label={`${p.name} Jira 키`} placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, jiraKey: t })} />
                             {jh && <a class="jira-link" href={jh} target="_blank" rel="noreferrer" aria-label={`${s.jiraKey} 열기`}>↗</a>}</span></td>
                           <td class="n num">{s.retakes || <span class="faint">0</span>}</td>
@@ -507,6 +507,8 @@ export function AssetsPage(props: {
 
   return (
     <div class="page assets-page">
+      {/* 담당 칸 제안: 인력 화면의 작업자 명단(참여 중) */}
+      <datalist id="asset-people">{v.people.map(p => <option value={p.name}>{p.team ?? ''}</option>)}</datalist>
       <header class="page-head">
         <div>
           <PageEyebrow page="assets" />
@@ -654,7 +656,7 @@ export function AssetsPage(props: {
                                 ? <StatusSelect value={a.sub} label={`${a.name} 세부 상태`} disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
                                 : <span class={`label-chip st-${a.sub}`}>{LABEL[a.sub]}</span>}</td>
                               <td>{midStage
-                                ? <Field value={a.assignee ?? ''} label={`${a.name} 담당`} placeholder="담당" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, assignee: t })} />
+                                ? <Field value={a.assignee ?? ''} label={`${a.name} 담당`} placeholder="담당" list="asset-people" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, assignee: t })} />
                                 : <span class="faint small">{a.assignee ?? '—'}</span>}</td>
                               <td><select class="field" aria-label={`${a.name} 배치`} value={a.batchId ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'batch_id', value: (e.target as HTMLSelectElement).value || null })}>
                                 <option value="">미배정</option>{v.batches.map(b => <option value={b.batchId}>{b.name}</option>)}

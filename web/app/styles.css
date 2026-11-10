@@ -1274,3 +1274,12 @@ table.grid.asset-parts-table tr.row.omit td { color: var(--text-3); }
 
 /* 메뉴가 길어도 아래 저장 · 내보내기가 잘리지 않게: 낮은 화면에서는 메뉴만 스크롤 */
 @media (min-width: 861px) { .sidebar .nav { flex: 0 1 auto; min-height: 0; overflow-y: auto; } .sidebar .sidebar-foot { flex: none; } }
+
+/* ───────── 작업자 명단(인력 화면 탭) ───────── */
+table.grid.people-table { min-width: 760px; }
+table.grid.people-table tr.row.off td { opacity: .55; }
+
+.people-table td:first-child .field.ghost-field { color: var(--text); font-weight: 600; font-size: 13px; }
+/* 빈 칸의 예시 글이 값처럼 보이지 않게: 줄에 올리거나 칸을 눌렀을 때만 흐리게 */
+.people-table .field.ghost-field::placeholder { color: transparent; }
+.people-table tr.row:hover .field.ghost-field::placeholder, .people-table .field.ghost-field:focus::placeholder { color: var(--text-3); opacity: .7; }

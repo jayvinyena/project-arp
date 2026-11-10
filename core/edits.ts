@@ -6,6 +6,8 @@ import type { PlanMode } from '../engine/types.ts';
 import { PLAN_MODES, DEFAULT_MODE_NAMES, modeMetaKey, readModeNames } from './modes.ts';
 import type { AssetEdit } from './assets.ts';
 import { applyAssetEdit, ASSET_EDIT_KINDS, assetDriven } from './assets.ts';
+import type { PeopleEdit } from './people.ts';
+import { applyPeopleEdit, PEOPLE_EDIT_KINDS } from './people.ts';
 
 export type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 export type UpdateField = 'name' | 'update_type_id' | 'start_date' | 'freeze_date' | 'release_date' | 'status';
@@ -64,7 +66,8 @@ export type Edit =
   // AI 활용 비율(파트별): 공수 = 기본 × (1 − 비율) + AI 사용 시 × 비율
   | { kind: 'aiShare'; partId: string; share: number }
   // 에셋 관리(core/assets.ts)
-  | AssetEdit;
+  | AssetEdit
+  | PeopleEdit;
 
 export interface EditContext { editor: string; batchId: string; reason?: string }
 export interface EditResult { changed: boolean; createdId?: string }
@@ -114,6 +117,7 @@ const qtyOk = (v: number | null) => v == null || (Number.isInteger(v) && v >= 0)
 export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: EditContext): EditResult {
   const dirty = (...t: EngineTable[]) => session.markDirty(...t);
   if (ASSET_EDIT_KINDS.has(edit.kind)) return applyAssetEdit(db, session, edit as AssetEdit, ctx);
+  if (PEOPLE_EDIT_KINDS.has(edit.kind)) return applyPeopleEdit(db, edit as PeopleEdit, ctx);
 
   switch (edit.kind) {
     // ───────── 업데이트 ─────────

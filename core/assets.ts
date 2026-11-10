@@ -6,6 +6,7 @@ import type { ProjectSession } from './pipeline.ts';
 import type { PlanMode } from '../engine/types.ts';
 import type { EditContext, EditResult } from './edits.ts';
 import { log, nextId, DATE, fail } from './edits.ts';
+import { peopleList } from './people.ts';
 
 export type AssetStatus = 'TODO' | 'WIP' | 'REVIEW' | 'RETAKE' | 'DONE' | 'HOLD' | 'OMIT';
 export const ASSET_STATUSES: AssetStatus[] = ['TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD', 'OMIT'];
@@ -660,6 +661,8 @@ export interface AssetsView {
   batches: { batchId: string; name: string; dueDate: string | null; sortOrder: number; note: string | null; count: number; done: number; progress: number }[];
   assets: AssetItem[];
   jiraBase: string | null;
+  /** 담당 칸 제안: 참여 중인 작업자(이름 · 소속팀) */
+  people: { name: string; team: string | null }[];
   totals: { assets: number; done: number; progress: number; review: number; retake: number; hold: number };
 }
 
@@ -670,7 +673,8 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
   const updateId = updates.find(u => u.updateId === wanted)?.updateId ?? updates[0]?.updateId ?? null;
   const parts = db.all('SELECT part_id, name FROM parts WHERE active = 1 ORDER BY sort_order').map(p => ({ partId: String(p.part_id), name: String(p.name) }));
   const jiraBase = db.get("SELECT value FROM meta WHERE key = 'jira_base_url'")?.value;
-  const empty: AssetsView = { updates, updateId, parts, groups: [], batches: [], assets: [], jiraBase: jiraBase == null ? null : String(jiraBase), totals: { assets: 0, done: 0, progress: 0, review: 0, retake: 0, hold: 0 } };
+  const people = peopleList(db).filter(p => p.active).map(p => ({ name: p.name, team: p.team }));
+  const empty: AssetsView = { updates, updateId, parts, groups: [], batches: [], assets: [], jiraBase: jiraBase == null ? null : String(jiraBase), people, totals: { assets: 0, done: 0, progress: 0, review: 0, retake: 0, hold: 0 } };
   if (!updateId) return empty;
 
   const partOrder = parts.map(p => p.partId);
@@ -766,7 +770,7 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
   });
   const any = (st: AssetStatus) => assets.filter(x => Object.values(x.parts).some(s => s.status === st)).length;
   return {
-    updates, updateId, parts, groups, batches, assets, jiraBase: jiraBase == null ? null : String(jiraBase),
+    updates, updateId, parts, groups, batches, assets, jiraBase: jiraBase == null ? null : String(jiraBase), people,
     totals: {
       assets: assets.length, done: assets.filter(isDone).length,
       progress: assets.length ? assets.reduce((s, x) => s + x.progress, 0) / assets.length : 0,

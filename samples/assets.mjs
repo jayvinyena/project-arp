@@ -43,5 +43,12 @@ export function build() {
     if (i < 2) data.asset_parts.push({ asset_id: id, part_id: 'CONCEPT', status: 'WIP', started_at: '2026-11-04', done_at: null, retakes: 0, assignee: '이원화', jira_key: null });
   });
   data.meta.push({ key: 'jira_base_url', value: 'https://example.atlassian.net/browse/' });
+  // 작업자 명단(가상): 에셋 담당 이름과 같게
+  data.people = [
+    { person_id: 'P001', name: '김원화', team: '원화', email: 'kim@example.com', note: null, active: 1, sort_order: 1 },
+    { person_id: 'P002', name: '이원화', team: '원화', email: null, note: '12월 휴가 예정', active: 1, sort_order: 2 },
+    { person_id: 'P003', name: '박모델', team: '모델링', email: 'park@example.com', note: null, active: 1, sort_order: 3 },
+    { person_id: 'P004', name: '최애니', team: '애니메이션', email: null, note: '외주', active: 0, sort_order: 4 },
+  ];
   return data;
 }

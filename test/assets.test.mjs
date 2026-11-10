@@ -35,7 +35,7 @@ test('구조 전환: v1 파일 → 최신(v6), 에셋 표 7개가 생긴다', ()
   const raw = new DatabaseSync(path);
   const r = migrate(nodeDb(raw));
   assert.deepEqual([r.from, r.to], [1, LATEST_SCHEMA]);
-  assert.equal(LATEST_SCHEMA, 6);
+  assert.equal(LATEST_SCHEMA, 7);
   const tables = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(x => x.name);
   for (const t of ['batches', 'assets', 'asset_parts', 'asset_thumbs', 'asset_links', 'asset_comments', 'asset_attrs']) assert.ok(tables.includes(t), t);
   raw.close();
