@@ -10,6 +10,7 @@ import { ProjectSession, calculate, validate } from '../core/pipeline.ts';
 import { applyEdit } from '../core/edits.ts';
 import { undoBatch } from '../core/history.ts';
 import { pipelinesList, partOrderFor } from '../core/pipelines.ts';
+import { migrate } from '../core/migrate.ts';
 import { assetsView } from '../core/assets.ts';
 
 const OUT = fileURLToPath(new URL('../samples/out/test-pipelines', import.meta.url));
@@ -27,7 +28,10 @@ test('재현 해결: 배경 원화 · 배경 모델링 파이프라인으로 배
   const bgC = apply({ kind: 'createPart', name: '배경 원화' }).createdId;
   const bgM = apply({ kind: 'createPart', name: '배경 모델링' }).createdId;
   const pid = apply({ kind: 'createPipeline', name: '배경', partIds: [bgC, bgM] }).createdId;
-  assert.deepEqual(pipelinesList(t.db).map(p => [p.name, p.steps.map(s => s.partId), p.resources]), [['배경', [bgC, bgM], 0]]);
+  // 예시 파일은 "기본" 파이프라인(리소스들이 거치는 파트만). 새 파트는 파트 목록에만 생기고 기본에 들어가지 않는다(docs/29)
+  const lists = pipelinesList(t.db).map(p => [p.name, p.steps.map(s => s.partId), p.resources]);
+  assert.deepEqual(lists, [['기본', ['CONCEPT', 'MODELING', 'ANIMATION', 'FX'], 6], ['배경', [bgC, bgM], 0]]);
+  assert.throws(() => apply({ kind: 'effort', resourceTypeId: 'BG_MAP', partId: bgC, profileId: 'BASE', days: 3 }), /파이프라인의 단계가 아닌/);
   // 진척이 있는 칸 비우기는 여전히 바로 하지 않는다(화면에서 옮기기 · 지우기 창)
   assert.throws(() => apply({ kind: 'effort', resourceTypeId: 'BG_MAP', partId: 'CONCEPT', profileId: 'BASE', days: null }), /옮기기/);
   // 새 파이프라인에 없는 파트를 정하지 않으면 거절
@@ -50,7 +54,7 @@ test('재현 해결: 배경 원화 · 배경 모델링 파이프라인으로 배
   undoBatch(t.db, t.session, c.batchId, ctx());
   assert.deepEqual(rows(t.db, "SELECT part_id FROM resource_parts WHERE resource_type_id = 'BG_MAP' ORDER BY part_id").map(r => r.part_id), ['CONCEPT', 'MODELING']);
   assert.deepEqual(rows(t.db, "SELECT part_id, completed_qty FROM progress WHERE resource_type_id = 'BG_MAP'"), [{ part_id: 'CONCEPT', completed_qty: 1 }]);
-  assert.equal(t.db.get("SELECT pipeline_id FROM resource_types WHERE resource_type_id = 'BG_MAP'").pipeline_id, null);
+  assert.equal(t.db.get("SELECT pipeline_id FROM resource_types WHERE resource_type_id = 'BG_MAP'").pipeline_id, 'L00', '기본 파이프라인으로 돌아온다');
   assert.ok(!validate(t.db).some(f => f.level === 'ERROR'));
 });
 
@@ -64,7 +68,7 @@ test('같은 파트를 다른 순서로: 프랍만 모델링 → 원화, 단계 
   const prop = stagesOf(t.db, 'PROP');
   assert.deepEqual(prop.map(s => [s.partId, s.predecessorPartId]), [['MODELING', null], ['CONCEPT', 'MODELING']]);
   assert.deepEqual([prop[1].overlapRate, prop[1].overlapSource], [0.5, 'STEP']);
-  assert.deepEqual(stagesOf(t.db, 'BG_MAP').map(s => s.partId), before, '다른 리소스는 그대로(파트 표 순서)');
+  assert.deepEqual(stagesOf(t.db, 'BG_MAP').map(s => s.partId), before, '다른 리소스는 그대로(기본 파이프라인)');
   apply({ kind: 'stepOverlap', pipelineId: pid, partId: 'CONCEPT', rate: null });
   assert.equal(stagesOf(t.db, 'PROP')[1].overlapSource, 'DEFAULT', '비우면 파트 쌍(모델링 > 원화 없음) → 기본');
   assert.deepEqual(partOrderFor(t.db)('PROP').slice(0, 2), ['MODELING', 'CONCEPT']);
@@ -74,6 +78,10 @@ test('에셋이 있는 리소스: 옮기면 에셋 상태 · 자동 집계도 �
   const t = open('assets');
   const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
   const np = apply({ kind: 'createPart', name: '컨셉' }).createdId;
+  // 새 파트는 파이프라인에 넣어야 옮길 수 있다(docs/29)
+  assert.throws(() => apply({ kind: 'moveResourcePart', resourceTypeIds: ['CHAR_NEW'], fromPartId: 'CONCEPT', toPartId: np }), /단계가 아닙니다/);
+  const base = pipelinesList(t.db).find(p => p.name === '기본');
+  apply({ kind: 'pipelineSteps', pipelineId: base.pipelineId, partIds: [np, ...base.steps.map(s => s.partId)] });
   const doneBefore = Number(t.db.get("SELECT count(*) AS n FROM asset_parts ap JOIN assets a ON a.asset_id = ap.asset_id WHERE a.resource_type_id = 'CHAR_NEW' AND ap.part_id = 'CONCEPT'").n);
   const c = ctx();
   apply({ kind: 'moveResourcePart', resourceTypeIds: ['CHAR_NEW'], fromPartId: 'CONCEPT', toPartId: np }, c);
@@ -112,4 +120,29 @@ test('순서 한 번에: 파트 표 · 배치 · 업데이트 우선순위(이�
   assert.equal(t.db.get("SELECT overlap_rate FROM part_overlaps WHERE from_part_id = 'MODELING' AND to_part_id = 'FX'").overlap_rate, 0.4);
   apply({ kind: 'overlapPair', fromPartId: 'MODELING', toPartId: 'FX', rate: null });
   assert.equal(t.db.get("SELECT count(*) AS n FROM part_overlaps WHERE from_part_id = 'MODELING' AND to_part_id = 'FX'").n, 0);
+});
+
+test('파일 구조 v11: 파이프라인이 없던 리소스는 "기본"(그 리소스들이 거치는 파트만, 파트 표 순서), 아무도 안 거치는 새 파트는 빠지고 계산은 그대로(docs/29)', () => {
+  const t = open('normal');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  const loose = apply({ kind: 'createPart', name: '배경 원화' }).createdId;
+  // v10처럼 되돌리기: 파이프라인 없음 · 리소스 파이프라인 비움
+  t.db.exec("DELETE FROM pipeline_steps; DELETE FROM pipelines; UPDATE resource_types SET pipeline_id = NULL; PRAGMA user_version = 10;");
+  const before = calculate(t.db, { planMode: 'TARGET' }).result.stages.map(s => [s.updateId, s.resourceTypeId, s.partId, s.predecessorPartId, s.overlapRate, s.end]);
+  assert.ok(validate(t.db).some(f => f.code === 'E10'), '파이프라인 없는 리소스는 주의');
+  const r = migrate(t.db);
+  assert.deepEqual([r.from, r.to], [10, 11]);
+  const lists = pipelinesList(t.db);
+  assert.deepEqual(lists.map(p => [p.pipelineId, p.name, p.steps.map(s => s.partId), p.steps.every(s => s.overlap == null)]), [['L00', '기본', ['CONCEPT', 'MODELING', 'ANIMATION', 'FX'], true]]);
+  assert.ok(!lists[0].steps.some(s => s.partId === loose), '아무도 거치지 않는 새 파트는 넣지 않는다');
+  assert.equal(Number(t.db.get('SELECT count(*) AS n FROM resource_types WHERE pipeline_id IS NULL').n), 0);
+  const after = calculate(t.db, { planMode: 'TARGET' }).result.stages.map(s => [s.updateId, s.resourceTypeId, s.partId, s.predecessorPartId, s.overlapRate, s.end]);
+  assert.deepEqual(after, before, '계산 결과 그대로');
+  assert.ok(!validate(t.db).some(f => f.code === 'E10'));
+  // 새 리소스는 첫 파이프라인 · 고른 파이프라인
+  const rid = apply({ kind: 'createResource', name: '탈것', groupName: '오브젝트' }).createdId;
+  assert.equal(t.db.get('SELECT pipeline_id FROM resource_types WHERE resource_type_id = ?', [rid]).pipeline_id, 'L00');
+  const pid = apply({ kind: 'createPipeline', name: '배경', partIds: [loose] }).createdId;
+  const rid2 = apply({ kind: 'createResource', name: '배경 소품', groupName: '배경', pipelineId: pid }).createdId;
+  assert.equal(t.db.get('SELECT pipeline_id FROM resource_types WHERE resource_type_id = ?', [rid2]).pipeline_id, pid);
 });

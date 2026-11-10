@@ -1,6 +1,6 @@
 // 새 프로젝트 만들기: 마법사 입력 → 검사 → 표 행 → 새 SQLite 파일. Node와 브라우저(Worker)가 같이 쓴다.
 import type { SqlDb } from './db.ts';
-import { migrate } from './migrate.ts';
+import { migrate, ensureDefaultPipeline } from './migrate.ts';
 
 export interface NewPart { name: string; headcount: number; utilization: number }
 export interface NewResource { group: string; name: string; /** 파트 순서대로 1개당 공수(인·일). null = 거치지 않음 */ efforts: (number | null)[] }
@@ -229,6 +229,7 @@ export function writeNewProject(db: SqlDb, schemaSql: string, input: NewProjectI
         db.run(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(c => row[c]));
       }
     }
+    ensureDefaultPipeline(db, true); // 마법사에서 정한 파트 순서 = 파이프라인 "기본"(docs/29)
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');

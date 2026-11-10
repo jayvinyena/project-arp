@@ -271,11 +271,25 @@ export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Shee
       const rtName = clean(want?.name);
       if (!rtName) throw new Error('새 리소스 종류의 이름이 비었습니다.');
       let id = db.get('SELECT resource_type_id FROM resource_types WHERE name = ?', [rtName])?.resource_type_id as string | undefined;
+      const [sheet] = JSON.parse(key) as string[];
       if (!id) {
-        id = run({ kind: 'createResource', name: rtName, groupName: clean(want?.group) }).createdId!;
+        // 파이프라인: 이 시트의 파트를 모두 담은 첫 파이프라인, 없으면 시트 이름 · 시트 열 순서로 새로(docs/29)
+        const want2 = sheetParts.get(sheet) ?? [];
+        const steps = new Map<string, Set<string>>();
+        for (const r of db.all('SELECT s.pipeline_id, s.part_id FROM pipeline_steps s JOIN pipelines p ON p.pipeline_id = s.pipeline_id ORDER BY p.sort_order, p.pipeline_id')) {
+          const k = String(r.pipeline_id);
+          if (!steps.has(k)) steps.set(k, new Set());
+          steps.get(k)!.add(String(r.part_id));
+        }
+        let pipelineId = [...steps].find(([, set]) => want2.every(p => set.has(p)))?.[0] ?? null;
+        if (!pipelineId && want2.length) {
+          let nm = clean(sheet) || rtName;
+          for (let i = 2; db.get('SELECT 1 AS ok FROM pipelines WHERE name = ?', [nm]); i++) nm = `${clean(sheet) || rtName} ${i}`;
+          pipelineId = run({ kind: 'createPipeline', name: nm, partIds: want2 }).createdId!;
+        }
+        id = run({ kind: 'createResource', name: rtName, groupName: clean(want?.group), ...(pipelineId ? { pipelineId } : {}) }).createdId!;
         report.resourcesCreated.push(rtName);
       }
-      const [sheet] = JSON.parse(key) as string[];
       for (const partId of sheetParts.get(sheet) ?? []) {
         if (!db.get('SELECT 1 AS ok FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [id, partId])) {
           run({ kind: 'effort', resourceTypeId: id, partId, profileId: 'BASE', days: 0 });

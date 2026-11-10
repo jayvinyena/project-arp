@@ -1,5 +1,5 @@
-// 공정 순서 · 파이프라인(docs/28): 기본(파트 표 순서)과 이름 붙인 파이프라인. 단계 칩은 끌어서 순서를 바꾸고,
-// 단계 사이 겹침률은 눌러서 고친다(비우면 파트 쌍 → 기본). 리소스는 리소스 · 공수 표에서 파이프라인을 고른다.
+// 공정 순서 · 파이프라인(docs/28 · 29): 이름 붙인 파이프라인만. 파트 표는 목록일 뿐, 새 파트는 어느 파이프라인에도 들어가지 않는다.
+// 단계 칩은 끌어서 순서를 바꾸고, 단계 사이 겹침률은 눌러서 고친다(비우면 파트 쌍 → 기본). 리소스는 리소스 · 공수 표에서 파이프라인을 고른다.
 import { useState } from 'preact/hooks';
 import type { SetupView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -58,24 +58,23 @@ function StepChips(props: { v: SetupView; ids: string[]; own: (partId: string) =
 export function PipelineSection(props: { v: SetupView; readOnly: boolean; apply: (e: Edit) => Promise<boolean> }) {
   const { v, readOnly: ro, apply } = props;
   const [newName, setNewName] = useState('');
-  const active = v.parts.filter(p => p.active).map(p => p.partId);
   const pair = (from: string, to: string) => v.overlaps.find(o => o.from === from && o.to === to)?.rate ?? null;
-  const defaultUsers = v.resources.filter(r => !r.pipelineId || !v.pipelines.some(p => p.pipelineId === r.pipelineId)).length;
+  const unpicked = v.resources.filter(r => !r.pipelineId || !v.pipelines.some(p => p.pipelineId === r.pipelineId));
+  const loose = v.parts.filter(p => p.active && !v.pipelines.some(pl => pl.steps.some(s => s.partId === p.partId)));
   return (
     <section class="card" aria-label="공정 순서 · 파이프라인">
       <div class="card-head">
         <div><h2>공정 순서 · 파이프라인</h2>
-          <p class="small muted" style="margin-top: 2px">리소스는 파이프라인 하나의 순서대로 작업합니다(리소스 · 공수 표의 "파이프라인"). 고르지 않으면 <b>기본(파트 표 순서)</b>. 단계 칩은 끌어서 순서를 바꾸고, 단계 사이 % 는 겹침률(앞 공정이 이만큼 끝나면 다음 공정 시작)입니다.</p></div>
+          <p class="small muted" style="margin-top: 2px">리소스는 파이프라인 하나의 단계 순서대로 작업합니다(리소스 · 공수 표의 "파이프라인"). 파트를 더해도 파이프라인은 바뀌지 않습니다. 단계 칩은 끌어서 순서를 바꾸고, 단계 사이 % 는 겹침률(앞 공정이 이만큼 끝나면 다음 공정 시작, 점선은 물려받은 값)입니다.</p></div>
       </div>
       <div class="card-body pipelines">
-        <div class="pipeline-card">
-          <div class="pipeline-head"><b>기본(파트 표 순서)</b><span class="small faint">리소스 {defaultUsers}종 · 순서는 위 파트 표에서 바꿉니다</span></div>
-          {/* 기본 순서의 단계 사이 값은 파트 쌍 겹침률(없으면 설정의 기본 겹침률을 흐리게) */}
-          <StepChips v={v} ids={active} readOnly={ro} dragLabel="기본" own={id => { const i = active.indexOf(id); return i > 0 ? pair(active[i - 1], id) : null; }}
-            inherited={() => v.defaultOverlap}
-            onOrder={ids => apply({ kind: 'reorderParts', partIds: [...ids, ...v.parts.filter(p => !p.active).map(p => p.partId)] })}
-            onOverlap={(id, rate) => { const i = active.indexOf(id); return apply({ kind: 'overlapPair', fromPartId: active[i - 1], toPartId: id, rate }); }} />
-        </div>
+        {loose.length > 0 && (
+          <p class="pipe-note small" role="note">어느 파이프라인에도 없는 파트: <b>{loose.map(p => p.name).join(' · ')}</b>. 이 파트로는 일이 가지 않습니다. 쓰는 파이프라인에 "＋ 단계 더하기"로 넣거나 새 파이프라인을 만드십시오.</p>
+        )}
+        {unpicked.length > 0 && (
+          <p class="pipe-note small" role="note">파이프라인을 고르지 않은 리소스 {unpicked.length}종({unpicked.slice(0, 4).map(r => r.name).join(', ')}{unpicked.length > 4 ? ' 등' : ''})은 파트 표 순서로 계산합니다. 리소스 · 공수 표에서 고르십시오.</p>
+        )}
+        {v.pipelines.length === 0 && <p class="small faint">파이프라인이 없습니다. 아래에서 만들고 단계를 순서대로 더합니다.</p>}
         {v.pipelines.map(pl => {
           const ids = pl.steps.map(s => s.partId);
           const rest = v.parts.filter(p => p.active && !ids.includes(p.partId));

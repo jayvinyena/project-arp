@@ -48,7 +48,7 @@ function PartRows(props: { v: SetupView; ro: boolean; apply: (e: Edit) => Promis
 export function SetupPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean> }) {
   const [v, setV] = useState<SetupView | null>(null);
   const [newPart, setNewPart] = useState('');
-  const [newRes, setNewRes] = useState({ group: '', name: '' });
+  const [newRes, setNewRes] = useState({ group: '', name: '', pipe: '' });
   const [hol, setHol] = useState({ date: '', name: '', kind: 'COMPANY' as 'PUBLIC' | 'COMPANY' });
   const [moveReq, setMoveReq] = useState<MoveRequest | PipelineRequest | null>(null);
   useEffect(() => { void rpc.setup().then(setV); }, [props.version]);
@@ -119,13 +119,13 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
 
       <section class="card" aria-label="파트">
         <div class="card-head">
-          <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">순서 = 기본 공정 순서입니다(파이프라인을 고르지 않은 리소스). 왼쪽 손잡이(⠿)나 줄을 길게 눌러 끌면 순서가 바뀝니다. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용됩니다. 달마다 다르게 하려면 "인력"에서 수정합니다.</p></div>
+          <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">제작 팀(공정) 목록입니다. 순서는 화면에 보이는 순서이고, 공정 순서는 아래 "공정 순서 · 파이프라인"에서 정합니다. 왼쪽 손잡이(⠿)나 줄을 길게 눌러 끌면 순서가 바뀝니다. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용됩니다. 달마다 다르게 하려면 "인력"에서 수정합니다.</p></div>
         </div>
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap ref-wrap">
             <table class="grid edit ref setup-parts">
-              <colgroup><col style="width: 44px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 120px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
-              <thead><tr><th aria-label="순서" /><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
+              <colgroup><col style="width: 44px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 200px" /><col style="width: 110px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
+              <thead><tr><th aria-label="순서" /><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th title="이 파트를 단계로 쓰는 파이프라인">파이프라인</th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
               <PartRows v={v} ro={ro} apply={apply}>{p => (
                   <>
                     <td><Field value={p.name} label={`${p.name} 파트 이름`} disabled={ro} onCommit={t => apply({ kind: 'renamePart', partId: p.partId, name: t })} /></td>
@@ -135,6 +135,10 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                       onCommit={t => (num(t) == null || num(t)! < 0 || num(t)! > 100 ? false : fillAll(p.partId, 'utilization', num(t)! / 100))} /></td>
                     <td class="n"><Field class="field n num-in" numeric value={pctText(p.aiShare)} label={`${p.name} AI 활용 비율`} disabled={ro || !p.active}
                       onCommit={t => apply({ kind: 'aiShare', partId: p.partId, share: (num(t) ?? 0) / 100 })} /></td>
+                    <td class="part-pipes">{(() => {
+                      const names = v.pipelines.filter(pl => pl.steps.some(st => st.partId === p.partId)).map(pl => pl.name);
+                      return names.length ? <span class="small">{names.join(' · ')}</span> : <span class={`small ${p.active ? 'warn-text' : 'faint'}`} title="어느 파이프라인에도 없어 이 파트로 일이 가지 않습니다. 공정 순서 · 파이프라인에서 단계로 더하십시오">파이프라인 없음</span>;
+                    })()}</td>
                     <td class="n num faint">{p.usedBy}종</td>
                     <td class="c"><label class="check"><input type="checkbox" aria-label={`${p.name} 사용`} checked={p.active} disabled={ro} onChange={() => void apply({ kind: 'partActive', partId: p.partId, active: !p.active })} /></label></td>
                     <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 파트 지우기`} disabled={p.usedBy > 0 || p.hasProgress}
@@ -148,7 +152,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
             <div class="inline" style="margin-top: 10px">
               <input class="field" placeholder="새 파트 이름 (예: 리깅)" aria-label="새 파트 이름" value={newPart} onInput={e => setNewPart((e.target as HTMLInputElement).value)} />
               <button type="button" class="btn sm" disabled={!newPart.trim()} onClick={async () => { if (await apply({ kind: 'createPart', name: newPart })) setNewPart(''); }}><IconPlus />파트 더하기</button>
-              <span class="small faint">새 파트는 맨 뒤 공정, 인원 0명으로 들어갑니다(인력에서 인원을 넣어야 그 파트 일이 계산됩니다).</span>
+              <span class="small faint">새 파트는 목록에만 들어갑니다(인원 0명, 어느 파이프라인에도 없음). 파이프라인에 단계로 더하고 인력에서 인원을 넣어야 일이 계산됩니다.</span>
             </div>
           )}
         </div>
@@ -199,7 +203,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                             if (pl && outside.length) { (ev.target as HTMLSelectElement).value = r.pipelineId ?? ''; setMoveReq({ kind: 'pipeline', resourceTypeId: r.resourceTypeId, pipelineId: pl.pipelineId }); }
                             else void apply({ kind: 'resourcePipeline', resourceTypeIds: [r.resourceTypeId], pipelineId: pid });
                           }}>
-                          <option value="">기본 순서</option>
+                          {!v.pipelines.some(pl => pl.pipelineId === r.pipelineId) && <option value="" disabled>고르지 않음</option>}
                           {v.pipelines.map(pl => <option value={pl.pipelineId} disabled={pl.steps.length === 0}>{pl.name}</option>)}
                         </select></td>
                         {activeParts.map(p => {
@@ -243,7 +247,15 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
             <div class="inline" style="margin-top: 10px">
               <input class="field" list="setup-groups" placeholder="분류 (예: 캐릭터)" aria-label="새 리소스 분류" value={newRes.group} onInput={e => setNewRes({ ...newRes, group: (e.target as HTMLInputElement).value })} />
               <input class="field" placeholder="새 리소스 이름 (예: 탈것)" aria-label="새 리소스 이름" value={newRes.name} onInput={e => setNewRes({ ...newRes, name: (e.target as HTMLInputElement).value })} />
-              <button type="button" class="btn sm" disabled={!newRes.name.trim()} onClick={async () => { if (await apply({ kind: 'createResource', name: newRes.name, groupName: newRes.group })) setNewRes({ group: newRes.group, name: '' }); }}><IconPlus />리소스 더하기</button>
+              {v.pipelines.length > 0 && (
+                <select class="field" aria-label="새 리소스 파이프라인" value={v.pipelines.some(pl => pl.pipelineId === newRes.pipe) ? newRes.pipe : v.pipelines[0].pipelineId} onChange={e => setNewRes({ ...newRes, pipe: (e.target as HTMLSelectElement).value })}>
+                  {v.pipelines.map(pl => <option value={pl.pipelineId}>{pl.name} 파이프라인</option>)}
+                </select>
+              )}
+              <button type="button" class="btn sm" disabled={!newRes.name.trim()} onClick={async () => {
+                const pipe = v.pipelines.some(pl => pl.pipelineId === newRes.pipe) ? newRes.pipe : v.pipelines[0]?.pipelineId;
+                if (await apply({ kind: 'createResource', name: newRes.name, groupName: newRes.group, ...(pipe ? { pipelineId: pipe } : {}) })) setNewRes({ ...newRes, name: '' });
+              }}><IconPlus />리소스 더하기</button>
               <span class="small faint">더한 뒤 파트별 기본 공수를 넣어야 계산에 들어갑니다.</span>
             </div>
           )}

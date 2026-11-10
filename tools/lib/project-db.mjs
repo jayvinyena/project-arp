@@ -4,7 +4,7 @@ import { readFileSync, rmSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validate as coreValidate } from '../../core/pipeline.ts';
 import { nodeDb } from './pipeline.mjs';
-import { migrate, LATEST_SCHEMA } from '../../core/migrate.ts';
+import { migrate, ensureDefaultPipeline, LATEST_SCHEMA } from '../../core/migrate.ts';
 import { sampleOrder } from '../../core/tables.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -26,6 +26,8 @@ export function createProjectFile(path, data) {
     for (const table of TABLE_ORDER) {
       for (const row of data[table] || []) insertRow(db, table, row);
     }
+    // 파이프라인을 적지 않은 예시 데이터: 리소스들이 거치는 파트로 "기본" 파이프라인(docs/29)
+    if (!(data.pipelines || []).length || (data.resource_types || []).some(r => !r.pipeline_id)) ensureDefaultPipeline(nodeDb(db));
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');

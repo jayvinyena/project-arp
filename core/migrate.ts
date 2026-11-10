@@ -2,7 +2,39 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 10;
+export const LATEST_SCHEMA = 11;
+
+/**
+ * 파이프라인이 없는(또는 없는 파이프라인을 고른) 리소스에 "기본" 파이프라인을 만들어 준다(docs/29).
+ * 단계 = 그 리소스들이 실제로 거치는 파트(파트 표 순서) — 아무도 거치지 않는 파트는 넣지 않는다.
+ * allParts면(새 프로젝트) 파이프라인이 하나도 없을 때 사용 중 파트 모두를 마법사 순서로.
+ * 단계 겹침률은 비워 두므로(파트 쌍 → 기본 값을 물려받음) 계산 결과는 그대로다.
+ */
+export function defaultPipelineSql(allParts = false): string {
+  const orphan = (t: string) => `(${t}.pipeline_id IS NULL OR NOT EXISTS (SELECT 1 FROM pipelines x WHERE x.pipeline_id = ${t}.pipeline_id))`;
+  return `
+    DROP TABLE IF EXISTS temp._arp_dp;
+    CREATE TEMP TABLE _arp_dp AS
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM pipelines WHERE pipeline_id = 'L00') THEN 'L00B' ELSE 'L00' END AS id,
+             CASE WHEN EXISTS (SELECT 1 FROM pipelines WHERE name = '기본') THEN '기본 순서' ELSE '기본' END AS name
+      WHERE EXISTS (SELECT 1 FROM resource_types r WHERE ${orphan('r')})
+        ${allParts ? 'OR (NOT EXISTS (SELECT 1 FROM pipelines) AND EXISTS (SELECT 1 FROM parts WHERE active = 1))' : ''};
+    INSERT INTO pipelines (pipeline_id, name, sort_order)
+      SELECT id, name, coalesce((SELECT min(sort_order) FROM pipelines), 1) - 1 FROM _arp_dp;
+    INSERT INTO pipeline_steps (pipeline_id, part_id, seq, overlap_rate)
+      SELECT (SELECT id FROM _arp_dp), p.part_id, ROW_NUMBER() OVER (ORDER BY p.sort_order, p.part_id), NULL FROM parts p
+      WHERE EXISTS (SELECT 1 FROM _arp_dp) AND (
+        p.part_id IN (SELECT rp.part_id FROM resource_parts rp JOIN resource_types r ON r.resource_type_id = rp.resource_type_id WHERE ${orphan('r')})
+        ${allParts ? 'OR p.active = 1' : ''});
+    UPDATE resource_types SET pipeline_id = (SELECT id FROM _arp_dp) WHERE EXISTS (SELECT 1 FROM _arp_dp) AND ${orphan('resource_types')};
+    DROP TABLE temp._arp_dp;
+  `;
+}
+
+/** 파일을 새로 쓴 뒤(새 프로젝트 · 옛 도구 가져오기 · 예시 파일) 부른다 */
+export function ensureDefaultPipeline(db: SqlDb, allParts = false): void {
+  db.exec(defaultPipelineSql(allParts));
+}
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -168,6 +200,11 @@ const STEPS: { to: number; note: string; sql: string }[] = [
       ) STRICT;
       ALTER TABLE resource_types ADD COLUMN pipeline_id TEXT;
     `,
+  },
+  {
+    to: 11,
+    note: '파트 목록과 파이프라인 나누기: 파이프라인이 없는 리소스는 "기본" 파이프라인(그 리소스들이 거치는 파트만, 파트 표 순서)으로. 계산은 그대로(docs/29-pipeline-catalog.md)',
+    sql: defaultPipelineSql(),
   },
 ];
 

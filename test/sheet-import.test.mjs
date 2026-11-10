@@ -193,6 +193,7 @@ test('가져오기: 시트 분류대로 새 리소스 종류 만들기(분류 = 
   assert.deepEqual(r.resourcesCreated, ['의상 상의'], '같은 이름은 하나로');
   const rt = t.db.get("SELECT r.resource_type_id AS id, g.name AS g FROM resource_types r JOIN resource_groups g ON g.group_id = r.group_id WHERE r.name = '의상 상의'");
   assert.equal(rt.g, '마이쿠키 의상');
+  assert.equal(t.db.get('SELECT pipeline_id FROM resource_types WHERE resource_type_id = ?', [rt.id]).pipeline_id, 'L00', '시트 파트를 모두 담은 파이프라인(기본)을 쓴다(docs/29)');
   assert.deepEqual(t.db.all("SELECT part_id, days FROM efforts WHERE resource_type_id = ? AND profile_id = 'BASE' ORDER BY part_id", [rt.id]).map(x => [x.part_id, x.days]),
     [['ANIMATION', 0], ['CONCEPT', 0], ['FX', 0], ['MODELING', 0]]);
   const shirt = t.db.get("SELECT resource_type_id FROM assets WHERE name = '여름 셔츠'");

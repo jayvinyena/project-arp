@@ -3,7 +3,7 @@
 import type { SqlDb } from './db.ts';
 import type { Cell, Sheets } from './xlsx.ts';
 import { serialToDate } from './xlsx.ts';
-import { migrate } from './migrate.ts';
+import { migrate, ensureDefaultPipeline } from './migrate.ts';
 import { fixedKoreanHolidays } from './new-project.ts';
 import { normalizeSheets, isTemplateBook, missingSheetNames } from './import-spec.ts';
 
@@ -538,6 +538,7 @@ export function writeImported(db: SqlDb, schemaSql: string, rows: Rows): void {
         db.run(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(c => row[c]));
       }
     }
+    ensureDefaultPipeline(db); // 리소스들이 거치는 파트를 파트 순서로(docs/29)
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');

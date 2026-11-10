@@ -77,6 +77,20 @@ await withBrowser(async (cdp, base) => {
   await sleep(700);
   check('손잡이에서 ↑ 로 되돌리기', (await partNames(cdp)).join() === before.join());
 
+  // 1-2. 새 파트는 파트 목록에만: 어느 파이프라인에도 들어가지 않고 알림(docs/29)
+  const pipeNames = () => cdp.eval("[...document.querySelectorAll('.pipeline-card input.pipeline-name')].map(x => x.value).join(',')");
+  check('예시 파일: 숨은 기본 순서 없이 "기본" 파이프라인 하나', (await pipeNames()) === '기본', await pipeNames());
+  await cdp.eval(`(() => { const i = document.querySelector('input[aria-label="새 파트 이름"]'); i.value = '배경 원화'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(200);
+  await clickText(cdp, '파트 더하기');
+  await cdp.waitUntil("[...document.querySelectorAll('table.setup-parts tbody tr')].length === 5", 8000);
+  const loose = await cdp.eval("(() => { const r = [...document.querySelectorAll('table.setup-parts tbody tr')].find(x => x.querySelector('input.field')?.value === '배경 원화'); return r.querySelector('td.part-pipes').textContent; })()");
+  const baseChips = await cdp.eval("[...[...document.querySelectorAll('.pipeline-card')].find(c => c.querySelector('input.pipeline-name')?.value === '기본').querySelectorAll('.step-chip')].map(c => c.textContent.trim()).join(',')");
+  const note = await cdp.eval("document.querySelector('.pipe-note')?.textContent ?? ''");
+  check('새 파트는 "파이프라인 없음" · 기본 파이프라인은 그대로 · 알림', loose === '파이프라인 없음' && !baseChips.includes('배경 원화') && note.includes('배경 원화'), `${loose} · ${baseChips} · ${note.slice(0, 40)}`);
+  await cdp.eval(`(() => { const r = [...document.querySelectorAll('table.setup-parts tbody tr')].find(x => x.querySelector('input.field')?.value === '배경 원화'); r.querySelector('button[aria-label="배경 원화 파트 지우기"]').click(); })()`);
+  await cdp.waitUntil("[...document.querySelectorAll('table.setup-parts tbody tr')].length === 4 && !document.querySelector('.pipe-note')", 8000).catch(() => {});
+
   // 2. 파이프라인 만들기 · 단계 더하기(모델링 → 원화, 거꾸로) · 단계 겹침률
   await cdp.eval(`(() => { const i = document.querySelector('input[aria-label="새 파이프라인 이름"]'); i.value = '역순'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await sleep(200);
@@ -99,7 +113,7 @@ await withBrowser(async (cdp, base) => {
   const dlg = await cdp.eval("document.querySelector('.move-dialog')?.getAttribute('aria-label') ?? null");
   const rowsN = await cdp.eval("document.querySelectorAll('.move-dialog .move-table tbody tr').length");
   check('밖 파트에 공수가 있으면 파이프라인 바꾸기 창(파트마다 옮길 곳)', dlg === '파이프라인 바꾸기' && rowsN >= 1, `${dlg} · ${rowsN}줄`);
-  check('창이 열려도 고르기 칸은 아직 그대로', (await cdp.eval(`document.querySelector('select[aria-label="신규 캐릭터 파이프라인"]').value`)) === '');
+  check('창이 열려도 고르기 칸은 아직 그대로(기본)', (await cdp.eval(`document.querySelector('select[aria-label="신규 캐릭터 파이프라인"]').value`)) === 'L00');
   await clickText(cdp, '파이프라인 바꾸기', "document.querySelector('.move-dialog')");
   await cdp.waitUntil("!document.querySelector('.move-dialog')", 8000).catch(() => {});
   const locked = await cdp.eval(`document.querySelectorAll('[aria-label^="신규 캐릭터 "][aria-label$=" 파이프라인 밖"]').length`);

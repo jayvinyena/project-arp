@@ -243,7 +243,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
 
             <section class="cw-section">
               <h3 class="sub-h">파트 체크리스트 <span class="small faint">완료 {view.parts.filter(p => a.parts[p.partId]?.status === 'DONE').length} / {view.parts.filter(p => a.parts[p.partId] && a.parts[p.partId].status !== 'OMIT').length}</span></h3>
-              <p class="small faint cw-hint">{(() => { const pl = a.pipelineId ? view.pipelines.find(x => x.pipelineId === a.pipelineId) : null; const nm = new Map(view.parts.map(p => [p.partId, p.name])); return pl ? `${pl.name} 파이프라인(${pl.steps.map(x => nm.get(x) ?? x).join(' → ')})` : `기본 순서(${view.parts.map(p => p.name).join(' → ')})`; })()} 순서입니다. 하지 않는 파트는 "해당 없음", 나중에 하게 되면 "대기"로 바꿉니다.</p>
+              <p class="small faint cw-hint">{(() => { const pl = a.pipelineId ? view.pipelines.find(x => x.pipelineId === a.pipelineId) : null; const nm = new Map(view.parts.map(p => [p.partId, p.name])); return pl ? `${pl.name} 파이프라인(${pl.steps.map(x => nm.get(x) ?? x).join(' → ')})` : '파이프라인을 고르지 않은 리소스라 파트 표'; })()} 순서입니다. 하지 않는 파트는 "해당 없음", 나중에 하게 되면 "대기"로 바꿉니다.</p>
               <div class="cw-progress"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></div>
               <div class="table-wrap ref-wrap">
                 <table class="grid edit ref asset-parts-table">
@@ -481,7 +481,7 @@ export function AssetsPage(props: {
 
   // ───── 보드 ─────
   // 파이프라인을 고르면 그 파이프라인 에셋만, 열 = 그 단계(docs/28). "모두"면 전체 파트 순서
-  const pipeSel = pipe === 'all' ? null : pipe === 'base' ? { pipelineId: null, steps: v.parts.map(p => p.partId) } : v.pipelines.find(p => p.pipelineId === pipe) ?? null;
+  const pipeSel = pipe === 'all' ? null : pipe === 'base' ? { pipelineId: null as string | null, steps: v.parts.map(p => p.partId) } : v.pipelines.find(p => p.pipelineId === pipe) ?? null;
   const boardShown = pipeSel ? shown.filter(a => a.pipelineId === pipeSel.pipelineId) : shown;
   const boardStages = pipeSel ? stages.filter(s => s.id === 'TODO' || s.id === 'DONE' || pipeSel.steps.includes(s.id)).sort((x, y) => (x.id === 'TODO' ? -1 : y.id === 'TODO' ? 1 : x.id === 'DONE' ? 1 : y.id === 'DONE' ? -1 : pipeSel.steps.indexOf(x.id) - pipeSel.steps.indexOf(y.id))) : stages;
   const boardParts = pipeSel ? v.parts.filter(p => pipeSel.steps.includes(p.partId)) : v.parts;
@@ -719,7 +719,7 @@ export function AssetsPage(props: {
                   <span class="faint">파이프라인</span>
                   <select class="field ghost-field" aria-label="보드 파이프라인" value={pipeSel || pipe === 'all' ? pipe : 'all'} onChange={e => setPipe((e.target as HTMLSelectElement).value)}>
                     <option value="all">모두(전체 파트 순서)</option>
-                    <option value="base">기본(파트 표 순서)</option>
+                    {v.assets.some(a => !a.pipelineId || !v.pipelines.some(p => p.pipelineId === a.pipelineId)) && <option value="base">파이프라인 고르지 않음</option>}
                     {v.pipelines.map(p => <option value={p.pipelineId}>{p.name}</option>)}
                   </select>
                 </>}

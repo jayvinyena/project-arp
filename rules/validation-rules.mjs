@@ -175,10 +175,10 @@ export const RULES = [
         AND NOT EXISTS (SELECT 1 FROM pipeline_steps ps WHERE ps.pipeline_id = r.pipeline_id AND ps.part_id = rp.part_id)`),
   },
   {
-    code: 'E10', level: 'WARN', title: '없는 파이프라인을 고른 리소스',
-    fix: '리소스 · 공수 표에서 파이프라인을 다시 고른다(그동안은 파트 표 순서로 계산).',
-    sql: q(`SELECT resource_type_id AS key, printf('%s: 파이프라인 %s 없음', name, pipeline_id) AS detail FROM resource_types
-      WHERE pipeline_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pipelines pl WHERE pl.pipeline_id = resource_types.pipeline_id)`),
+    code: 'E10', level: 'WARN', title: '파이프라인이 없는 리소스',
+    fix: '리소스 · 공수 표에서 파이프라인을 고른다(그동안은 파트 표 순서로 계산, docs/29).',
+    sql: q(`SELECT resource_type_id AS key, CASE WHEN pipeline_id IS NULL THEN printf('%s: 파이프라인을 고르지 않음', name) ELSE printf('%s: 파이프라인 %s 없음', name, pipeline_id) END AS detail FROM resource_types
+      WHERE active = 1 AND (pipeline_id IS NULL OR NOT EXISTS (SELECT 1 FROM pipelines pl WHERE pl.pipeline_id = resource_types.pipeline_id))`),
   },
   {
     // 제작 리스트 가져오기에서 새로 만든 리소스 종류는 공수 0(거치지만 공수 미정)으로 만든다(docs/20-asset-management.md 21절)

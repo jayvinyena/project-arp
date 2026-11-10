@@ -59,7 +59,7 @@ export type Edit =
   | { kind: 'partActive'; partId: string; active: boolean }
   | { kind: 'deletePart'; partId: string }
   // 리소스 · 공수
-  | { kind: 'createResource'; name: string; groupName: string }
+  | { kind: 'createResource'; name: string; groupName: string; /** 비우면 첫 파이프라인(docs/29) */ pipelineId?: string | null }
   | { kind: 'renameResource'; resourceTypeId: string; name: string }
   | { kind: 'resourceGroup'; resourceTypeId: string; groupName: string }
   | { kind: 'renameGroup'; groupId: string; name: string }
@@ -574,8 +574,12 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const groupId = groupFor(db, ctx, edit.groupName);
       const id = nextId(db, 'resource_types', 'resource_type_id', 'R', 3);
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM resource_types')?.s ?? 0) + 1;
-      const row = { resource_type_id: id, group_id: groupId, name, sort_order: sortOrder, active: 1 };
-      db.run('INSERT INTO resource_types (resource_type_id, group_id, name, sort_order, active) VALUES (?, ?, ?, ?, ?)', [id, groupId, name, sortOrder, 1]);
+      // 리소스는 늘 파이프라인 하나를 쓴다(docs/29): 고른 것, 없으면 첫 파이프라인
+      const pipelineId = edit.pipelineId !== undefined
+        ? (edit.pipelineId && (db.get('SELECT 1 AS ok FROM pipelines WHERE pipeline_id = ?', [edit.pipelineId]) ? edit.pipelineId : fail('없는 파이프라인입니다.')))
+        : ((db.get('SELECT pipeline_id FROM pipelines ORDER BY sort_order, pipeline_id LIMIT 1')?.pipeline_id as string | undefined) ?? null);
+      const row = { resource_type_id: id, group_id: groupId, name, sort_order: sortOrder, active: 1, pipeline_id: pipelineId };
+      db.run('INSERT INTO resource_types (resource_type_id, group_id, name, sort_order, active, pipeline_id) VALUES (?, ?, ?, ?, ?, ?)', [id, groupId, name, sortOrder, 1, pipelineId]);
       log(db, ctx, 'INSERT', 'resource_types', id, null, undefined, row);
       dirty('resource_types');
       return { changed: true, createdId: id };

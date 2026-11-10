@@ -1420,3 +1420,7 @@ tr.row:hover .eff-move, .eff-move:focus-visible { opacity: 1; }
 .move-opt select.field { width: 220px; }
 .move-table select.field { width: 100%; }
 .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }
+
+/* 파트 표 파이프라인 칸 · 파이프라인 알림(docs/29) */
+table.grid.setup-parts td.part-pipes { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pipe-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); }
