@@ -1,4 +1,4 @@
-// 제작 현황판(docs/20-asset-management.md 18절): 마일스톤 하나의 제작 상황을 한 화면에.
+// 제작 현황판(docs/20-asset-management.md 18절): 업데이트(마일스톤) 하나의 제작 상황을 한 화면에.
 // 요약 4칸 · 추이(누적 완료 공수 대 계획선, 완료 예정) · 처리할 것 · 항목 × 파트 진행 · 단계 분포 · 배치.
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
@@ -108,11 +108,15 @@ function TodoList(props: { updateId: string; items: DashTodo[]; empty: string; s
   );
 }
 
-export function DashboardPage(props: { version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; onGo: (page: 'assets' | 'progress') => void }) {
-  const [updateId, setUpdateId] = useState<string | null>(null);
+export function DashboardPage(props: {
+  version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; onGo: (page: 'assets' | 'progress') => void;
+  /** 지금 업데이트(모든 화면이 함께 쓴다) */
+  updateId: string | null; onUpdate: (id: string) => void;
+}) {
+  const [updateId, setUpdateId] = useState<string | null>(props.updateId);
   const [v, setV] = useState<View | null>(null);
   const [tab, setTab] = useState<keyof DashboardView['todo']>('review');
-  useEffect(() => { void rpc.dashboard(updateId, props.planMode).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); }); }, [props.version, updateId, props.planMode]);
+  useEffect(() => { void rpc.dashboard(updateId, props.planMode).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, updateId, props.planMode]);
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const s = v.summary;
   const verdict = v.forecast ? VERDICT[v.forecast.status as UpdateStatus] : null;
@@ -134,10 +138,10 @@ export function DashboardPage(props: { version: number; planMode: PlanMode; setP
         <div>
           <PageEyebrow page="dashboard" />
           <h1>제작 현황판</h1>
-          <p class="muted" style="margin-top: 6px">마일스톤 하나의 제작 상황입니다. 진행은 작업 진척의 완료 수량을 기본 공수로 바꿔 계산합니다({MODE_LABEL[props.planMode]} 물량 기준).</p>
+          <p class="muted" style="margin-top: 6px">업데이트(마일스톤) 하나의 제작 상황입니다. 진행은 작업 진척의 완료 수량을 기본 공수로 바꿔 계산합니다({MODE_LABEL[props.planMode]} 물량 기준).</p>
         </div>
         <div class="inline">
-          <select class="field" aria-label="마일스톤" value={v.updateId ?? ''} onChange={e => setUpdateId((e.target as HTMLSelectElement).value)}>
+          <select class="field" aria-label="업데이트(마일스톤)" title="업데이트(마일스톤) — 에셋 · 작업 진척 · 시뮬레이션도 같은 업데이트로 열립니다" value={v.updateId ?? ''} onChange={e => { const id = (e.target as HTMLSelectElement).value; setUpdateId(id); props.onUpdate(id); }}>
             {v.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (완료 · 취소)'}</option>)}
           </select>
           <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />

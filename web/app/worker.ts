@@ -29,6 +29,7 @@ import { assetBook, importAssets } from '../../core/asset-io.ts';
 import { isArpAssetBook, scanSheetBook, importSheetBook } from '../../core/sheet-import.ts';
 import type { SheetPlan } from '../../core/sheet-import.ts';
 import { dashboardView } from '../../core/dashboard.ts';
+import { setupStatus } from '../../core/onboarding.ts';
 import type { Edit } from '../../core/edits.ts';
 import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
@@ -65,7 +66,7 @@ function setMeta(s: SqlDb, key: string, value: string | null) {
 
 function view() {
   const { sql: s, session: ss } = need();
-  return { snapshot: launchSnapshot(s), compare: compareLaunchModes(s, ss), meta: meta(s) };
+  return { snapshot: launchSnapshot(s), compare: compareLaunchModes(s, ss), meta: meta(s), setup: setupStatus(s) };
 }
 
 const handlers: Record<string, (payload: any) => unknown> = {

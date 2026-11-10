@@ -352,10 +352,12 @@ export function AssetsPage(props: {
   onImport: () => Promise<void>;
   /** 다른 화면에서 넘어올 때: 업데이트 · 리소스 종류 · 바로 열 에셋 */
   focus?: { updateId: string; resourceTypeId?: string; assetId?: string } | null;
+  /** 지금 업데이트(모든 화면이 함께 쓴다) */
+  updateId: string | null; onUpdate: (id: string) => void;
 }) {
   const ro = props.readOnly;
   const pref = <T,>(k: string, d: T): T => { try { return (localStorage.getItem(`arp.assets.${k}`) as T | null) ?? d; } catch { return d; } };
-  const [updateId, setUpdateId] = useState<string | null>(props.focus?.updateId ?? null);
+  const [updateId, setUpdateId] = useState<string | null>(props.focus?.updateId ?? props.updateId);
   const [v, setV] = useState<AssetsView | null>(null);
   const [tab, setTab] = useState<Tab>('assets');
   const [view, setView] = useState<View>(() => pref('view', 'list'));
@@ -386,7 +388,7 @@ export function AssetsPage(props: {
     setUpdateId(props.focus.updateId); setFocusRt(props.focus.resourceTypeId ?? null); setTab('assets');
     if (props.focus.assetId) { clearFilters(); setOpenId(props.focus.assetId); }
   }, [props.focus]);
-  useEffect(() => { void rpc.assets(updateId).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); }); }, [props.version, updateId]);
+  useEffect(() => { void rpc.assets(updateId).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, updateId]);
   useEffect(() => { try { localStorage.setItem('arp.assets.view', view); localStorage.setItem('arp.assets.boardBy', boardBy); localStorage.setItem('arp.assets.groupBy', groupBy); localStorage.setItem('arp.assets.team', team); } catch { /* 없어도 된다 */ } }, [view, boardBy, groupBy, team]);
   useEffect(() => {
     if (!v || !focusRt) return;
@@ -511,8 +513,8 @@ export function AssetsPage(props: {
           <h1>에셋 제작 현황</h1>
           <p class="muted" style="margin-top: 6px">지금 만들고 있는 에셋의 단계와 상태를 리스트 · 보드에서 보고 바로 고칩니다. 완료는 작업 진척에 자동 집계됩니다.</p>
         </div>
-        <label class="inline"><span class="small faint">마일스톤</span>
-          <select class="field" aria-label="마일스톤" value={v.updateId ?? ''} onChange={e => { setUpdateId((e.target as HTMLSelectElement).value); setGroup('all'); setBatch('all'); }}>
+        <label class="inline"><span class="small faint">업데이트(마일스톤)</span>
+          <select class="field" aria-label="업데이트(마일스톤)" value={v.updateId ?? ''} onChange={e => { const id = (e.target as HTMLSelectElement).value; setUpdateId(id); props.onUpdate(id); setGroup('all'); setBatch('all'); }}>
             {v.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (완료 · 취소)'}</option>)}
           </select></label>
       </header>
@@ -737,7 +739,7 @@ export function AssetsPage(props: {
 
       {tab === 'batches' && (
         <section class="card">
-          <div class="card-head"><div><h2>배치</h2><p class="small muted" style="margin-top: 2px">마일스톤 안의 납품 묶음입니다. 마감일은 그 배치 에셋의 모든 파트가 완료되는 날 기준입니다. 에셋 마감일이 비어 있으면 배치 마감일을 따릅니다.</p></div></div>
+          <div class="card-head"><div><h2>배치</h2><p class="small muted" style="margin-top: 2px">업데이트(마일스톤) 안의 납품 묶음입니다. 마감일은 그 배치 에셋의 모든 파트가 완료되는 날 기준입니다. 에셋 마감일이 비어 있으면 배치 마감일을 따릅니다.</p></div></div>
           <div class="card-body" style="padding-top: 4px">
             <div class="table-wrap ref-wrap">
               <table class="grid edit ref batch-table">

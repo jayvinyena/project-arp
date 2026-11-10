@@ -154,7 +154,7 @@ function Preview(props: { view: CompareView | null; scenarioId: string }) {
   );
 }
 
-function ActionForm(props: { meta: SimMeta; planMode: PlanMode; onAdd: (a: ScenarioAction) => Promise<boolean> }) {
+function ActionForm(props: { meta: SimMeta; planMode: PlanMode; updateId: string | null; onAdd: (a: ScenarioAction) => Promise<boolean> }) {
   const { meta } = props;
   const [kind, setKind] = useState<ActionKind>('headcount');
   const live = meta.updates.filter(u => u.live);
@@ -172,7 +172,7 @@ function ActionForm(props: { meta: SimMeta; planMode: PlanMode; onAdd: (a: Scena
   };
   const part = v('part', meta.parts[0]?.partId ?? '');
   const p = meta.parts.find(x => x.partId === part);
-  const upd = v('update', live[0]?.updateId ?? '');
+  const upd = v('update', live.find(x => x.updateId === props.updateId)?.updateId ?? live[0]?.updateId ?? '');
   const u = meta.updates.find(x => x.updateId === upd);
   const vols = meta.volumes.filter(x => x.updateId === upd);
   const res = v('res', vols[0]?.resourceTypeId ?? '');
@@ -282,9 +282,9 @@ function ActionForm(props: { meta: SimMeta; planMode: PlanMode; onAdd: (a: Scena
   );
 }
 
-function Analysis(props: { meta: SimMeta; scenario: ScenarioSummary | null; planMode: PlanMode; version: number }) {
+function Analysis(props: { meta: SimMeta; scenario: ScenarioSummary | null; planMode: PlanMode; version: number; updateId: string | null; onUpdate: (id: string) => void }) {
   const live = props.meta.updates.filter(u => u.live);
-  const [upd, setUpd] = useState(live[0]?.updateId ?? '');
+  const [upd, setUpd] = useState(live.find(u => u.updateId === props.updateId)?.updateId ?? live[0]?.updateId ?? '');
   const [sens, setSens] = useState<(Sensitivity & { ms: number }) | null>(null);
   const [scale, setScale] = useState<MaxScaleResult | null>(null);
   const [heads, setHeads] = useState<HeadcountResult | null>(null);
@@ -311,7 +311,7 @@ function Analysis(props: { meta: SimMeta; scenario: ScenarioSummary | null; plan
     <section class="card">
       <div class="card-head">
         <StepTitle n={4} title="업데이트 자세히 보기" sub={`업데이트 하나를 골라, 파트마다 1명을 더하면 며칠 당겨지는지와 물량 · 인원을 얼마나 바꿔야 하는지 계산합니다(${basis}).`} />
-        <select class="field" aria-label="분석할 업데이트" value={upd} onChange={e => setUpd((e.target as HTMLSelectElement).value)}>{live.map(u => <option value={u.updateId}>{u.name}</option>)}</select>
+        <select class="field" aria-label="분석할 업데이트" value={upd} onChange={e => { const id = (e.target as HTMLSelectElement).value; setUpd(id); props.onUpdate(id); }}>{live.map(u => <option value={u.updateId}>{u.name}</option>)}</select>
       </div>
       <div class="card-body">
         {error && <div class="banner bad"><IconAlert /><div>{error}</div></div>}
@@ -360,6 +360,8 @@ export function SimulationPage(props: {
   onApplyScenario: (scenarioId: string, force: boolean) => Promise<boolean>;
   /** 다른 화면에서 만든 시나리오: 고르고 원본과 비교 */
   focus?: string | null;
+  /** 지금 업데이트(모든 화면이 함께 쓴다) */
+  updateId: string | null; onUpdate: (id: string) => void;
 }) {
   const [data, setData] = useState<{ scenarios: ScenarioSummary[]; meta: SimMeta } | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
@@ -459,7 +461,7 @@ export function SimulationPage(props: {
                 ))}
               </div>
               <Preview view={compare} scenarioId={cur.scenarioId} />
-              {editable && <ActionForm meta={data.meta} planMode={props.planMode} onAdd={async a => (await props.onScenario({ kind: 'addAction', scenarioId: cur.scenarioId, action: a })).ok} />}
+              {editable && <ActionForm meta={data.meta} planMode={props.planMode} updateId={props.updateId} onAdd={async a => (await props.onScenario({ kind: 'addAction', scenarioId: cur.scenarioId, action: a })).ok} />}
               {!props.readOnly && (
                 <div class="danger-zone">
                   <button type="button" class="btn sm" onClick={async () => { const r = await props.onScenario({ kind: 'create', name: `${cur.name} 복제`, copyFrom: cur.scenarioId }); if (r.createdId) setSelected(r.createdId); }}>복제</button>
@@ -478,7 +480,7 @@ export function SimulationPage(props: {
           </section>
         )}
         <Compare view={compare} scenarios={data.scenarios} picked={picked} onToggle={toggle} />
-        <Analysis meta={data.meta} scenario={cur && !cur.appliedAt ? cur : null} planMode={props.planMode} version={props.version} />
+        <Analysis meta={data.meta} scenario={cur && !cur.appliedAt ? cur : null} planMode={props.planMode} version={props.version} updateId={props.updateId} onUpdate={props.onUpdate} />
       </div>
     </div>
   );

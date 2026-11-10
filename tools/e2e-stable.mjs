@@ -29,7 +29,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 
   // 1. 되돌리기
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&nosw` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&nosw` });
   await cdp.waitUntil("document.querySelectorAll('table.grid tbody tr.row').length > 0");
   await setQty(cdp, '프랍 기본안', '70');
   await nav(cdp, '변경 이력');
@@ -79,7 +79,7 @@ await withBrowser(async (cdp, base) => {
   check('되살리면 고친 값(7)과 "저장 안 된 변경"', (await value(cdp, '배경 맵 기본안')) === '7' && (await cdp.eval("document.querySelector('.save-state').textContent")).includes('저장 안 된'));
 
   // 4. 최근 파일: 핸들로 연 파일은 시작 화면에 남고, 누르면 다시 열린다
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&nosw` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&nosw` });
   await cdp.waitUntil("document.querySelector('.save-state')?.textContent.includes('저장됨')", 10000);
   await cdp.eval("[...document.querySelectorAll('.sidebar button')].find(b => b.textContent.trim() === '파일 닫기').click()");
   await cdp.waitUntil("document.querySelector('.recent-item')", 8000);
@@ -90,7 +90,7 @@ await withBrowser(async (cdp, base) => {
   check('최근 파일을 누르면 열린다', (await cdp.eval("document.querySelector('.save-state').textContent")).includes('저장'));
 
   // 5. 옛 구조(v1) 파일: 새 구조로 열고 원본 받기를 알린다
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal-v1&nosw` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal-v1&page=launch&nosw` });
   await cdp.waitUntil("document.querySelectorAll('table.grid tbody tr.row').length > 0", 10000);
   const v1 = await cdp.eval("document.querySelector('.main .banner.warn')?.textContent ?? ''");
   check('옛 구조 파일 → 새 구조로 열고 원본 받기 알림', v1.includes('옛 구조(v1)') && v1.includes('원본 받기'), v1.slice(0, 30));

@@ -45,12 +45,14 @@ function SpentInput(props: { value: number | null; label: string; disabled: bool
 export function ProgressPage(props: {
   version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean>;
   onTemplate: () => Promise<void>; onImport: () => Promise<void>;
+  /** 지금 업데이트(모든 화면이 함께 쓴다) */
+  updateId: string | null; onUpdate: (id: string) => void;
 }) {
-  const [wanted, setWanted] = useState<string | null>(null);
+  const [wanted, setWanted] = useState<string | null>(props.updateId);
   const [field, setField] = useState<'done' | 'spent'>('done');
   const [view, setView] = useState<ProgressView | null>(null);
   const [asOf, setAsOf] = useState(today());
-  useEffect(() => { void rpc.progress(wanted).then(setView); }, [props.version, wanted]);
+  useEffect(() => { void rpc.progress(wanted).then(x => { setView(x); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, wanted]);
   if (!view) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   if (!view.updateId) return <div class="page"><p class="muted">업데이트가 없습니다. 업데이트 계획에서 먼저 만드십시오.</p></div>;
   const updateId = view.updateId;
@@ -69,12 +71,12 @@ export function ProgressPage(props: {
         <div>
           <PageEyebrow page="progress" />
           <h1>파트별 완료 수량</h1>
-          <p class="muted" style="margin-top: 6px">끝낸 수량을 입력하면 남은 일만 다시 계산해서 완료 예정이 바로 변경됩니다.</p>
+          <p class="muted" style="margin-top: 6px">에셋이 없는 리소스의 완료 수량과 모든 리소스의 실투입 인·일을 입력합니다. 에셋이 있는 리소스는 에셋 상태에서 자동으로 셉니다. 입력하면 남은 일만 다시 계산해 완료 예정이 바로 바뀝니다.</p>
         </div>
         <div class="inline">
           <label class="form-row" style="gap: 4px">
             <span class="small faint">업데이트</span>
-            <select class="field" aria-label="진척 업데이트" value={updateId} onChange={e => setWanted((e.target as HTMLSelectElement).value)}>
+            <select class="field" aria-label="진척 업데이트" value={updateId} onChange={e => { const id = (e.target as HTMLSelectElement).value; setWanted(id); props.onUpdate(id); }}>
               {view.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (계산 밖)'}</option>)}
             </select>
           </label>

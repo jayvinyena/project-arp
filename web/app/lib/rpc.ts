@@ -16,8 +16,9 @@ import type { AssetsView, AssetDetail } from '../../../core/assets.ts';
 import type { AssetImportReport } from '../../../core/asset-io.ts';
 import type { SheetScan, SheetPlan, SheetImportReport } from '../../../core/sheet-import.ts';
 import type { DashboardView } from '../../../core/dashboard.ts';
+import type { SetupStatus } from '../../../core/onboarding.ts';
 
-export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null> }
+export interface View { snapshot: LaunchSnapshot; compare: LaunchCompare; meta: Record<string, string | null>; setup: SetupStatus }
 
 const worker = new Worker(new URL('../worker.ts', import.meta.url), { type: 'module' });
 let seq = 0;

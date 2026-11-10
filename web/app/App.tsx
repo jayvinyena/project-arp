@@ -6,6 +6,7 @@ import type { View } from './lib/rpc.ts';
 import { pickFile, fetchSample, saveInPlace, saveAs, SaveConflictError, canSaveInPlace, pickXlsx, fetchBytes } from './lib/files.ts';
 import { ImportReport } from './ui/ImportReport.tsx';
 import { SheetImportDialog } from './ui/SheetImport.tsx';
+import { SetupGuide, setupDone } from './ui/SetupGuide.tsx';
 import type { SheetScan, SheetPlan } from '../../core/sheet-import.ts';
 import { ImportGuide } from './ui/ImportGuide.tsx';
 import { HistoryPage } from './ui/HistoryPage.tsx';
@@ -41,6 +42,12 @@ import { IconLogo, IconLaunch, IconCalendar, IconSliders, IconCheck, IconFolder,
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
 type Page = HelpPage;
+const PAGES: Page[] = ['dashboard', 'assets', 'progress', 'launch', 'plan', 'simulation', 'advisor', 'setup', 'capacity', 'templates', 'calibration', 'history'];
+/** 파일마다 마지막으로 본 화면(이 브라우저). 데이터 점검은 열 때마다 다시 보는 화면이 아니라 빼 둔다 */
+const lastPageOf = (name: string): Page | null => { try { const p = localStorage.getItem(`arp.lastPage.${name}`) as Page | null; return p && PAGES.includes(p) ? p : null; } catch { return null; } };
+const rememberPage = (name: string, page: Page) => { try { if (PAGES.includes(page)) localStorage.setItem(`arp.lastPage.${name}`, page); } catch { /* 없어도 된다 */ } };
+const readGuideHidden = (name: string) => { try { return localStorage.getItem(`arp.setupGuide.hidden.${name}`) === '1'; } catch { return false; } };
+const writeGuideHidden = (name: string) => { try { localStorage.setItem(`arp.setupGuide.hidden.${name}`, '1'); } catch { /* 없어도 된다 */ } };
 interface FileState { name: string; handle: FileSystemFileHandle | null; lastModified: number; readOnly: boolean; lockedBy: string | null; isSample: boolean }
 
 const LOCK_FRESH_MS = 30 * 60 * 1000;
@@ -59,6 +66,9 @@ export function App() {
   const [version, setVersion] = useState(0);
   const [planMode, setPlanMode] = useState<PlanMode>('TARGET');
   const [page, setPage] = useState<Page>((new URLSearchParams(location.search).get('page') as Page) || 'launch');
+  // 지금 업데이트(마일스톤): 현황판 · 에셋 · 작업 진척 · 시뮬레이션이 함께 쓴다(docs/23-ux-review.md 6.3). 파일을 열면 비운다
+  const [curUpdate, setCurUpdate] = useState<string | null>(null);
+  const [guideHidden, setGuideHidden] = useState(false);
   const pageRef = useRef(page);
   pageRef.current = page;
   const [save, setSave] = useState<{ state: SaveState; at?: number; message?: string }>({ state: 'saved' });
@@ -104,6 +114,8 @@ export function App() {
   const writeRef = useRef<() => Promise<boolean>>(async () => false);
 
   const setFileNow = (next: FileState) => { fileRef.current = next; setFile(next); };
+  // 파일마다 마지막으로 본 화면을 기억(되살리기 · 다시 열기도 그 화면으로)
+  useEffect(() => { if (file) rememberPage(file.name, page); }, [page, file?.name]);
   const projectKey = (v: View | null) => (v ? `${v.meta.project_name ?? ''}|${v.meta.created_at ?? ''}` : '');
 
   /** 이 프로젝트의 복구 사본만 지운다(다른 프로젝트 사본은 남긴다) */
@@ -277,7 +289,11 @@ export function App() {
       savedSeq.current = 0;
       setView(v);
       setVersion(x => x + 1);
-      setPage(p => (p === 'check' ? 'launch' : p));
+      setCurUpdate(null);
+      setGuideHidden(readGuideHidden(opened.name));
+      // 처음 화면: 주소의 page → 이 파일에서 마지막으로 본 화면 → 제작 기록이 있으면 현황판, 없으면 런칭(docs/23 6.2)
+      const forced = new URLSearchParams(location.search).get('page') as Page | null;
+      setPage(forced || lastPageOf(opened.name) || (v.setup.records ? 'dashboard' : 'launch'));
       // 편집 중 표시를 쓰고 저장할 때까지는 "저장 중"
       setSave({ state: opened.handle && !lockedByOther ? 'saving' : 'saved' });
       if (opened.handle && !lockedByOther) {
@@ -363,6 +379,8 @@ export function App() {
       savedSeq.current = saved?.handle ? 0 : -1;
       setView(await rpc.view());
       setVersion(x => x + 1);
+      setCurUpdate(null);
+      setGuideHidden(false);
       setPage('launch');
       setSave(saved?.handle ? { state: 'saved', at: Date.now() } : { state: 'dirty' });
       setCreating(false);
@@ -539,6 +557,8 @@ export function App() {
       editSeq.current = 1;
       setView(v);
       setVersion(x => x + 1);
+      setCurUpdate(null);
+      setGuideHidden(readGuideHidden(`${base}.arp`));
       setPage('launch');
       setSave({ state: 'dirty' });
       setImported(v.report);
@@ -752,24 +772,27 @@ export function App() {
           <div class="small faint" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{file.name}</div>
         </div>
         <nav class="nav" aria-label="메뉴">
-          <div class="nav-label">계획</div>
+          {/* 메뉴 4묶음(docs/23-ux-review.md 6.1): 매일 보는 현황 → 결정할 때 계획 → 처음 한 번 기준 정보 → 기록 · 점검 */}
+          <div class="nav-label">현황</div>
           {navItem('dashboard', <IconChart />)}
-          {navItem('launch', <IconLaunch />)}
-          {navItem('plan', <IconCalendar />)}
           {navItem('assets', <IconImage />)}
           {navItem('progress', <IconProgress />)}
+          <div class="nav-label">계획</div>
+          {navItem('launch', <IconLaunch />)}
+          {navItem('plan', <IconCalendar />)}
           {navItem('simulation', <IconSliders />)}
           {navItem('advisor', <IconTarget />)}
-          <div class="nav-label" style="margin-top: 12px">기준 정보</div>
+          <div class="nav-label">기준 정보</div>
           {navItem('setup', <IconSettings />)}
-          {navItem('templates', <IconLayers />)}
           {navItem('capacity', <IconUsers />)}
+          {navItem('templates', <IconLayers />)}
           {navItem('calibration', <IconTune />)}
-          {navItem('history', <IconHistory />)}
+          <div class="nav-label">기록 · 점검</div>
           <button class={`nav-item${page === 'check' ? ' active' : ''}`} title={helpDoc('check').short} aria-current={page === 'check' ? 'page' : undefined} onClick={() => setPage('check')}>
             <IconCheck />데이터 점검
             {(errors > 0 || warns > 0) && <span class={`end pill ${errors ? 'bad' : 'warn'}`}>{errors || warns}</span>}
           </button>
+          {navItem('history', <IconHistory />)}
         </nav>
         <div class="sidebar-foot">
           <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>
@@ -825,13 +848,19 @@ export function App() {
               <div class="inline" style="margin-top: 8px"><button class="btn sm primary" onClick={() => void saveAsNew()}><IconSave />다른 이름으로 저장</button></div></div></div>
           </div>
         )}
+        {/* 처음 할 일 안내: 화면 맨 위(docs/23-ux-review.md 6.4) */}
+        {(page === 'dashboard' || page === 'launch') && !guideHidden && !setupDone(view.setup) && (
+          <div class="page" style="margin-bottom: 16px">
+            <SetupGuide status={view.setup} onGo={p => setPage(p)} onHide={() => { setGuideHidden(true); writeGuideHidden(file.name); }} />
+          </div>
+        )}
         {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} />}
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
-        {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} />}
-        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} />}
-        {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} />}
+        {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} updateId={curUpdate} onUpdate={setCurUpdate} />}
+        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
+        {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
-        {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} focus={simFocus} />}
+        {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} focus={simFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'advisor' && <AdvisorPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onMakeScenario={onAdviceScenario} />}
         {page === 'setup' && <SetupPage version={version} readOnly={file.readOnly} onApply={onApply} />}
         {page === 'templates' && <TemplatesPage version={version} readOnly={file.readOnly} onApply={onApply} />}

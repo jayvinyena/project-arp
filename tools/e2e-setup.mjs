@@ -29,7 +29,7 @@ const daysOf = (cdp, name) => cdp.eval(`(() => { const r = [...document.querySel
 
 await withBrowser(async (cdp, base) => {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&nosw` });
+  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&page=launch&nosw` });
   await cdp.waitUntil("document.querySelectorAll('.mode-card').length === 3", 15000);
 
   // 1. 물량 템플릿: 기본 이름 · 세 열 나란히 · 편집 중인 열만 입력

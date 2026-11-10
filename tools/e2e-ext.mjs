@@ -92,14 +92,14 @@ await withBrowser(async (cdp, base) => {
   await cdp.send('Page.navigate', { url: `${app}?nosw` });
   await cdp.waitUntil("document.querySelector('.welcome-card')");
   await asUser('나');
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&nosw` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&nosw` });
   await cdp.waitUntil("document.querySelector('.save-state')?.textContent.includes('저장됨')", 10000);
   await sleep(500);
   check('처음 열 때는 알림 없음', !(await cdp.eval("!!document.querySelector('.banner.notice')")));
   await clickText(cdp, '파일 닫기', "document.querySelector('.sidebar')");
   await cdp.waitUntil("document.querySelector('.welcome-card')");
   await asUser('가');
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1&nosw` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&keep=1&nosw` });
   await cdp.waitUntil("document.querySelector('input[aria-label=\"이펙트 기본안\"]')", 10000);
   await sleep(500);
   await typeIn(cdp, '이펙트 기본안', '40');
@@ -107,7 +107,7 @@ await withBrowser(async (cdp, base) => {
   await clickText(cdp, '파일 닫기', "document.querySelector('.sidebar')");
   await cdp.waitUntil("document.querySelector('.welcome-card')");
   await asUser('나');
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1&nosw` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&keep=1&nosw` });
   let banner = '';
   try { await cdp.waitUntil("document.querySelector('.banner.notice')", 10000); banner = await cdp.eval("document.querySelector('.banner.notice').textContent"); } catch { /* 없음 */ }
   check('다시 열면 "지난번에 본 뒤 바뀐 것": 런칭 완료 예정 변화 · 가님이 고침', banner.includes('런칭') && banner.includes('가님이 1번 수정했습니다'), banner.slice(0, 90));

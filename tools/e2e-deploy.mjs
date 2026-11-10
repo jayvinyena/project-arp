@@ -14,7 +14,7 @@ await withBrowser(async (cdp, base) => {
   check('맨 위 주소(/)로 열면 앱이 뜬다', rootOk, await cdp.eval('location.pathname'));
 
   // 2. 예시 파일 열기(주소 정리 뒤에도 쿼리 유지)
-  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&nosw` });
+  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&page=launch&nosw` });
   let sampleOk = false;
   try { await cdp.waitUntil("document.querySelector('table.grid.vol')", 15000); sampleOk = true; } catch { /* 실패 */ }
   check('/app/index.html?sample=… → 주소가 /app/로 바뀌어도 예시가 열린다', sampleOk, await cdp.eval('location.pathname + location.search'));
@@ -51,7 +51,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(100);
 
   // 6. 서비스 워커가 켜진 채 옮겨지는 주소로 열기(온라인)
-  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal` });
+  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&page=launch` });
   let swOnline = false;
   try { await cdp.waitUntil("document.querySelector('table.grid.vol') && navigator.serviceWorker.controller", 15000); swOnline = true; } catch { /* 실패 */ }
   check('서비스 워커가 켜진 채 /app/index.html?sample=… 로 열어도 예시가 열린다', swOnline, await cdp.eval('location.pathname + location.search'));

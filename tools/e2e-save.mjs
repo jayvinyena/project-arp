@@ -22,7 +22,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("localStorage.setItem('arp.editor', '검사자')");
 
   // 1. OPFS 파일로 열기 → 편집 중 표시를 쓰고 저장
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1` });
   await cdp.waitUntil(ready);
   await cdp.waitUntil(`${saveText}.includes('저장됨')`, 10000);
   check('열 때 편집 중 표시를 파일에 저장', true, await cdp.eval(saveText));
@@ -38,7 +38,7 @@ await withBrowser(async (cdp, base) => {
   check('약 2초 뒤 자동 저장', waited >= 1000 && waited < 5000, `${waited}ms`);
 
   // 3. 다시 열면(파일 그대로) 고친 값이 남아 있다
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
   const kept = await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').value`);
   check('다시 열면 고친 값(5)이 남아 있다', kept === '5', `값 ${kept}`);
@@ -59,7 +59,7 @@ await withBrowser(async (cdp, base) => {
 
   // 5. 다른 사람이 편집 중이면 읽기 전용
   await cdp.eval("localStorage.setItem('arp.editor', '다른 사람')");
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
   await sleep(500);
   const ro = await cdp.eval("document.querySelector('.banner.warn')?.textContent ?? ''");
@@ -69,12 +69,12 @@ await withBrowser(async (cdp, base) => {
   // 6. 같은 이름이라도 다른 PC(브라우저)에서 편집 중이면 읽기 전용, 원래 PC면 고칠 수 있다
   const device = await cdp.eval("localStorage.getItem('arp.device')");
   await cdp.eval("localStorage.setItem('arp.editor', '검사자'); localStorage.setItem('arp.device', 'other-pc')");
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
   await sleep(500);
   check('같은 이름 · 다른 PC면 읽기 전용', await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').disabled`));
   await cdp.eval(`localStorage.setItem('arp.device', ${JSON.stringify(device)})`);
-  await cdp.send('Page.navigate', { url: `${app}?sample=normal&opfs=1&keep=1` });
+  await cdp.send('Page.navigate', { url: `${app}?sample=normal&page=launch&opfs=1&keep=1` });
   await cdp.waitUntil(ready);
   await sleep(500);
   check('같은 이름 · 같은 PC면 고칠 수 있다', !(await cdp.eval(`document.querySelector('input[aria-label="배경 맵 기본안"]').disabled`)));

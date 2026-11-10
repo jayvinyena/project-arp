@@ -70,6 +70,10 @@ await withBrowser(async (cdp, base) => {
   check('파일이 생겼다', file > 10000, `${file}바이트`);
   const icon = await cdp.eval(`[...document.querySelectorAll('tr.row')].find(r => r.textContent.includes('아이콘'))?.querySelector('.steps')?.textContent ?? ''`);
   check('아이콘이 원화·UI를 거친다', icon.includes('원화') && icon.includes('UI'), icon);
+  // 처음 할 일 안내(docs/23-ux-review.md 6.4): 공수 · 인력은 만들기에서 채워져 체크, 물량이 다음 단계
+  const guide = await cdp.eval("(() => { const g = document.querySelector('.setup-guide'); return g ? { head: g.querySelector('h2').textContent, done: g.querySelectorAll('.setup-step.done').length, next: g.querySelector('.setup-step.next b')?.textContent } : null; })()");
+  check('새 프로젝트: 처음 할 일 안내(2 / 3 끝남 · 다음 = 런칭 물량)', guide && guide.head.includes('2 / 3') && guide.done === 2 && guide.next === '런칭 물량', JSON.stringify(guide));
+  await shot(cdp, 'new-4-guide');
 
   // 물량 넣고 계산
   // 기본안에 넣고 "기본안 → 최소안·최대안 복사"로 세 템플릿을 채운다(계산이 막혀 있어도 템플릿 전환·채우기가 된다)
@@ -83,6 +87,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelectorAll('.mode-card').length === 3");
   const big = await cdp.eval("document.querySelectorAll('.mode-card .big')[1]?.textContent");
   check('물량을 입력하면 완료 예정일이 나온다', /월 \d+일/.test(big ?? ''), big);
+  check('물량을 넣으면 처음 할 일 안내가 사라진다', !(await cdp.eval("!!document.querySelector('.setup-guide')")));
   await shot(cdp, 'new-5-created');
 }, { build: !process.argv.includes('--no-build') });
 
