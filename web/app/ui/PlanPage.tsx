@@ -9,6 +9,7 @@ import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
 import { fmtDate, fmtShortDate, fmtInt, fmtDays, fmtPct } from '../lib/format.ts';
 import { VolumeTable } from './VolumeTable.tsx';
 import { IconAlert, IconPlus, IconX } from './icons.tsx';
+import { useReorder, Grip } from './reorder.tsx';
 import { MODE_LABEL, humanKey } from './LaunchPage.tsx';
 
 const STATUS: Record<UpdateStatus, { text: string; tone: string }> = {
@@ -132,17 +133,16 @@ function LoadMap(props: { view: PlanView }) {
 function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApply: (e: Edit) => void; readOnly: boolean }) {
   const live = props.view.rows.filter(r => r.live);
   const rest = props.view.rows.filter(r => !r.live);
-  const row = (r: PlanRow, i: number) => {
+  // 진행 중 · 예정 업데이트는 손잡이나 줄을 길게 눌러 끌어 우선순위를 바꾼다(docs/27 4.3)
+  const ro = useReorder(live.map(r => r.updateId), ids => props.onApply({ kind: 'reorderPriority', updateIds: ids }), { disabled: props.readOnly });
+  const row = (r: PlanRow) => {
     const st = r.result ? STATUS[r.result.status] : null;
+    const drag = r.live && !props.readOnly;
     return (
-      <tr class={`row${r.live ? '' : ' muted-row'}`}>
+      <tr class={`row${r.live ? '' : ' muted-row'}${drag ? ` ${ro.cls(r.updateId)}` : ''}`} {...(drag ? ro.item(r.updateId) : {})}>
         <td class="n">
-          {r.live && !props.readOnly ? (
-            <span class="prio">
-              <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 우선순위 올리기`} disabled={i === 0} onClick={() => props.onApply({ kind: 'movePriority', updateId: r.updateId, direction: -1 })}>↑</button>
-              <span class="num">{r.priority}</span>
-              <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 우선순위 내리기`} disabled={i === live.length - 1} onClick={() => props.onApply({ kind: 'movePriority', updateId: r.updateId, direction: 1 })}>↓</button>
-            </span>
+          {drag ? (
+            <span class="prio"><button {...ro.handle(r.updateId, `${r.name} 우선순위`)}><Grip /></button><span class="num">{r.priority}</span></span>
           ) : <span class="faint">{r.live ? r.priority : '—'}</span>}
         </td>
         <td>
@@ -169,7 +169,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
   };
   return (
     <section class="card">
-      <div class="card-head"><div><h2>업데이트</h2><p class="small muted" style="margin-top: 2px">우선순위가 높은 업데이트가 인력을 먼저 사용합니다. 화살표로 순서를 변경합니다.</p></div></div>
+      <div class="card-head"><div><h2>업데이트</h2><p class="small muted" style="margin-top: 2px">우선순위가 높은 업데이트가 인력을 먼저 사용합니다. 왼쪽 손잡이(⠿)나 줄을 길게 눌러 끌면 순서가 바뀝니다.</p></div></div>
       <div class="card-body" style="padding-top: 8px">
         <div class="table-wrap">
           <table class="grid list">
@@ -177,7 +177,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
               <th class="n" style="width: 96px">순위</th><th>업데이트</th><th class="n">시작</th><th class="n">제작 완료 목표</th><th class="n">출시</th>
               <th class="n">{MODE_LABEL.TARGET} 물량</th><th class="n">완료 예정 · 범위</th><th>판정 · 근거</th>
             </tr></thead>
-            <tbody>
+            <tbody data-reorder-box="">
               {live.map(row)}
               {rest.map(row)}
             </tbody>

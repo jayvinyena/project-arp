@@ -24,7 +24,7 @@ export function validate(db: SqlDb, only?: Set<string>): Finding[] {
 }
 
 const ENGINE_TABLES = [
-  'holidays', 'parts', 'part_overlaps', 'resource_types', 'resource_parts', 'efforts', 'effort_mix',
+  'holidays', 'parts', 'part_overlaps', 'pipeline_steps', 'resource_types', 'resource_parts', 'efforts', 'effort_mix',
   'update_types', 'updates', 'volumes', 'progress', 'capacity',
 ] as const;
 
@@ -46,6 +46,7 @@ export function readProjectData(db: SqlDb): ProjectData {
 export const KEY_COLUMNS: Record<string, string[]> = {
   settings: [],
   part_overlaps: ['from_part_id', 'to_part_id'],
+  pipeline_steps: ['pipeline_id', 'part_id'],
   resource_parts: ['resource_type_id', 'part_id'],
   efforts: ['resource_type_id', 'part_id', 'profile_id'],
   effort_mix: ['part_id', 'profile_id'],

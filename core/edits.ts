@@ -10,6 +10,8 @@ import type { PeopleEdit } from './people.ts';
 import { applyPeopleEdit, PEOPLE_EDIT_KINDS } from './people.ts';
 import type { NewsEdit } from './news.ts';
 import { applyNewsEdit, NEWS_EDIT_KINDS } from './news.ts';
+import type { PipelineEdit } from './pipelines.ts';
+import { applyPipelineEdit, PIPELINE_EDIT_KINDS, allowedParts } from './pipelines.ts';
 
 export type QtyField = 'min_qty' | 'target_qty' | 'stretch_qty' | 'outsource_qty';
 export type UpdateField = 'name' | 'update_type_id' | 'start_date' | 'freeze_date' | 'release_date' | 'status';
@@ -70,7 +72,8 @@ export type Edit =
   // 에셋 관리(core/assets.ts)
   | AssetEdit
   | PeopleEdit
-  | NewsEdit;
+  | NewsEdit
+  | PipelineEdit;
 
 export interface EditContext { editor: string; batchId: string; reason?: string }
 export interface EditResult { changed: boolean; createdId?: string }
@@ -122,6 +125,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
   if (ASSET_EDIT_KINDS.has(edit.kind)) return applyAssetEdit(db, session, edit as AssetEdit, ctx);
   if (PEOPLE_EDIT_KINDS.has(edit.kind)) return applyPeopleEdit(db, edit as PeopleEdit, ctx);
   if (NEWS_EDIT_KINDS.has(edit.kind)) return applyNewsEdit(db, edit as NewsEdit, ctx);
+  if (PIPELINE_EDIT_KINDS.has(edit.kind)) return applyPipelineEdit(db, session, edit as PipelineEdit, ctx);
 
   switch (edit.kind) {
     // ───────── 업데이트 ─────────
@@ -550,14 +554,15 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const capacity = db.all('SELECT * FROM capacity WHERE part_id = ?', [edit.partId]);
       const overlaps = db.all('SELECT * FROM part_overlaps WHERE from_part_id = ? OR to_part_id = ?', [edit.partId, edit.partId]);
       const mix = db.all('SELECT * FROM effort_mix WHERE part_id = ?', [edit.partId]);
+      const steps = db.all('SELECT * FROM pipeline_steps WHERE part_id = ?', [edit.partId]);
       // 그 파트 소속 작업자는 소속팀 없음으로(되돌리면 돌아온다)
       for (const p of db.all('SELECT person_id FROM people WHERE team = ?', [old.name])) {
         db.run('UPDATE people SET team = NULL WHERE person_id = ?', [p.person_id]);
         log(db, ctx, 'UPDATE', 'people', String(p.person_id), 'team', old.name, null);
       }
       db.run('DELETE FROM parts WHERE part_id = ?', [edit.partId]);
-      log(db, ctx, 'DELETE', 'parts', edit.partId, null, { ...old, capacity, part_overlaps: overlaps, effort_mix: mix }, undefined);
-      dirty('parts', 'capacity', 'part_overlaps', 'effort_mix');
+      log(db, ctx, 'DELETE', 'parts', edit.partId, null, { ...old, capacity, part_overlaps: overlaps, effort_mix: mix, pipeline_steps: steps }, undefined);
+      dirty('parts', 'capacity', 'part_overlaps', 'effort_mix', 'pipeline_steps');
       return { changed: true };
     }
 
@@ -640,7 +645,7 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const cur = db.get('SELECT days FROM efforts WHERE resource_type_id = ? AND part_id = ? AND profile_id = ?', [edit.resourceTypeId, edit.partId, edit.profileId]);
       if (edit.profileId === 'BASE' && edit.days == null) {
         if (!rp) return { changed: false };
-        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 작업 진척 기록이 있어 제외할 수 없습니다. 공수를 0으로 두십시오.');
+        if (db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? AND part_id = ? LIMIT 1', [edit.resourceTypeId, edit.partId])) fail('이 파트에 작업 진척 기록이 있습니다. 칸의 옮기기(→)로 다른 파트로 옮기거나, 기록까지 지우기를 고르십시오.');
         const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
         db.run('DELETE FROM resource_parts WHERE resource_type_id = ? AND part_id = ?', [edit.resourceTypeId, edit.partId]);
         log(db, ctx, 'DELETE', 'resource_parts', key, null, { ...rp, efforts }, undefined);
@@ -656,6 +661,8 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       }
       if (!rp) {
         if (edit.profileId === 'AI') fail('기본 공수를 먼저 입력하십시오.');
+        const allowed = allowedParts(db, edit.resourceTypeId);
+        if (allowed && !allowed.has(edit.partId)) fail('이 리소스 파이프라인의 단계가 아닌 파트입니다. 기준 정보 › 파이프라인에서 단계를 더하거나 리소스의 파이프라인을 바꾸십시오.');
         const row = { resource_type_id: edit.resourceTypeId, part_id: edit.partId, rework_rate: 0 };
         db.run('INSERT INTO resource_parts (resource_type_id, part_id, rework_rate) VALUES (?, ?, 0)', [edit.resourceTypeId, edit.partId]);
         log(db, ctx, 'INSERT', 'resource_parts', key, null, undefined, row);

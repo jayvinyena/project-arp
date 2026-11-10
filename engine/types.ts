@@ -19,7 +19,9 @@ export interface Settings {
 export interface Holiday { date: string; name: string; kind?: string }
 export interface Part { part_id: string; name: string; sort_order: number; active: number }
 export interface PartOverlap { from_part_id: string; to_part_id: string; overlap_rate: number }
-export interface ResourceType { resource_type_id: string; group_id: string | null; name: string; sort_order: number; active: number }
+export interface ResourceType { resource_type_id: string; group_id: string | null; name: string; sort_order: number; active: number; /** 고른 파이프라인(없으면 파트 표 순서) */ pipeline_id?: string | null }
+/** 파이프라인 단계: 순서(seq)와 앞 단계와의 겹침률(비우면 파트 쌍 → 기본) */
+export interface PipelineStep { pipeline_id: string; part_id: string; seq: number; overlap_rate: number | null }
 export interface ResourcePart { resource_type_id: string; part_id: string; rework_rate: number }
 export interface Effort { resource_type_id: string; part_id: string; profile_id: string; days: number }
 export interface EffortMix { part_id: string; profile_id: string; share: number }
@@ -68,6 +70,8 @@ export interface ProjectData {
   holidays: Holiday[];
   parts: Part[];
   part_overlaps: PartOverlap[];
+  /** 리소스별 파이프라인 단계(없으면 모든 리소스가 파트 표 순서) */
+  pipeline_steps?: PipelineStep[];
   resource_types: ResourceType[];
   resource_parts: ResourcePart[];
   efforts: Effort[];
@@ -100,7 +104,7 @@ export interface StageResult {
   partId: string;
   predecessorPartId: string | null;
   overlapRate: number | null;
-  overlapSource: 'FIRST' | 'PAIR' | 'DEFAULT';
+  overlapSource: 'FIRST' | 'STEP' | 'PAIR' | 'DEFAULT';
   requiredDays: number;
   remainingDays: number;
   /** 앞 공정 조건을 처음 채운 날 (null = 계획 기간 안에 못 채움 또는 이미 끝남) */

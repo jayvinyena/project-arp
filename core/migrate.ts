@@ -2,7 +2,7 @@
 // 새 파일도 v1 구조를 만든 뒤 이 단계를 차례로 밟는다. 그래서 "새로 만든 파일"과 "옛 파일을 바꾼 것"이 항상 같다.
 import type { SqlDb } from './db.ts';
 
-export const LATEST_SCHEMA = 9;
+export const LATEST_SCHEMA = 10;
 
 const STEPS: { to: number; note: string; sql: string }[] = [
   {
@@ -148,6 +148,25 @@ const STEPS: { to: number; note: string; sql: string }[] = [
       INSERT INTO teams (team_id, name, sort_order)
         SELECT printf('T%02d', row_number() OVER (ORDER BY min(sort_order), team)), team, row_number() OVER (ORDER BY min(sort_order), team)
         FROM people WHERE team IS NOT NULL AND team <> '' AND team NOT IN (SELECT name FROM parts) GROUP BY team;
+    `,
+  },
+  {
+    to: 10,
+    note: '리소스별 파이프라인: 이름 붙인 단계 목록(순서 · 단계 겹침률), 리소스가 하나를 고른다. 고르지 않으면 지금처럼 파트 표 순서(docs/28-resource-pipelines.md)',
+    sql: `
+      CREATE TABLE pipelines (
+        pipeline_id TEXT PRIMARY KEY,
+        name        TEXT NOT NULL UNIQUE,
+        sort_order  INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      CREATE TABLE pipeline_steps (
+        pipeline_id  TEXT NOT NULL REFERENCES pipelines(pipeline_id) ON DELETE CASCADE,
+        part_id      TEXT NOT NULL REFERENCES parts(part_id) ON DELETE CASCADE,
+        seq          INTEGER NOT NULL,
+        overlap_rate REAL CHECK (overlap_rate IS NULL OR overlap_rate BETWEEN 0 AND 1),
+        PRIMARY KEY (pipeline_id, part_id)
+      ) STRICT;
+      ALTER TABLE resource_types ADD COLUMN pipeline_id TEXT;
     `,
   },
 ];

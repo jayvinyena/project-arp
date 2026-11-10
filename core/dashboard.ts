@@ -4,6 +4,7 @@ import type { SqlDb } from './db.ts';
 import type { PlanMode } from '../engine/types.ts';
 import type { AssetStatus, Stage } from './assets.ts';
 import { stageOf, pipeline, defaultStatus } from './assets.ts';
+import { partOrderFor } from './pipelines.ts';
 
 export interface DashTodo { assetId: string; name: string; resource: string; part: string | null; since: string | null; who: string | null }
 export interface DashboardView {
@@ -134,6 +135,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
 
   // 모든 에셋이 같은 파이프라인(사용 중인 파트 전부). 행이 없으면 거치는 파트는 대기, 아니면 해당 없음
   const pl = pipeline(db);
+  const orderFor = partOrderFor(db); // 리소스별 공정 순서(docs/28)
   const st0 = (a: Record<string, unknown>, p: string) => ((states.get(String(a.asset_id))?.get(p)?.status as AssetStatus) ?? defaultStatus(pl.passes.has(`${a.resource_type_id}|${p}`)));
   const states = new Map<string, Map<string, Record<string, unknown>>>();
   for (const r of db.all('SELECT ap.* FROM asset_parts ap JOIN assets a ON a.asset_id = ap.asset_id WHERE a.update_id = ?', [updateId])) {
@@ -150,7 +152,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
   const staleBefore = iso(parse(today) - 14 * DAY);
   for (const a of assets) {
     const id = String(a.asset_id);
-    const st = pl.parts;
+    const st = orderFor(String(a.resource_type_id));
     const s = states.get(id) ?? new Map();
     const statusOf = (p: string) => st0(a, p);
     const stage = stageOf(st, statusOf);
@@ -177,7 +179,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
 
   const batches = db.all('SELECT * FROM batches WHERE update_id = ? ORDER BY sort_order, batch_id', [updateId]).map(b => {
     const mine = assets.filter(a => a.batch_id === b.batch_id);
-    const doneN = mine.filter(a => stageOf(pl.parts, p => st0(a, p)) === 'DONE').length;
+    const doneN = mine.filter(a => stageOf(orderFor(String(a.resource_type_id)), p => st0(a, p)) === 'DONE').length;
     const due = (b.due_date as string) ?? null;
     // 진행 = 끝난 파트 수 ÷ 할 파트 수(에셋 전체, 해당 없음은 뺀다)
     let partsAll = 0; let partsDone = 0;

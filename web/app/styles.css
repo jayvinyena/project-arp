@@ -1362,3 +1362,61 @@ table.grid.people-table tr.row:hover .people-del, .people-del:focus-visible { op
 table.grid.edit select.field.ghost-field { border-color: transparent; background-color: transparent; }
 table.grid.edit tr.row:hover select.field.ghost-field, table.grid.edit select.field.ghost-field:focus { border-color: var(--line-strong); background-color: var(--surface); }
 
+
+/* 끌어서 순서 바꾸기(docs/27 4.3): 손잡이 · 잡힌 줄 · 놓일 자리 선 */
+.reorder-handle { display: inline-grid; place-items: center; width: 24px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-3); cursor: grab; touch-action: none; }
+.reorder-handle:hover:not(:disabled) { background: var(--hover); color: var(--text-2); }
+.reorder-handle:focus-visible { outline: none; box-shadow: var(--ring); color: var(--text); }
+.reorder-handle:disabled { cursor: default; opacity: .4; }
+.reorder-handle .icon.grip { width: 16px; height: 16px; }
+[data-reorder-id] { user-select: none; }
+[data-reorder-id] input, [data-reorder-id] select, [data-reorder-id] textarea { user-select: text; }
+body.reordering, body.reordering * { cursor: grabbing !important; user-select: none !important; }
+tr.dragging td, .step-chip.dragging { opacity: .45; }
+table.grid tr.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+table.grid tr.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
+.step-chip.drop-before { box-shadow: -3px 0 0 var(--accent); }
+.step-chip.drop-after { box-shadow: 3px 0 0 var(--accent); }
+
+/* 공정 순서 · 파이프라인(docs/28) */
+.pipelines { display: flex; flex-direction: column; gap: 10px; }
+.pipeline-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+.pipeline-card:first-child { background: var(--surface-2); }
+.pipeline-head { display: flex; align-items: center; gap: 10px; min-height: 32px; flex-wrap: wrap; }
+.pipeline-head .field.pipeline-name { font-weight: 650; width: 200px; }
+.pipeline-head .field.add-step { width: 150px; }
+.step-chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.step-chip { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px 0 2px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 550; white-space: nowrap; }
+.step-chip .reorder-handle { width: 20px; height: 26px; }
+.step-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-ink); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.step-chip:not(:has(.reorder-handle)) { padding-left: 6px; }
+.step-x { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: -4px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text-3); cursor: pointer; }
+.step-x:hover { background: var(--bad-soft); color: var(--bad); }
+.step-x .icon { width: 12px; height: 12px; }
+.overlap-pill { display: inline-flex; align-items: center; gap: 2px; height: 24px; min-width: 52px; justify-content: center; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.overlap-pill.inherited { border-style: dashed; color: var(--text-3); font-weight: 500; }
+.overlap-pill:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink); }
+.overlap-pill:disabled { cursor: default; }
+.overlap-arrow { color: var(--text-3); }
+.field.overlap-in { width: 52px; height: 24px; padding: 0 6px; border-radius: 12px; font-size: 11.5px; text-align: center; }
+
+/* 리소스 · 공수 표: 파이프라인 칸 · 파이프라인 밖 칸 · 옮기기 */
+table.grid.edit select.field.pipe-select { width: 100%; }
+table.grid.setup-res td.eff-off, table.grid.setup-res.ref td.eff-off { color: var(--text-3); text-align: center; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 60%, transparent) 6px 7px); }
+table.grid.setup-res td.eff-warn .field.num-in { border-color: var(--warn); color: var(--warn); }
+table.grid.setup-res td.eff-base { position: relative; }
+.eff-move { position: absolute; top: 50%; left: 6px; transform: translateY(-50%); display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); color: var(--text-2); font-size: 11px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; }
+tr.row:hover .eff-move, .eff-move:focus-visible { opacity: 1; }
+.eff-move:hover { border-color: var(--accent); color: var(--accent-ink); }
+.eff-move:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* 옮기기 · 지우기 창 */
+.dialog.move-dialog { width: min(620px, 100%); }
+.move-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.move-opt { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.move-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.move-opt > input { margin-top: 3px; }
+.move-opt > span { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.move-opt select.field { width: 220px; }
+.move-table select.field { width: 100%; }
+.dialog-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }

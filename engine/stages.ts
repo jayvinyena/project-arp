@@ -19,7 +19,7 @@ export interface Stage {
   preDoneDays: number;
   predecessor: Stage | null;
   overlapRate: number | null;
-  overlapSource: 'FIRST' | 'PAIR' | 'DEFAULT';
+  overlapSource: 'FIRST' | 'STEP' | 'PAIR' | 'DEFAULT';
   /** 배정 순서 비교용 */
   order: number[];
   /** 남은 일을 배정하기 시작하는 날: 업데이트 시작일과 작업 진척 기준일 다음 날 중 늦은 날 */
@@ -81,6 +81,16 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
     resourceParts.get(rp.resource_type_id)!.push(rp);
   }
   for (const list of resourceParts.values()) list.sort((a, b) => partOrder.get(a.part_id)! - partOrder.get(b.part_id)!);
+  // 리소스별 파이프라인(docs/28): 고른 파이프라인이 있으면 그 단계 순서, 단계에 없는 파트는 뒤에(파트 표 순서). 없으면 파트 표 순서 그대로
+  const steps = new Map<string, { seq: number; overlap: number | null }>();
+  for (const st of data.pipeline_steps ?? []) steps.set(`${st.pipeline_id}|${st.part_id}`, { seq: st.seq, overlap: st.overlap_rate });
+  const pipelineOf = new Map(data.resource_types.map(r => [r.resource_type_id, r.pipeline_id ?? null]));
+  const stepOf = (rt: string, part: string) => { const p = pipelineOf.get(rt); return p ? steps.get(`${p}|${part}`) : undefined; };
+  for (const [rt, list] of resourceParts) {
+    if (!pipelineOf.get(rt)) continue;
+    const pos = (part: string) => stepOf(rt, part)?.seq ?? 1e6 + partOrder.get(part)!;
+    list.sort((a, b) => pos(a.part_id) - pos(b.part_id));
+  }
 
   const mixedDays = (rt: string, part: string): number => {
     const base = efforts.get(`${rt}|${part}|BASE`);
@@ -117,9 +127,11 @@ export function buildStages(data: ProjectData, planMode: PlanMode, legacyProgres
       let overlapRate: number | null = null;
       let overlapSource: Stage['overlapSource'] = 'FIRST';
       if (prev) {
+        // 겹침률: 파이프라인 단계에 적은 값 → 파트 쌍 → 기본
+        const step = stepOf(v.resource_type_id, rp.part_id)?.overlap;
         const pair = overlap.get(`${prev.partId}>${rp.part_id}`);
-        overlapRate = pair ?? s.default_overlap_rate;
-        overlapSource = pair == null ? 'DEFAULT' : 'PAIR';
+        if (step != null) { overlapRate = step; overlapSource = 'STEP'; }
+        else { overlapRate = pair ?? s.default_overlap_rate; overlapSource = pair == null ? 'DEFAULT' : 'PAIR'; }
       }
       const stage: Stage = {
         index: stages.length,

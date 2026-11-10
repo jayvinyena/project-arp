@@ -119,7 +119,7 @@ test('리소스: 만들기(새 분류)·이름·분류 옮기기·공수 넣기(
   let r = setupView(db).resources.find(x => x.resourceTypeId === id);
   assert.equal(r.name, '탈것(소형)');
   assert.equal(r.groupName, '캐릭터');
-  assert.deepEqual(r.efforts.MODELING, { base: 4, ai: 3, rework: 0.1 });
+  assert.deepEqual(r.efforts.MODELING, { base: 4, ai: 3, rework: 0.1, done: 0, assets: 0 });
   // 물량에 입력하면 계산된다
   edit({ kind: 'addResource', updateId: 'LAUNCH', resourceTypeId: id });
   edit({ kind: 'volume', updateId: 'LAUNCH', resourceTypeId: id, field: 'target_qty', value: 5 });
@@ -130,7 +130,7 @@ test('리소스: 만들기(새 분류)·이름·분류 옮기기·공수 넣기(
   r = setupView(db).resources.find(x => x.resourceTypeId === id);
   assert.deepEqual(Object.keys(r.efforts), ['CONCEPT']);
   undo(lastBatch(db));
-  assert.deepEqual(setupView(db).resources.find(x => x.resourceTypeId === id).efforts.MODELING, { base: 4, ai: 3, rework: 0.1 });
+  assert.deepEqual(setupView(db).resources.find(x => x.resourceTypeId === id).efforts.MODELING, { base: 4, ai: 3, rework: 0.1, done: 0, assets: 0 });
   // 실적이 있는 파트는 뺄 수 없다
   assert.throws(() => edit({ kind: 'effort', resourceTypeId: 'CHAR_NEW', partId: 'CONCEPT', profileId: 'BASE', days: null }), /작업 진척/);
   // 쓰이지 않으면 지울 수 있고, 되돌리면 공수까지 돌아온다
@@ -138,7 +138,7 @@ test('리소스: 만들기(새 분류)·이름·분류 옮기기·공수 넣기(
   const del = edit({ kind: 'deleteResource', resourceTypeId: id });
   assert.ok(del.changed);
   undo(lastBatch(db));
-  assert.deepEqual(setupView(db).resources.find(x => x.resourceTypeId === id).efforts.MODELING, { base: 4, ai: 3, rework: 0.1 });
+  assert.deepEqual(setupView(db).resources.find(x => x.resourceTypeId === id).efforts.MODELING, { base: 4, ai: 3, rework: 0.1, done: 0, assets: 0 });
   raw.close();
 });
 

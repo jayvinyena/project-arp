@@ -2,6 +2,8 @@
 import type { SqlDb } from './db.ts';
 import type { Person, TeamOption } from './people.ts';
 import { peopleList, teamOptions } from './people.ts';
+import { partOrderFor, pipelinesList } from './pipelines.ts';
+import type { PipelineInfo } from './pipelines.ts';
 import type { PlanMode, PlanResult, UpdateStatus } from '../engine/types.ts';
 import { runPlan } from '../engine/index.ts';
 import type { ProjectSession, Finding } from './pipeline.ts';
@@ -297,6 +299,7 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
   if (!updateId) return empty;
 
   const passes = new Set(db.all('SELECT resource_type_id, part_id FROM resource_parts').map(r => `${r.resource_type_id}|${r.part_id}`));
+  const orderFor = partOrderFor(db);
   const base = new Map(db.all("SELECT resource_type_id, part_id, days FROM efforts WHERE profile_id = 'BASE'").map(r => [`${r.resource_type_id}|${r.part_id}`, Number(r.days)]));
   const done = new Map(db.all('SELECT * FROM progress WHERE update_id = ?', [updateId]).map(r => [`${r.resource_type_id}|${r.part_id}`, r]));
   // 실적 관련 주의(A02 확장 초과, A04 앞 공정보다 많이 끝남)를 칸에 붙인다
@@ -311,8 +314,12 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
     const target = Number(v.target_qty ?? 0);
     const outsource = Number(v.outsource_qty ?? 0);
     const need = Math.max(0, target - outsource);
-    let prev: number | null = null;
     let last = 0;
+    // 앞 공정 = 이 리소스 공정 순서(파이프라인)에서 바로 앞에 거치는 파트
+    const chain = orderFor(rt).filter(pid => passes.has(`${rt}|${pid}`));
+    const prevOf = new Map(chain.map((pid, i) => [pid, i > 0 ? chain[i - 1] : null]));
+    const doneOf = (pid: string) => Number(done.get(`${rt}|${pid}`)?.completed_qty ?? 0);
+    if (chain.length) last = doneOf(chain[chain.length - 1]);
     const cells = parts.map(p => {
       const key = `${rt}|${p.partId}`;
       const on = passes.has(key);
@@ -321,10 +328,9 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
       let flag: string | null = null;
       if (on) {
         const c = completed ?? 0;
+        const before = prevOf.get(p.partId) ?? null;
         if (c > (vol.get(rt) ?? 0)) flag = '세 번째 템플릿 물량보다 많습니다';
-        else if (prev !== null && c > prev) flag = '앞 공정보다 많이 끝났습니다';
-        prev = c;
-        last = c;
+        else if (before !== null && c > doneOf(before)) flag = '앞 공정보다 많이 끝났습니다';
         const days = base.get(key) ?? 0;
         const bp = byPart.get(p.partId)!;
         bp.totalDays += need * days;
@@ -353,9 +359,17 @@ export interface SetupView {
   groups: { groupId: string; name: string }[];
   resources: {
     resourceTypeId: string; name: string; groupId: string | null; groupName: string; active: boolean; used: boolean;
-    efforts: Record<string, { base: number | null; ai: number | null; rework: number }>;
+    /** 고른 파이프라인(없으면 null = 파트 표 순서) */
+    pipelineId: string | null;
+    /** records = 그 칸의 작업 진척(완료 수량 합) · 에셋 상태 수: 비울 때 옮기기 · 지우기 창을 띄운다 */
+    efforts: Record<string, { base: number | null; ai: number | null; rework: number; done: number; assets: number }>;
   }[];
   hasAI: boolean;
+  /** 이름 붙인 파이프라인(단계 순서 · 단계 겹침률 · 쓰는 리소스 수) */
+  pipelines: PipelineInfo[];
+  /** 파트 쌍 겹침률(파이프라인을 고르지 않은 리소스 · 단계 겹침률이 빈 곳), 기본 겹침률 */
+  overlaps: { from: string; to: string; rate: number }[];
+  defaultOverlap: number;
 }
 
 /** 새 프로젝트 마법사에서 입력한 것(기본 정보·파트·리소스·공수)을 만든 뒤에 고치는 화면용 */
@@ -379,16 +393,19 @@ export function setupView(db: SqlDb): SetupView {
   const groupName = new Map(groups.map(g => [g.groupId, g.name]));
   const rps = db.all('SELECT * FROM resource_parts');
   const effs = db.all('SELECT * FROM efforts');
+  const doneBy = new Map(db.all('SELECT resource_type_id, part_id, sum(completed_qty) AS n FROM progress GROUP BY resource_type_id, part_id').map(r => [`${r.resource_type_id}|${r.part_id}`, Number(r.n)]));
+  const assetBy = new Map(db.all('SELECT a.resource_type_id, ap.part_id, count(*) AS n FROM asset_parts ap JOIN assets a ON a.asset_id = ap.asset_id GROUP BY a.resource_type_id, ap.part_id').map(r => [`${r.resource_type_id}|${r.part_id}`, Number(r.n)]));
   const resources = db.all(`SELECT r.* FROM resource_types r LEFT JOIN resource_groups g ON g.group_id = r.group_id
       ORDER BY coalesce(g.sort_order, 1e9), r.sort_order, r.resource_type_id`).map(r => {
     const id = String(r.resource_type_id);
     const efforts: SetupView['resources'][number]['efforts'] = {};
     for (const rp of rps.filter(x => x.resource_type_id === id)) {
       const of = (prof: string) => { const e = effs.find(x => x.resource_type_id === id && x.part_id === rp.part_id && x.profile_id === prof); return e ? Number(e.days) : null; };
-      efforts[String(rp.part_id)] = { base: of('BASE'), ai: of('AI'), rework: Number(rp.rework_rate) };
+      const k = `${id}|${rp.part_id}`;
+      efforts[String(rp.part_id)] = { base: of('BASE'), ai: of('AI'), rework: Number(rp.rework_rate), done: doneBy.get(k) ?? 0, assets: assetBy.get(k) ?? 0 };
     }
     const used = ['volumes', 'type_templates', 'progress', 'assets'].some(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [id]));
-    return { resourceTypeId: id, name: String(r.name), groupId: r.group_id == null ? null : String(r.group_id), groupName: r.group_id == null ? '' : groupName.get(String(r.group_id)) ?? '', active: Number(r.active) === 1, used, efforts };
+    return { resourceTypeId: id, name: String(r.name), groupId: r.group_id == null ? null : String(r.group_id), groupName: r.group_id == null ? '' : groupName.get(String(r.group_id)) ?? '', active: Number(r.active) === 1, used, pipelineId: (r.pipeline_id as string) ?? null, efforts };
   });
   return {
     project: {
@@ -399,5 +416,8 @@ export function setupView(db: SqlDb): SetupView {
     horizon: { start, end },
     parts, groups, resources,
     hasAI: !!db.get("SELECT 1 AS ok FROM effort_profiles WHERE profile_id = 'AI'"),
+    pipelines: pipelinesList(db),
+    overlaps: db.all('SELECT * FROM part_overlaps').map(o => ({ from: String(o.from_part_id), to: String(o.to_part_id), rate: Number(o.overlap_rate) })),
+    defaultOverlap: Number(s.default_overlap_rate ?? 0),
   };
 }

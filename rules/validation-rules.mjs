@@ -20,6 +20,12 @@ CREATE TEMP VIEW IF NOT EXISTS horizon_months AS
     WHERE m.month < (SELECT horizon_end_month FROM settings) AND m.month < '9999-12'
   )
   SELECT month FROM m;
+-- 리소스마다 거치는 파트의 공정 위치(docs/28): 고른 파이프라인 단계 순서, 단계에 없거나 파이프라인이 없으면 파트 표 순서
+CREATE TEMP VIEW IF NOT EXISTS step_pos AS
+  SELECT rp.resource_type_id, rp.part_id, CASE WHEN ps.seq IS NOT NULL THEN ps.seq ELSE 1000000 + p.sort_order END AS pos
+  FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id
+  JOIN resource_types r ON r.resource_type_id = rp.resource_type_id
+  LEFT JOIN pipeline_steps ps ON ps.pipeline_id = r.pipeline_id AND ps.part_id = rp.part_id;
 `;
 
 const q = s => s.replace(/\s+/g, ' ').trim();
@@ -28,19 +34,21 @@ const q = s => s.replace(/\s+/g, ' ').trim();
 // horizon_months는 settings, live_* 는 updates·volumes를 읽는다. 규칙을 수정하면 여기도 맞춘다(검사가 빠진 규칙을 잡는다).
 export const RULE_TABLES = {
   S01: ['settings'], S02: ['settings'], S03: ['settings'],
-  P01: ['parts'], P02: ['parts'], P03: ['part_overlaps'], P04: ['part_overlaps', 'parts'],
+  P01: ['parts'], P02: ['parts'], P03: ['part_overlaps'], P04: ['part_overlaps', 'parts', 'pipeline_steps'],
   E01: ['effort_profiles'],
   E02: ['volumes', 'updates', 'resource_parts', 'parts'],
   E03: ['volumes', 'updates', 'resource_parts', 'parts', 'efforts'],
   E04: ['efforts'], E05: ['resource_parts'], E06: ['effort_mix'],
   E07: ['effort_mix', 'resource_parts', 'efforts'],
   E08: ['volumes', 'updates', 'resource_parts', 'parts', 'efforts'],
+  E09: ['resource_parts', 'resource_types', 'pipeline_steps'],
+  E10: ['resource_types'],
   U01: ['updates'], U02: ['updates'], U03: ['updates'], U04: ['updates', 'settings'],
   U05: ['updates', 'update_types'], U06: ['updates'], U07: ['updates', 'volumes'],
   V01: ['volumes', 'updates'], V02: ['volumes', 'updates'], V03: ['volumes', 'updates'], V04: ['volumes', 'updates'],
   V05: ['volumes', 'updates', 'resource_types'],
   A01: ['progress'], A02: ['progress', 'updates', 'volumes'], A03: ['progress', 'resource_parts'],
-  A04: ['progress', 'updates', 'parts', 'resource_parts'],
+  A04: ['progress', 'updates', 'parts', 'resource_parts', 'resource_types', 'pipeline_steps'],
   C01: ['parts', 'capacity', 'settings'], C02: ['capacity'],
   C03: ['parts', 'resource_parts', 'volumes', 'updates', 'capacity', 'settings'],
   T01: ['type_templates'],
@@ -108,7 +116,9 @@ export const RULES = [
     fix: '앞 파트가 공정 순서상 먼저 오도록 고치거나 행을 지운다.',
     sql: q(`SELECT o.from_part_id || '>' || o.to_part_id AS key, '공정 순서와 반대이거나 쓰지 않는 파트입니다' AS detail
       FROM part_overlaps o JOIN parts a ON a.part_id = o.from_part_id JOIN parts b ON b.part_id = o.to_part_id
-      WHERE a.active = 0 OR b.active = 0 OR a.sort_order >= b.sort_order`),
+      WHERE a.active = 0 OR b.active = 0 OR (a.sort_order >= b.sort_order AND NOT EXISTS (
+        SELECT 1 FROM pipeline_steps x JOIN pipeline_steps y ON y.pipeline_id = x.pipeline_id AND y.seq > x.seq
+        WHERE x.part_id = o.from_part_id AND y.part_id = o.to_part_id))`),
   },
 
   // ───────── 리소스 · 공수 ─────────
@@ -155,6 +165,20 @@ export const RULES = [
       WHERE m.profile_id <> 'BASE' AND m.share > 0
         AND NOT EXISTS (SELECT 1 FROM efforts e WHERE e.resource_type_id = rp.resource_type_id AND e.part_id = rp.part_id AND e.profile_id = m.profile_id)
       GROUP BY m.part_id, m.profile_id`),
+  },
+  {
+    code: 'E09', level: 'WARN', title: '파이프라인에 없는 파트에 공수가 있다',
+    fix: '기준 정보 › 파이프라인에서 그 파트를 단계로 더하거나, 리소스 · 공수 표에서 그 칸을 비우거나 다른 파트로 옮긴다.',
+    sql: q(`SELECT rp.resource_type_id || '|' || rp.part_id AS key, printf('%s · %s: 파이프라인 단계가 아니라 맨 뒤에 계산합니다', r.name, p.name) AS detail
+      FROM resource_parts rp JOIN resource_types r ON r.resource_type_id = rp.resource_type_id JOIN parts p ON p.part_id = rp.part_id
+      WHERE r.pipeline_id IS NOT NULL AND EXISTS (SELECT 1 FROM pipelines pl WHERE pl.pipeline_id = r.pipeline_id)
+        AND NOT EXISTS (SELECT 1 FROM pipeline_steps ps WHERE ps.pipeline_id = r.pipeline_id AND ps.part_id = rp.part_id)`),
+  },
+  {
+    code: 'E10', level: 'WARN', title: '없는 파이프라인을 고른 리소스',
+    fix: '리소스 · 공수 표에서 파이프라인을 다시 고른다(그동안은 파트 표 순서로 계산).',
+    sql: q(`SELECT resource_type_id AS key, printf('%s: 파이프라인 %s 없음', name, pipeline_id) AS detail FROM resource_types
+      WHERE pipeline_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pipelines pl WHERE pl.pipeline_id = resource_types.pipeline_id)`),
   },
   {
     // 제작 리스트 가져오기에서 새로 만든 리소스 종류는 공수 0(거치지만 공수 미정)으로 만든다(docs/20-asset-management.md 21절)
@@ -279,9 +303,10 @@ export const RULES = [
       FROM progress b
       JOIN live_updates u ON u.update_id = b.update_id
       JOIN parts pb ON pb.part_id = b.part_id
-      JOIN resource_parts rp ON rp.resource_type_id = b.resource_type_id
-      JOIN parts pa ON pa.part_id = rp.part_id AND pa.active = 1 AND pa.sort_order < pb.sort_order
-      LEFT JOIN progress a ON a.update_id = b.update_id AND a.resource_type_id = b.resource_type_id AND a.part_id = rp.part_id
+      JOIN step_pos sb ON sb.resource_type_id = b.resource_type_id AND sb.part_id = b.part_id
+      JOIN step_pos sa ON sa.resource_type_id = b.resource_type_id AND sa.pos < sb.pos
+      JOIN parts pa ON pa.part_id = sa.part_id AND pa.active = 1
+      LEFT JOIN progress a ON a.update_id = b.update_id AND a.resource_type_id = b.resource_type_id AND a.part_id = sa.part_id
       WHERE b.completed_qty > coalesce(a.completed_qty, 0)`),
   },
 

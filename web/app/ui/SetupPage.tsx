@@ -2,6 +2,11 @@
 // AI: 리소스 × 파트마다 "기본(AI 없이)"과 "AI 사용 시" 공수, 파트마다 AI 활용 비율 → 공수 = 기본 × (1 − 비율) + AI × 비율
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
+import { PipelineSection } from './PipelineSection.tsx';
+import { MoveDialog } from './MoveDialog.tsx';
+import type { MoveRequest, PipelineRequest } from './MoveDialog.tsx';
+import { useReorder, Grip } from './reorder.tsx';
+import type { JSX } from 'preact';
 import { rpc } from '../lib/rpc.ts';
 import type { SetupView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -24,11 +29,28 @@ export function Field(props: { value: string; label: string; disabled?: boolean;
     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { reset(); (e.target as HTMLInputElement).blur(); } }} />;
 }
 
+/** 파트 표 줄: 손잡이(⠿)나 줄을 길게 눌러 끌어 순서를 바꾼다(docs/27 4.3) */
+function PartRows(props: { v: SetupView; ro: boolean; apply: (e: Edit) => Promise<boolean>; children: (p: SetupView['parts'][number]) => JSX.Element }) {
+  const ids = props.v.parts.map(p => p.partId);
+  const r = useReorder(ids, next => props.apply({ kind: 'reorderParts', partIds: next }), { disabled: props.ro });
+  return (
+    <tbody data-reorder-box="">
+      {props.v.parts.map(p => (
+        <tr class={`row${p.active ? '' : ' muted-row'} ${r.cls(p.partId)}`} {...r.item(p.partId)}>
+          <td class="c">{!props.ro && <button {...r.handle(p.partId, p.name)}><Grip /></button>}</td>
+          {props.children(p)}
+        </tr>
+      ))}
+    </tbody>
+  );
+}
+
 export function SetupPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean> }) {
   const [v, setV] = useState<SetupView | null>(null);
   const [newPart, setNewPart] = useState('');
   const [newRes, setNewRes] = useState({ group: '', name: '' });
   const [hol, setHol] = useState({ date: '', name: '', kind: 'COMPANY' as 'PUBLIC' | 'COMPANY' });
+  const [moveReq, setMoveReq] = useState<MoveRequest | PipelineRequest | null>(null);
   useEffect(() => { void rpc.setup().then(setV); }, [props.version]);
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const ro = props.readOnly;
@@ -97,20 +119,15 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
 
       <section class="card" aria-label="파트">
         <div class="card-head">
-          <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">순서 = 공정 순서입니다. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용됩니다. 달마다 다르게 하려면 "인력"에서 수정합니다.</p></div>
+          <div><h2>파트</h2><p class="small muted" style="margin-top: 2px">순서 = 기본 공정 순서입니다(파이프라인을 고르지 않은 리소스). 왼쪽 손잡이(⠿)나 줄을 길게 눌러 끌면 순서가 바뀝니다. 기본 인원·가동률은 계획 기간({v.horizon.start} ~ {v.horizon.end}) 모든 달에 적용됩니다. 달마다 다르게 하려면 "인력"에서 수정합니다.</p></div>
         </div>
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap ref-wrap">
             <table class="grid edit ref setup-parts">
-              <colgroup><col style="width: 80px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 120px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
-              <thead><tr><th>순서</th><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
-              <tbody>
-                {v.parts.map((p, i) => (
-                  <tr class={`row${p.active ? '' : ' muted-row'}`}>
-                    <td><span class="prio">
-                      <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 앞으로`} disabled={ro || i === 0} onClick={() => void apply({ kind: 'movePart', partId: p.partId, direction: -1 })}>↑</button>
-                      <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 뒤로`} disabled={ro || i === v.parts.length - 1} onClick={() => void apply({ kind: 'movePart', partId: p.partId, direction: 1 })}>↓</button>
-                    </span></td>
+              <colgroup><col style="width: 44px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 120px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
+              <thead><tr><th aria-label="순서" /><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
+              <PartRows v={v} ro={ro} apply={apply}>{p => (
+                  <>
                     <td><Field value={p.name} label={`${p.name} 파트 이름`} disabled={ro} onCommit={t => apply({ kind: 'renamePart', partId: p.partId, name: t })} /></td>
                     <td class="n"><Field class="field n num-in" numeric value={numText(p.headcount)} label={`${p.name} 기본 인원`} disabled={ro || !p.active}
                       onCommit={t => (num(t) == null || num(t)! < 0 ? false : fillAll(p.partId, 'headcount', num(t)!))} /></td>
@@ -123,34 +140,36 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                     <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${p.name} 파트 지우기`} disabled={p.usedBy > 0 || p.hasProgress}
                       title={p.usedBy > 0 ? `리소스 ${p.usedBy}종이 거칩니다. 공수에서 이 파트를 제외해야 삭제할 수 있습니다` : p.hasProgress ? '작업 진척 기록이 있습니다' : '지우기'}
                       onClick={() => void apply({ kind: 'deletePart', partId: p.partId })}><IconX /></button>}</td>
-                  </tr>
-                ))}
-              </tbody>
+                  </>
+                )}</PartRows>
             </table>
           </div>
           {!ro && (
             <div class="inline" style="margin-top: 10px">
               <input class="field" placeholder="새 파트 이름 (예: 리깅)" aria-label="새 파트 이름" value={newPart} onInput={e => setNewPart((e.target as HTMLInputElement).value)} />
               <button type="button" class="btn sm" disabled={!newPart.trim()} onClick={async () => { if (await apply({ kind: 'createPart', name: newPart })) setNewPart(''); }}><IconPlus />파트 더하기</button>
-              <span class="small faint">새 파트는 맨 뒤 공정, 인원 0명으로 들어갑니다.</span>
+              <span class="small faint">새 파트는 맨 뒤 공정, 인원 0명으로 들어갑니다(인력에서 인원을 넣어야 그 파트 일이 계산됩니다).</span>
             </div>
           )}
         </div>
       </section>
 
+      <PipelineSection v={v} readOnly={ro} apply={apply} />
+
       <section class="card" aria-label="리소스">
         <div class="card-head">
           <div><h2>리소스 · 1개당 공수(인·일)</h2>
-            <p class="small muted" style="margin-top: 2px">파트마다 <b>기본</b>(AI 없이)과 <b>AI</b>(AI 사용 시) 공수를 입력합니다. 기본을 비우면 그 파트를 거치지 않고, AI를 비우면 기본과 같은 값으로 간주합니다. 계산 공수 = 기본 × (1 − AI 활용 비율) + AI × 비율.</p></div>
+            <p class="small muted" style="margin-top: 2px">파트마다 <b>기본</b>(AI 없이)과 <b>AI</b>(AI 사용 시) 공수를 입력합니다. 기본을 비우면 그 파트를 거치지 않고, AI를 비우면 기본과 같은 값(흐린 숫자)으로 계산합니다. 작업 기록이 있는 칸을 비우거나 칸의 → 를 누르면 다른 파트로 옮길 수 있습니다. 파이프라인을 고르면 그 단계의 칸만 입력합니다.</p></div>
         </div>
         <div class="card-body" style="padding-top: 8px">
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
           <div class="table-wrap ref-wrap">
             <table class="grid edit ref setup-res">
-              <colgroup><col style="width: 200px" />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
+              <colgroup><col style="width: 200px" /><col style="width: 140px" />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
               <thead>
                 <tr>
                   <th rowSpan={2}>리소스</th>
+                  <th rowSpan={2} title="이 리소스의 공정 순서. 기준 정보 › 공정 순서 · 파이프라인에서 만듭니다">파이프라인</th>
                   {activeParts.map(p => <th colSpan={2} class="part-th">{p.name}</th>)}
                   <th rowSpan={2} class="c">사용</th>
                   <th rowSpan={2} title="다른 분류로 옮길 때 변경합니다">분류 이동</th>
@@ -161,7 +180,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
               <tbody>
                 {byGroup.map(g => (
                   <>
-                    <tr class="group group-strong"><td colSpan={activeParts.length * 2 + 4}>
+                    <tr class="group group-strong"><td colSpan={activeParts.length * 2 + 5}>
                       <span class="group-head">
                         {g.groupId && !ro
                           ? <Field class="field group-name" value={g.name} label={`분류 ${g.name} 이름`} onCommit={t => apply({ kind: 'renameGroup', groupId: g.groupId!, name: t })} />
@@ -172,13 +191,38 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                     {g.rows.map(r => (
                       <tr class={`row in-group${r.active ? '' : ' muted-row'}`}>
                         <td><Field value={r.name} label={`${r.name} 리소스 이름`} disabled={ro} onCommit={t => apply({ kind: 'renameResource', resourceTypeId: r.resourceTypeId, name: t })} /></td>
+                        <td><select class="field ghost-field pipe-select" aria-label={`${r.name} 파이프라인`} value={r.pipelineId ?? ''} disabled={ro}
+                          onChange={ev => {
+                            const pid = (ev.target as HTMLSelectElement).value || null;
+                            const pl = pid ? v.pipelines.find(x => x.pipelineId === pid) : null;
+                            const outside = pl ? Object.keys(r.efforts).filter(k => !pl.steps.some(st => st.partId === k)) : [];
+                            if (pl && outside.length) { (ev.target as HTMLSelectElement).value = r.pipelineId ?? ''; setMoveReq({ kind: 'pipeline', resourceTypeId: r.resourceTypeId, pipelineId: pl.pipelineId }); }
+                            else void apply({ kind: 'resourcePipeline', resourceTypeIds: [r.resourceTypeId], pipelineId: pid });
+                          }}>
+                          <option value="">기본 순서</option>
+                          {v.pipelines.map(pl => <option value={pl.pipelineId} disabled={pl.steps.length === 0}>{pl.name}</option>)}
+                        </select></td>
                         {activeParts.map(p => {
                           const e = r.efforts[p.partId];
+                          const pl = r.pipelineId ? v.pipelines.find(x => x.pipelineId === r.pipelineId) : null;
+                          const outside = !!pl && !pl.steps.some(st => st.partId === p.partId);
+                          if (outside && !e) {
+                            return <><td class="n eff-base eff-off" title={`${pl!.name} 파이프라인의 단계가 아닙니다`}><span aria-label={`${r.name} ${p.name} 파이프라인 밖`}>·</span></td><td class="n eff-ai eff-off" /></>;
+                          }
+                          const records = !!e && (e.done > 0 || e.assets > 0);
                           return (
                             <>
-                              <td class="n eff-base"><Field class="field n num-in" numeric value={numText(e?.base ?? null)} placeholder="—" label={`${r.name} ${p.name} 기본 공수`} disabled={ro}
-                                onCommit={t => apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'BASE', days: num(t) })} /></td>
-                              <td class="n eff-ai"><Field class="field n num-in ai" numeric value={numText(e?.ai ?? null)} placeholder={e ? '=기본' : ''} label={`${r.name} ${p.name} AI 공수`} disabled={ro || !e}
+                              <td class={`n eff-base${outside ? ' eff-warn' : ''}`} title={outside ? '파이프라인 밖 파트에 공수가 있습니다(맨 뒤에 계산). → 로 옮기십시오' : undefined}>
+                                <Field class="field n num-in" numeric value={numText(e?.base ?? null)} placeholder="—" label={`${r.name} ${p.name} 기본 공수`} disabled={ro}
+                                  onCommit={t => {
+                                    // 기록이 있는 칸을 비우면 옮기기 · 지우기 창(바로 거절하지 않는다)
+                                    if (num(t) == null && records) { setMoveReq({ kind: 'cell', resourceTypeId: r.resourceTypeId, partId: p.partId }); return false; }
+                                    return apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'BASE', days: num(t) });
+                                  }} />
+                                {e && !ro && <button type="button" class="eff-move" aria-label={`${r.name} ${p.name} 다른 파트로 옮기기`} title={`다른 파트로 옮기기${records ? `(작업 진척 ${e.done} · 에셋 ${e.assets} 함께)` : ''}`}
+                                  onClick={() => setMoveReq({ kind: 'cell', resourceTypeId: r.resourceTypeId, partId: p.partId })}>→</button>}
+                              </td>
+                              <td class="n eff-ai"><Field class="field n num-in ai" numeric value={numText(e?.ai ?? null)} placeholder={e ? numText(e.base) : ''} label={`${r.name} ${p.name} AI 공수`} disabled={ro || !e}
                                 onCommit={t => apply({ kind: 'effort', resourceTypeId: r.resourceTypeId, partId: p.partId, profileId: 'AI', days: num(t) })} /></td>
                             </>
                           );
@@ -205,6 +249,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           )}
         </div>
       </section>
+      {moveReq && <MoveDialog v={v} req={moveReq} apply={apply} onClose={() => setMoveReq(null)} />}
     </div>
   );
 }

@@ -24,6 +24,8 @@ export const TABLES: TableInfo[] = [
   { name: 'holidays', label: '휴일', keys: ['date'], since: 1, sample: true },
   { name: 'parts', label: '파트', keys: ['part_id'], since: 1, sample: true },
   { name: 'part_overlaps', label: '겹침률', keys: ['from_part_id', 'to_part_id'], since: 1, childKey: 'part_overlaps', sample: true },
+  { name: 'pipelines', label: '파이프라인', keys: ['pipeline_id'], since: 10, sample: true },
+  { name: 'pipeline_steps', label: '파이프라인 단계', keys: ['pipeline_id', 'part_id'], since: 10, childKey: 'pipeline_steps', sample: true },
   { name: 'resource_groups', label: '분류', keys: ['group_id'], since: 1, sample: true },
   { name: 'resource_types', label: '리소스', keys: ['resource_type_id'], since: 1, sample: true },
   { name: 'resource_parts', label: '거치는 파트', keys: ['resource_type_id', 'part_id'], since: 1, childKey: 'resource_parts', sample: true },
@@ -57,6 +59,7 @@ export const ADDED_COLUMNS: { table: string; column: string; since: number }[] =
   { table: 'scenario_changes', column: 'label', since: 2 },
   { table: 'scenarios', column: 'applied_at', since: 2 },
   { table: 'progress', column: 'spent_days', since: 3 },
+  { table: 'resource_types', column: 'pipeline_id', since: 10 },
 ];
 
 export const tableKeys = (): Record<string, string[]> => Object.fromEntries(TABLES.filter(t => t.keys).map(t => [t.name, t.keys!]));

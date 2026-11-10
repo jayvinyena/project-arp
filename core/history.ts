@@ -8,7 +8,7 @@ import { tableKeys, tableLabels, childTables } from './tables.ts';
 
 // 표마다 키 칸 · 이름 · 딸린 행은 core/tables.ts 한 곳에서 읽는다
 const KEYS: Record<string, string[]> = tableKeys();
-const ENGINE = new Set(['settings', 'part_overlaps', 'resource_parts', 'efforts', 'effort_mix', 'update_types', 'updates', 'volumes', 'progress', 'capacity', 'parts', 'resource_types', 'holidays']);
+const ENGINE = new Set(['settings', 'part_overlaps', 'pipeline_steps', 'resource_parts', 'efforts', 'effort_mix', 'update_types', 'updates', 'volumes', 'progress', 'capacity', 'parts', 'resource_types', 'holidays']);
 /** 지울 때 함께 남긴 딸린 행(키 → 표). 되돌리면 이 순서(외래 키 순서)로 다시 넣는다 */
 const CHILD_TABLES: [string, string][] = childTables();
 
@@ -18,7 +18,7 @@ const FIELD_NAME: Record<string, string> = {
   release_date: '출시', priority: '우선순위', days: '1개당 인·일', spent_days: '실투입', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
   productivity: '생산성', outsource_days: '외주', support_days: '지원', completed_qty: '완료', horizon: '계획 기간', share: '비율', overlap_rate: '겹침률',
   sort_order: '순서', active: '사용', group_id: '분류', rework_rate: '재작업률', buffer_rate: '여유율', work_weekdays: '근무 요일', value: '값',
-  tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', code: '리소스명', category: '세부 분류', team: '소속팀', email: '이메일', important: '중요', note: '메모', due_date: '마감일', done_at: '완료일', started_at: '시작일',
+  tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', code: '리소스명', category: '세부 분류', team: '소속팀', email: '이메일', important: '중요', pipeline_id: '파이프라인', seq: '단계 순서', note: '메모', due_date: '마감일', done_at: '완료일', started_at: '시작일',
   assignee: '담당', retakes: '리테이크', as_of: '기준일', image: '이미지', url: '주소', title: '제목', body: '내용',
 };
 

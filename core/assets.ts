@@ -7,6 +7,7 @@ import type { PlanMode } from '../engine/types.ts';
 import type { EditContext, EditResult } from './edits.ts';
 import { log, nextId, DATE, fail } from './edits.ts';
 import { peopleList } from './people.ts';
+import { partOrderFor, pipelinesList } from './pipelines.ts';
 
 export type AssetStatus = 'TODO' | 'WIP' | 'REVIEW' | 'RETAKE' | 'DONE' | 'HOLD' | 'OMIT';
 export const ASSET_STATUSES: AssetStatus[] = ['TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD', 'OMIT'];
@@ -448,7 +449,7 @@ export function applyAssetEdit(db: SqlDb, session: ProjectSession, edit: AssetEd
       for (const assetId of edit.assetIds) {
         const a = assetRow(db, assetId);
         const pl = pipeline(db);
-        const steps = pl.parts;
+        const steps = partOrderFor(db)(String(a.resource_type_id)); // 그 리소스의 공정 순서(파이프라인)
         const status = new Map(db.all('SELECT part_id, status FROM asset_parts WHERE asset_id = ?', [assetId]).map(r => [String(r.part_id), r.status as AssetStatus]));
         const st = (p: string) => status.get(p) ?? defaultStatus(pl.passes.has(`${a.resource_type_id}|${p}`));
         const from = stageOf(steps, st);
@@ -640,6 +641,10 @@ export interface AssetItem {
   assignee: string | null;
   links: number; comments: number; sortOrder: number;
   parts: Record<string, AssetPartState>;
+  /** 이 에셋의 공정 순서(리소스 파이프라인 → 나머지 파트) */
+  order: string[];
+  /** 리소스가 고른 파이프라인(없으면 null = 파트 표 순서) */
+  pipelineId: string | null;
   /** 끝난 파트 공수 ÷ 거치는 파트 공수(기본 공수 기준) */
   progress: number;
   retakes: number;
@@ -663,6 +668,8 @@ export interface AssetsView {
   jiraBase: string | null;
   /** 담당 칸 제안: 참여 중인 작업자(이름 · 소속팀) */
   people: { name: string; team: string | null }[];
+  /** 이름 붙인 파이프라인(보드 열 고르기) */
+  pipelines: { pipelineId: string; name: string; steps: string[] }[];
   totals: { assets: number; done: number; progress: number; review: number; retake: number; hold: number };
 }
 
@@ -674,10 +681,13 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
   const parts = db.all('SELECT part_id, name FROM parts WHERE active = 1 ORDER BY sort_order').map(p => ({ partId: String(p.part_id), name: String(p.name) }));
   const jiraBase = db.get("SELECT value FROM meta WHERE key = 'jira_base_url'")?.value;
   const people = peopleList(db).filter(p => p.active).map(p => ({ name: p.name, team: p.team }));
-  const empty: AssetsView = { updates, updateId, parts, groups: [], batches: [], assets: [], jiraBase: jiraBase == null ? null : String(jiraBase), people, totals: { assets: 0, done: 0, progress: 0, review: 0, retake: 0, hold: 0 } };
+  const pipelines = pipelinesList(db).map(p => ({ pipelineId: p.pipelineId, name: p.name, steps: p.steps.map(x => x.partId) }));
+  const empty: AssetsView = { updates, updateId, parts, groups: [], batches: [], assets: [], jiraBase: jiraBase == null ? null : String(jiraBase), people, pipelines, totals: { assets: 0, done: 0, progress: 0, review: 0, retake: 0, hold: 0 } };
   if (!updateId) return empty;
 
   const partOrder = parts.map(p => p.partId);
+  const orderFor = partOrderFor(db);
+  const pipeOf = new Map(db.all('SELECT resource_type_id, pipeline_id FROM resource_types').map(r => [String(r.resource_type_id), (r.pipeline_id as string) ?? null]));
   const steps = new Map<string, string[]>();
   for (const r of db.all('SELECT rp.resource_type_id, rp.part_id FROM resource_parts rp JOIN parts p ON p.part_id = rp.part_id AND p.active = 1 ORDER BY p.sort_order')) {
     const k = String(r.resource_type_id);
@@ -714,8 +724,9 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
     const pr = partRows.get(id) ?? {};
     const partsState: Record<string, AssetPartState> = {};
     let total = 0; let done = 0; let retakes = 0;
-    // 모든 에셋이 같은 파이프라인(사용 중인 파트 전부). 진행 = 끝낸 파트 공수 ÷ 할 파트 공수(해당 없음은 빼고, 공수가 없으면 1)
-    for (const p of partOrder) {
+    // 모든 에셋이 모든 파트를 가진다(해당 없음 ↔ 켜기). 순서는 그 리소스의 파이프라인(docs/28). 진행 = 끝낸 파트 공수 ÷ 할 파트 공수
+    const ord = orderFor(rt);
+    for (const p of ord) {
       const inPlan = passes.has(`${rt}|${p}`);
       const s = pr[p] ? { ...pr[p], inPlan } : blank(inPlan);
       partsState[p] = s;
@@ -725,13 +736,13 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
       total += d;
       if (s.status === 'DONE') done += d;
     }
-    const stage = stageOf(partOrder, p => partsState[p].status);
-    const doing = partOrder.filter(p => partsState[p].status !== 'OMIT');
+    const stage = stageOf(ord, p => partsState[p].status);
+    const doing = ord.filter(p => partsState[p].status !== 'OMIT');
     const cur = stage === 'TODO' ? doing[0] : stage === 'DONE' ? doing[doing.length - 1] : stage;
     return {
       assetId: id, name: String(a.name), code: (a.code as string) ?? null, category: (a.category as string) ?? null, attrs: attrs.get(id) ?? [], resourceTypeId: rt, batchId: (a.batch_id as string) ?? null,
       tier: a.tier as Tier, jiraKey: (a.jira_key as string) ?? null, note: (a.note as string) ?? null, thumbAt: thumbs.get(id) ?? null,
-      parts: partsState, progress: total > 0 ? done / total : 1, retakes,
+      parts: partsState, order: ord, pipelineId: pipeOf.get(rt) ?? null, progress: total > 0 ? done / total : 1, retakes,
       stage, sub: stage === 'DONE' ? 'DONE' : stage === 'TODO' ? 'TODO' : partsState[stage].status,
       dueDate: (a.due_date as string) ?? null, assignee: cur ? (pr[cur]?.assignee ?? null) : null,
       links: linkN.get(id) ?? 0, comments: commentN.get(id) ?? 0, sortOrder: Number(a.sort_order),
@@ -752,7 +763,7 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
     const reg = { MIN: 0, TARGET: 0, STRETCH: 0, total: mine.length };
     for (const x of mine) reg[x.tier] += 1;
     groupMap.get(gk)!.resources.push({
-      resourceTypeId: rt, name: String(v.name), steps: (steps.get(rt) ?? []).slice().sort((a, b) => partOrder.indexOf(a) - partOrder.indexOf(b)),
+      resourceTypeId: rt, name: String(v.name), steps: (steps.get(rt) ?? []).slice().sort((a, b) => orderFor(rt).indexOf(a) - orderFor(rt).indexOf(b)),
       volume: { min: v.min_qty == null ? null : Number(v.min_qty), target: v.target_qty == null ? null : Number(v.target_qty), stretch: v.stretch_qty == null ? null : Number(v.stretch_qty) },
       registered: reg, done: mine.filter(isDone).length, manualProgress: mine.length === 0 && manual.has(rt),
     });
@@ -770,7 +781,7 @@ export function assetsView(db: SqlDb, wanted: string | null): AssetsView {
   });
   const any = (st: AssetStatus) => assets.filter(x => Object.values(x.parts).some(s => s.status === st)).length;
   return {
-    updates, updateId, parts, groups, batches, assets, jiraBase: jiraBase == null ? null : String(jiraBase), people,
+    updates, updateId, parts, groups, batches, assets, jiraBase: jiraBase == null ? null : String(jiraBase), people, pipelines,
     totals: {
       assets: assets.length, done: assets.filter(isDone).length,
       progress: assets.length ? assets.reduce((s, x) => s + x.progress, 0) / assets.length : 0,

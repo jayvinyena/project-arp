@@ -11,7 +11,7 @@ import { applyEdit } from '../core/edits.ts';
 import { undoBatch, historyView } from '../core/history.ts';
 import { capacityView } from '../core/plan.ts';
 import { assetsView } from '../core/assets.ts';
-import { migrate } from '../core/migrate.ts';
+import { migrate, LATEST_SCHEMA } from '../core/migrate.ts';
 import { teamOptions } from '../core/people.ts';
 
 const OUT = fileURLToPath(new URL('../samples/out/test-people', import.meta.url));
@@ -100,9 +100,9 @@ test('파트 이름을 바꾸면 소속팀도 따라가고, 파트를 지우면 
 test('구조 v9: 지금 적힌 소속팀 중 파트가 아닌 것은 지원 팀으로 옮긴다', () => {
   const t = open('normal');
   t.raw.exec(`INSERT INTO people (person_id, name, team, active, sort_order) VALUES ('P001', '가', '원화', 1, 1), ('P002', '나', 'PM', 1, 2), ('P003', '다', '기획', 1, 3), ('P004', '라', 'PM', 1, 4), ('P005', '마', NULL, 1, 5);
-    DROP TABLE teams; PRAGMA user_version = 8;`);
+    DROP TABLE teams; DROP TABLE pipeline_steps; DROP TABLE pipelines; ALTER TABLE resource_types DROP COLUMN pipeline_id; PRAGMA user_version = 8;`);
   const r = migrate(t.db);
-  assert.deepEqual([r.from, r.to], [8, 9]);
+  assert.deepEqual([r.from, r.to], [8, LATEST_SCHEMA]);
   assert.deepEqual(t.raw.prepare('SELECT team_id, name FROM teams ORDER BY sort_order').all().map(x => `${x.team_id}:${x.name}`), ['T01:PM', 'T02:기획']);
   assert.deepEqual(teamOptions(t.db).map(x => x.name), ['원화', '모델링', '애니메이션', 'FX', 'PM', '기획']);
 });

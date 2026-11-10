@@ -10,6 +10,8 @@ import type { Edit } from '../../../core/edits.ts';
 import { fmtPct, fmtDate } from '../lib/format.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { IconPlus, IconX, IconDownload, IconFolder, IconImage, IconGrid, IconList } from './icons.tsx';
+import { useReorder, Grip } from './reorder.tsx';
+import type { JSX } from 'preact';
 
 const STATUS: { s: AssetStatus; label: string }[] = [
   { s: 'TODO', label: '대기' }, { s: 'WIP', label: '진행' }, { s: 'REVIEW', label: '검수 요청' }, { s: 'RETAKE', label: '수정' },
@@ -98,10 +100,21 @@ function StatusSelect(props: { value: AssetStatus; label: string; disabled: bool
   );
 }
 
-function PartDots(props: { asset: AssetItem; parts: AssetsView['parts'] }) {
+/** 이 에셋이 거치는 파트를 그 리소스 파이프라인 순서로. 파이프라인 밖 파트는 "해당 없음"이면 감추고, 기록이 있으면 맨 뒤에 */
+const partsInOrder = (a: AssetItem, parts: AssetsView['parts'], pipelines: AssetsView['pipelines']) => {
+  const steps = a.pipelineId ? pipelines.find(x => x.pipelineId === a.pipelineId)?.steps ?? null : null;
+  const at = (id: string) => { const i = a.order.indexOf(id); return i < 0 ? 1e6 + parts.findIndex(p => p.partId === id) : i; };
+  return parts.filter(p => a.parts[p.partId] && !(steps && !steps.includes(p.partId) && a.parts[p.partId].status === 'OMIT')).sort((x, y) => at(x.partId) - at(y.partId));
+};
+
+/** 단계 고르기 칸: 대기 · 이 에셋 파이프라인 순서의 파트 · 완료 */
+const stagesOf = (a: AssetItem, parts: AssetsView['parts'], pipelines: AssetsView['pipelines']): { id: Stage; name: string }[] =>
+  [{ id: 'TODO', name: '대기' }, ...partsInOrder(a, parts, pipelines).map(p => ({ id: p.partId, name: p.name })), { id: 'DONE', name: '완료' }];
+
+function PartDots(props: { asset: AssetItem; parts: AssetsView['parts']; pipelines: AssetsView['pipelines'] }) {
   return (
     <span class="part-dots">
-      {props.parts.filter(p => props.asset.parts[p.partId]).map(p => {
+      {partsInOrder(props.asset, props.parts, props.pipelines).map(p => {
         const s = props.asset.parts[p.partId];
         return <span class={`pdot st-${s.status}`} title={`${p.name}: ${LABEL[s.status]}${s.doneAt ? ` · ${s.doneAt}` : ''}`}><span class="pdot-name">{p.name.slice(0, 2)}</span></span>;
       })}
@@ -230,14 +243,14 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
 
             <section class="cw-section">
               <h3 class="sub-h">파트 체크리스트 <span class="small faint">완료 {view.parts.filter(p => a.parts[p.partId]?.status === 'DONE').length} / {view.parts.filter(p => a.parts[p.partId] && a.parts[p.partId].status !== 'OMIT').length}</span></h3>
-              <p class="small faint cw-hint">모든 에셋이 같은 파이프라인({view.parts.map(p => p.name).join(' → ')})입니다. 하지 않는 파트는 "해당 없음", 나중에 하게 되면 "대기"로 바꿉니다.</p>
+              <p class="small faint cw-hint">{(() => { const pl = a.pipelineId ? view.pipelines.find(x => x.pipelineId === a.pipelineId) : null; const nm = new Map(view.parts.map(p => [p.partId, p.name])); return pl ? `${pl.name} 파이프라인(${pl.steps.map(x => nm.get(x) ?? x).join(' → ')})` : `기본 순서(${view.parts.map(p => p.name).join(' → ')})`; })()} 순서입니다. 하지 않는 파트는 "해당 없음", 나중에 하게 되면 "대기"로 바꿉니다.</p>
               <div class="cw-progress"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></div>
               <div class="table-wrap ref-wrap">
                 <table class="grid edit ref asset-parts-table">
                   <colgroup><col style="width: 96px" /><col style="width: 130px" /><col style="width: 150px" /><col /><col style="width: 150px" /><col style="width: 64px" /></colgroup>
                   <thead><tr><th>파트</th><th>상태</th><th>완료일</th><th>담당</th><th>Jira</th><th class="n">리테이크</th></tr></thead>
                   <tbody>
-                    {view.parts.filter(p => a.parts[p.partId]).map(p => {
+                    {partsInOrder(a, view.parts, view.pipelines).map(p => {
                       const s = a.parts[p.partId];
                       const jh = jiraHref(view.jiraBase, s.jiraKey);
                       return (
@@ -303,7 +316,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
           <aside class="cw-side">
             <span class="cw-side-h">단계</span>
             <select class="field" aria-label="단계 옮기기" value={a.stage} disabled={ro} onChange={e => props.move([a.assetId], (e.target as HTMLSelectElement).value)}>
-              {props.stages.filter(s => s.id === 'TODO' || s.id === 'DONE' || a.parts[s.id]).map(s => <option value={s.id}>{s.name}</option>)}
+              {stagesOf(a, view.parts, view.pipelines).map(s => <option value={s.id}>{s.name}</option>)}
             </select>
             {a.stage !== 'TODO' && a.stage !== 'DONE' && <>
               <span class="cw-side-h">세부 상태</span>
@@ -343,6 +356,22 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
 // ───────── 화면 ─────────
 type Tab = 'assets' | 'batches' | 'volumes';
 type View = 'list' | 'board';
+
+/** 배치 표 줄: 손잡이나 줄을 길게 눌러 끌어 순서를 바꾼다 */
+function BatchRows(props: { batches: AssetsView['batches']; ro: boolean; apply: (e: Edit) => Promise<boolean>; children: (b: AssetsView['batches'][number]) => JSX.Element }) {
+  const r = useReorder(props.batches.map(b => b.batchId), ids => props.apply({ kind: 'reorderBatches', batchIds: ids }), { disabled: props.ro });
+  return (
+    <tbody data-reorder-box="">
+      {props.batches.length === 0 && <tr><td colSpan={7} class="muted small">배치가 없습니다. 아래에서 더합니다.</td></tr>}
+      {props.batches.map(b => (
+        <tr class={`row ${r.cls(b.batchId)}`} {...r.item(b.batchId)}>
+          <td class="c">{!props.ro && <button {...r.handle(b.batchId, b.name)}><Grip /></button>}</td>
+          {props.children(b)}
+        </tr>
+      ))}
+    </tbody>
+  );
+}
 type GroupBy = 'none' | 'group' | 'category' | 'batch' | 'stage';
 
 export function AssetsPage(props: {
@@ -362,6 +391,7 @@ export function AssetsPage(props: {
   const [tab, setTab] = useState<Tab>('assets');
   const [view, setView] = useState<View>(() => pref('view', 'list'));
   const [boardBy, setBoardBy] = useState<string>(() => pref('boardBy', 'stage')); // 'stage' 또는 파트 ID
+  const [pipe, setPipe] = useState<string>(() => pref('pipe', 'all')); // 보드 파이프라인: all · base(기본 순서) · 파이프라인 ID
   const [groupBy, setGroupBy] = useState<GroupBy>(() => pref('groupBy', 'group'));
   const [group, setGroup] = useState('all');
   const [batch, setBatch] = useState('all');
@@ -389,7 +419,7 @@ export function AssetsPage(props: {
     if (props.focus.assetId) { clearFilters(); setOpenId(props.focus.assetId); }
   }, [props.focus]);
   useEffect(() => { void rpc.assets(updateId).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, updateId]);
-  useEffect(() => { try { localStorage.setItem('arp.assets.view', view); localStorage.setItem('arp.assets.boardBy', boardBy); localStorage.setItem('arp.assets.groupBy', groupBy); localStorage.setItem('arp.assets.team', team); } catch { /* 없어도 된다 */ } }, [view, boardBy, groupBy, team]);
+  useEffect(() => { try { localStorage.setItem('arp.assets.view', view); localStorage.setItem('arp.assets.boardBy', boardBy); localStorage.setItem('arp.assets.groupBy', groupBy); localStorage.setItem('arp.assets.team', team); localStorage.setItem('arp.assets.pipe', pipe); } catch { /* 없어도 된다 */ } }, [view, boardBy, groupBy, team, pipe]);
   useEffect(() => {
     if (!v || !focusRt) return;
     const g = v.groups.find(x => x.resources.some(r => r.resourceTypeId === focusRt));
@@ -436,10 +466,10 @@ export function AssetsPage(props: {
   const dueOf = (a: AssetItem) => a.dueDate ?? (a.batchId ? batchById.get(a.batchId)?.dueDate ?? null : null);
   const t0 = today();
 
-  /** 단계 옮기기: 뒤로 옮기면(되돌림) 먼저 묻는다 */
+  /** 단계 옮기기: 뒤로 옮기면(되돌림) 먼저 묻는다. 앞 · 뒤는 그 에셋 파이프라인 순서로 */
   const move = (ids: string[], stage: Stage) => {
-    const rank = (s: Stage) => stages.findIndex(x => x.id === s);
-    const back = ids.map(id => v.assets.find(a => a.assetId === id)!).filter(a => a && rank(stage) < rank(a.stage));
+    const rank = (s: Stage, a: AssetItem) => (s === 'TODO' ? -1 : s === 'DONE' ? 1e9 : (a.order.indexOf(s) + 1 || 1e6 + stages.findIndex(x => x.id === s)));
+    const back = ids.map(id => v.assets.find(a => a.assetId === id)!).filter(a => a && rank(stage, a) < rank(a.stage, a));
     if (back.length) {
       setConfirm({ ids, stage, text: stage === 'TODO'
         ? `${back.length}개를 "대기"로 되돌리면 모든 파트 상태가 대기가 됩니다.`
@@ -450,10 +480,15 @@ export function AssetsPage(props: {
   };
 
   // ───── 보드 ─────
-  const partBoard = boardBy !== 'stage' ? v.parts.find(p => p.partId === boardBy) ?? null : null;
+  // 파이프라인을 고르면 그 파이프라인 에셋만, 열 = 그 단계(docs/28). "모두"면 전체 파트 순서
+  const pipeSel = pipe === 'all' ? null : pipe === 'base' ? { pipelineId: null, steps: v.parts.map(p => p.partId) } : v.pipelines.find(p => p.pipelineId === pipe) ?? null;
+  const boardShown = pipeSel ? shown.filter(a => a.pipelineId === pipeSel.pipelineId) : shown;
+  const boardStages = pipeSel ? stages.filter(s => s.id === 'TODO' || s.id === 'DONE' || pipeSel.steps.includes(s.id)).sort((x, y) => (x.id === 'TODO' ? -1 : y.id === 'TODO' ? 1 : x.id === 'DONE' ? 1 : y.id === 'DONE' ? -1 : pipeSel.steps.indexOf(x.id) - pipeSel.steps.indexOf(y.id))) : stages;
+  const boardParts = pipeSel ? v.parts.filter(p => pipeSel.steps.includes(p.partId)) : v.parts;
+  const partBoard = boardBy !== 'stage' ? boardParts.find(p => p.partId === boardBy) ?? null : null;
   const boardCols: { id: string; name: string; items: AssetItem[] }[] = partBoard
-    ? (['TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD'] as AssetStatus[]).map(s => ({ id: s, name: LABEL[s], items: shown.filter(a => a.parts[partBoard.partId]?.status === s) }))
-    : stages.map(s => ({ id: s.id, name: s.name, items: shown.filter(a => a.stage === s.id) }));
+    ? (['TODO', 'WIP', 'REVIEW', 'RETAKE', 'DONE', 'HOLD'] as AssetStatus[]).map(s => ({ id: s, name: LABEL[s], items: boardShown.filter(a => a.parts[partBoard.partId]?.status === s) }))
+    : boardStages.map(s => ({ id: s.id, name: s.name, items: boardShown.filter(a => a.stage === s.id) }));
   // 모든 에셋이 같은 파이프라인이라 어느 열에나 놓을 수 있다(해당 없음인 파트 열에 놓으면 그 파트가 켜진다)
   const canDrop = (col: string) => !!col;
   const onDrop = (col: string, index: number) => {
@@ -650,7 +685,7 @@ export function AssetsPage(props: {
                                 <span class="row-meta small faint">{[groupBy !== 'category' && a.category !== rtName.get(a.resourceTypeId) ? a.category : null, a.code, a.comments ? `댓글 ${a.comments}` : null, a.links ? `링크 ${a.links}` : null].filter(Boolean).join(' · ')}</span></td>
                               {groupBy !== 'group' && <td class="small">{groupName.get(a.resourceTypeId)} · {rtName.get(a.resourceTypeId)}</td>}
                               <td><select class={`field stage-select stage-${a.stage === 'DONE' ? 'done' : a.stage === 'TODO' ? 'todo' : 'mid'}`} aria-label={`${a.name} 단계`} value={a.stage} disabled={ro} onChange={e => move([a.assetId], (e.target as HTMLSelectElement).value)}>
-                                {stages.filter(s => s.id === 'TODO' || s.id === 'DONE' || a.parts[s.id]).map(s => <option value={s.id}>{s.name}</option>)}
+                                {stagesOf(a, v.parts, v.pipelines).map(s => <option value={s.id}>{s.name}</option>)}
                               </select></td>
                               <td class="st-cell">{midStage
                                 ? <StatusSelect value={a.sub} label={`${a.name} 세부 상태`} disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
@@ -664,7 +699,7 @@ export function AssetsPage(props: {
                               <td><DueCell own={a.dueDate} batchDue={a.batchId ? batchById.get(a.batchId)?.dueDate ?? null : null} done={a.stage === 'DONE'} label={`${a.name} 마감일`} disabled={ro}
                                 onCommit={d2 => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'due_date', value: d2 })} /></td>
                               <td class="small">{a.jiraKey ? (jh ? <a href={jh} target="_blank" rel="noreferrer">{a.jiraKey}</a> : a.jiraKey) : <span class="faint">—</span>}</td>
-                              <td><PartDots asset={a} parts={v.parts} /></td>
+                              <td><PartDots asset={a} parts={v.parts} pipelines={v.pipelines} /></td>
                             </tr>
                           );
                         })}
@@ -680,12 +715,20 @@ export function AssetsPage(props: {
           {view === 'board' && shown.length > 0 && (
             <>
               <div class="list-opts small">
+                {v.pipelines.length > 0 && <>
+                  <span class="faint">파이프라인</span>
+                  <select class="field ghost-field" aria-label="보드 파이프라인" value={pipeSel || pipe === 'all' ? pipe : 'all'} onChange={e => setPipe((e.target as HTMLSelectElement).value)}>
+                    <option value="all">모두(전체 파트 순서)</option>
+                    <option value="base">기본(파트 표 순서)</option>
+                    {v.pipelines.map(p => <option value={p.pipelineId}>{p.name}</option>)}
+                  </select>
+                </>}
                 <span class="faint">열</span>
                 <div class="segmented wide" role="radiogroup" aria-label="보드 열">
-                  <button type="button" role="radio" aria-checked={boardBy === 'stage'} class={boardBy === 'stage' ? 'on' : ''} onClick={() => setBoardBy('stage')}>제작 단계</button>
-                  {v.parts.map(p => <button type="button" role="radio" aria-checked={boardBy === p.partId} class={boardBy === p.partId ? 'on' : ''} onClick={() => setBoardBy(p.partId)}>{p.name} 상태</button>)}
+                  <button type="button" role="radio" aria-checked={!partBoard} class={!partBoard ? 'on' : ''} onClick={() => setBoardBy('stage')}>제작 단계</button>
+                  {boardParts.map(p => <button type="button" role="radio" aria-checked={boardBy === p.partId} class={boardBy === p.partId ? 'on' : ''} onClick={() => setBoardBy(p.partId)}>{p.name} 상태</button>)}
                 </div>
-                <span class="faint">{partBoard ? `${partBoard.name} 파트의 상태별 열입니다. 이 파트가 "해당 없음"인 에셋은 빠집니다.` : '카드는 지금 작업 중인 파트 열에 있습니다. 앞 열로 끌면 지나친 파트는 완료, "해당 없음"인 파트 열에 놓으면 그 파트가 켜집니다.'}</span>
+                <span class="faint">{partBoard ? `${partBoard.name} 파트의 상태별 열입니다. 이 파트가 "해당 없음"인 에셋은 빠집니다.` : '카드는 지금 작업 중인 파트 열에 있습니다. 앞 열로 끌면 지나친 파트는 완료, "해당 없음"인 파트 열에 놓으면 그 파트가 켜집니다.'}{pipeSel && boardShown.length < shown.length ? ` 다른 파이프라인 에셋 ${shown.length - boardShown.length}개는 이 보드에 없습니다.` : ''}</span>
               </div>
               <div class="kanban" role="list" aria-label="보드">
                 {boardCols.map(col => {
@@ -721,7 +764,7 @@ export function AssetsPage(props: {
                                     {a.jiraKey && <span class="label-chip">{a.jiraKey}</span>}
                                     {a.comments > 0 && <span class="label-chip" title="댓글">💬 {a.comments}</span>}
                                   </div>
-                                  <PartDots asset={a} parts={v.parts} />
+                                  <PartDots asset={a} parts={v.parts} pipelines={v.pipelines} />
                                 </div>
                               </div>
                             </>
@@ -741,29 +784,22 @@ export function AssetsPage(props: {
 
       {tab === 'batches' && (
         <section class="card">
-          <div class="card-head"><div><h2>배치</h2><p class="small muted" style="margin-top: 2px">업데이트(마일스톤) 안의 납품 묶음입니다. 마감일은 그 배치 에셋의 모든 파트가 완료되는 날 기준입니다. 에셋 마감일이 비어 있으면 배치 마감일을 따릅니다.</p></div></div>
+          <div class="card-head"><div><h2>배치</h2><p class="small muted" style="margin-top: 2px">업데이트(마일스톤) 안의 납품 묶음입니다. 왼쪽 손잡이(⠿)나 줄을 길게 눌러 끌면 순서가 바뀝니다. 마감일은 그 배치 에셋의 모든 파트가 완료되는 날 기준입니다. 에셋 마감일이 비어 있으면 배치 마감일을 따릅니다.</p></div></div>
           <div class="card-body" style="padding-top: 4px">
             <div class="table-wrap ref-wrap">
               <table class="grid edit ref batch-table">
-                <colgroup><col style="width: 80px" /><col /><col style="width: 170px" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 200px" /><col style="width: 48px" /></colgroup>
-                <thead><tr><th>순서</th><th>배치</th><th>마감일</th><th class="n">에셋</th><th class="n">완료</th><th>진행</th><th aria-label="행 작업" /></tr></thead>
-                <tbody>
-                  {v.batches.length === 0 && <tr><td colSpan={7} class="muted small">배치가 없습니다. 아래에서 더합니다.</td></tr>}
-                  {v.batches.map((b, i) => (
-                    <tr class="row">
-                      <td><span class="prio">
-                        <button type="button" class="btn ghost icon-btn" aria-label={`${b.name} 앞으로`} disabled={ro || i === 0} onClick={() => void apply({ kind: 'moveBatch', batchId: b.batchId, direction: -1 })}>↑</button>
-                        <button type="button" class="btn ghost icon-btn" aria-label={`${b.name} 뒤로`} disabled={ro || i === v.batches.length - 1} onClick={() => void apply({ kind: 'moveBatch', batchId: b.batchId, direction: 1 })}>↓</button>
-                      </span></td>
+                <colgroup><col style="width: 44px" /><col /><col style="width: 170px" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 200px" /><col style="width: 48px" /></colgroup>
+                <thead><tr><th aria-label="순서" /><th>배치</th><th>마감일</th><th class="n">에셋</th><th class="n">완료</th><th>진행</th><th aria-label="행 작업" /></tr></thead>
+                <BatchRows batches={v.batches} ro={ro} apply={apply}>{b => (
+                    <>
                       <td><Field class="field" value={b.name} label={`${b.name} 배치 이름`} disabled={ro} onCommit={t => apply({ kind: 'batchField', batchId: b.batchId, field: 'name', value: t })} /></td>
                       <td><input class="field" type="date" aria-label={`${b.name} 마감일`} value={b.dueDate ?? ''} disabled={ro} onChange={e => void apply({ kind: 'batchField', batchId: b.batchId, field: 'due_date', value: (e.target as HTMLInputElement).value || null })} /></td>
                       <td class="n num">{b.count}</td>
                       <td class="n num">{b.done}</td>
                       <td><span class="share"><span class="num small">{fmtPct(b.progress)}</span><span class="bar"><span class="fill" style={{ width: `${Math.round(b.progress * 100)}%` }} /></span></span></td>
                       <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${b.name} 배치 지우기`} title="지우면 이 배치의 에셋은 미배정이 됩니다" onClick={() => void apply({ kind: 'deleteBatch', batchId: b.batchId })}><IconX /></button>}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                    </>
+                )}</BatchRows>
               </table>
             </div>
             {!ro && (

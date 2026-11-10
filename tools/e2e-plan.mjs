@@ -53,8 +53,8 @@ await withBrowser(async (cdp, base) => {
   const names = await cdp.eval(rowNames);
   check('새 업데이트는 우선순위 맨 뒤', names[4] === '시즌 3', names.join(', '));
 
-  // 우선순위 올리기
-  await cdp.eval(`document.querySelector('button[aria-label="시즌 3 우선순위 올리기"]').click()`);
+  // 우선순위 올리기: 손잡이에서 ↑(끌기는 e2e-pipeline에서 시험)
+  await cdp.eval(`(() => { const b = document.querySelector('button[aria-label^="시즌 3 우선순위 순서 옮기기"]'); b.focus(); b.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })); })()`);
   await sleep(800);
   const after = await cdp.eval(rowNames);
   check('우선순위 올리기: 시즌 2 앞으로', after.indexOf('시즌 3') === 3, after.join(', '));
