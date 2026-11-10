@@ -1383,7 +1383,9 @@ table.grid tr.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 .pipeline-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
 .pipeline-card:first-child { background: var(--surface-2); }
 .pipeline-head { display: flex; align-items: center; gap: 10px; min-height: 32px; flex-wrap: wrap; }
-.pipeline-head .field.pipeline-name { font-weight: 650; width: 200px; }
+.pipeline-head .field.pipeline-name { font-weight: 650; width: min(100%, calc(20em + 24px)); }
+/* 이름 길이에 맞춘 폭(20자까지 다 보임, 지원하는 브라우저) */
+@supports (field-sizing: content) { .pipeline-head .field.pipeline-name { field-sizing: content; min-width: 120px; max-width: min(100%, calc(20em + 24px)); } }
 .pipeline-head .field.add-step { width: 150px; }
 .step-chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .step-chip { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px 0 2px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 550; white-space: nowrap; }

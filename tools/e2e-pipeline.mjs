@@ -138,6 +138,15 @@ await withBrowser(async (cdp, base) => {
     const after = await cdp.eval(`document.querySelector('input[aria-label="코스튬 원화 기본 공수"]').value`);
     check('→ 로 다른 파트에 옮기면 원화 칸이 빈다', after === '' && !!to, `→ ${to}`);
   }
+  // 긴 파이프라인 이름(19자)도 리소스 표 고르기 칸에 다 보인다
+  const longName = '캐릭터 제작 파이프라인 긴 이름 시험';
+  await typeIn(cdp, 'input.pipeline-name', longName);
+  const fit = await cdp.eval(`[...document.querySelectorAll('select.pipe-select')].map(s => {
+    const cs = getComputedStyle(s); const c = document.createElement('canvas').getContext('2d'); c.font = cs.font;
+    const room = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 20; // 펼침 화살표
+    return { t: s.selectedOptions[0]?.text ?? '', ok: c.measureText(s.selectedOptions[0]?.text ?? '').width <= room };
+  })`);
+  check('긴 파이프라인 이름도 리소스 표 칸에 다 보인다', fit.some(f => f.t === longName) && fit.every(f => f.ok), JSON.stringify(fit.filter(f => !f.ok)));
   check('기준 정보 390px 가로 넘침 없음', await shot(cdp, 'pipeline-setup-390', 390));
 
   // 5. 에셋 보드: 파이프라인을 고르면 그 파이프라인 에셋만, 열 = 단계

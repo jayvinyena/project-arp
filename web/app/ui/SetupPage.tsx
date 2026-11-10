@@ -57,6 +57,9 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
   const apply = (e: Edit) => props.onApply(e);
   const num = (t: string) => (t === '' ? null : Number(t.replace(/,/g, '')));
   const activeParts = v.parts.filter(p => p.active);
+  // 파이프라인 고르기 폭 = 가장 긴 이름이 다 보이게(글자 폭을 재서). 표가 좁아져도 칸이 줄지 않게 고르기에 최소 폭을 준다
+  const pipeSelW = pipeWidth(v.pipelines.map(pl => pl.name));
+  const pipeColW = pipeSelW + 17;
   const groups = v.groups;
   // 리소스를 분류별로 묶는다(분류 없는 것은 맨 끝)
   const byGroup: { groupId: string | null; name: string; rows: SetupView['resources'] }[] = [];
@@ -169,7 +172,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
           <div class="table-wrap ref-wrap">
             <table class="grid edit ref setup-res">
-              <colgroup><col style="width: 200px" /><col style="width: 140px" />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
+              <colgroup><col style="width: 200px" /><col style={`width: ${pipeColW}px`} />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
               <thead>
                 <tr>
                   <th rowSpan={2}>리소스</th>
@@ -195,7 +198,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                     {g.rows.map(r => (
                       <tr class={`row in-group${r.active ? '' : ' muted-row'}`}>
                         <td><Field value={r.name} label={`${r.name} 리소스 이름`} disabled={ro} onCommit={t => apply({ kind: 'renameResource', resourceTypeId: r.resourceTypeId, name: t })} /></td>
-                        <td><select class="field ghost-field pipe-select" aria-label={`${r.name} 파이프라인`} value={r.pipelineId ?? ''} disabled={ro}
+                        <td><select class="field ghost-field pipe-select" aria-label={`${r.name} 파이프라인`} title={v.pipelines.find(pl => pl.pipelineId === r.pipelineId)?.name} style={`min-width: ${pipeSelW}px`} value={r.pipelineId ?? ''} disabled={ro}
                           onChange={ev => {
                             const pid = (ev.target as HTMLSelectElement).value || null;
                             const pl = pid ? v.pipelines.find(x => x.pipelineId === pid) : null;
@@ -264,4 +267,17 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
       {moveReq && <MoveDialog v={v} req={moveReq} apply={apply} onClose={() => setMoveReq(null)} />}
     </div>
   );
+}
+
+/** 고르기에 이름이 다 보이는 폭(px): 글자 폭 + 안쪽 여백(10 + 10) · 펼침 화살표(약 20) · 여유. 104~260px */
+function pipeWidth(names: string[]): number {
+  let w = 0;
+  try {
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (ctx) {
+      ctx.font = `12.5px ${getComputedStyle(document.body).fontFamily}`;
+      for (const n of names) w = Math.max(w, ctx.measureText(n).width);
+    }
+  } catch { w = Math.max(0, ...names.map(n => n.length * 13)); }
+  return Math.min(260, Math.max(104, Math.ceil(w) + 48));
 }

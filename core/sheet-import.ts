@@ -2,6 +2,7 @@
 // 1) scanSheetBook: 시트마다 머리글 행을 찾아 칸의 뜻(마일스톤 · 분류 · 이름 · 리소스명 · 파트 상태 …)을 알아보고,
 //    가져오기 창에서 고를 것(마일스톤 → 업데이트, 시트 · 분류 → 리소스 종류, 모르는 상태 말)을 모은다.
 // 2) importSheetBook: 고른 대응대로 에셋을 만들거나 고친다. 한 묶음이라 변경 이력에서 한 번에 되돌린다.
+import { PIPELINE_NAME_MAX } from './limits.ts';
 import type { SqlDb } from './db.ts';
 import type { ProjectSession } from './pipeline.ts';
 import type { Cell, Sheets, SheetLinks } from './xlsx.ts';
@@ -283,8 +284,9 @@ export function importSheetBook(db: SqlDb, session: ProjectSession, sheets: Shee
         }
         let pipelineId = [...steps].find(([, set]) => want2.every(p => set.has(p)))?.[0] ?? null;
         if (!pipelineId && want2.length) {
-          let nm = clean(sheet) || rtName;
-          for (let i = 2; db.get('SELECT 1 AS ok FROM pipelines WHERE name = ?', [nm]); i++) nm = `${clean(sheet) || rtName} ${i}`;
+          const base = (clean(sheet) || rtName).slice(0, PIPELINE_NAME_MAX - 3).trim();
+          let nm = base;
+          for (let i = 2; db.get('SELECT 1 AS ok FROM pipelines WHERE name = ?', [nm]); i++) nm = `${base} ${i}`;
           pipelineId = run({ kind: 'createPipeline', name: nm, partIds: want2 }).createdId!;
         }
         id = run({ kind: 'createResource', name: rtName, groupName: clean(want?.group), ...(pipelineId ? { pipelineId } : {}) }).createdId!;

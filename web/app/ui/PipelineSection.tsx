@@ -1,5 +1,6 @@
 // 공정 순서 · 파이프라인(docs/28 · 29): 이름 붙인 파이프라인만. 파트 표는 목록일 뿐, 새 파트는 어느 파이프라인에도 들어가지 않는다.
 // 단계 칩은 끌어서 순서를 바꾸고, 단계 사이 겹침률은 눌러서 고친다(비우면 파트 쌍 → 기본). 리소스는 리소스 · 공수 표에서 파이프라인을 고른다.
+import { PIPELINE_NAME_MAX } from '../../../core/limits.ts';
 import { useState } from 'preact/hooks';
 import type { SetupView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -105,7 +106,7 @@ export function PipelineSection(props: { v: SetupView; readOnly: boolean; apply:
         })}
         {!ro && (
           <div class="inline">
-            <input class="field" aria-label="새 파이프라인 이름" placeholder="새 파이프라인 이름(예: 배경)" value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)}
+            <input class="field" aria-label="새 파이프라인 이름" maxLength={PIPELINE_NAME_MAX} placeholder="새 파이프라인 이름(예: 배경)" value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)}
               onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget.nextElementSibling as HTMLButtonElement | null)?.click(); }} />
             <button type="button" class="btn sm" disabled={!newName.trim()} onClick={async () => { if (await apply({ kind: 'createPipeline', name: newName, partIds: [] })) setNewName(''); }}><IconPlus />파이프라인 만들기</button>
             <span class="small faint">만든 뒤 단계를 순서대로 더하고, 리소스 · 공수 표에서 리소스의 파이프라인을 고릅니다.</span>

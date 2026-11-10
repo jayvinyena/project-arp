@@ -146,3 +146,13 @@ test('파일 구조 v11: 파이프라인이 없던 리소스는 "기본"(그 리
   const rid2 = apply({ kind: 'createResource', name: '배경 소품', groupName: '배경', pipelineId: pid }).createdId;
   assert.equal(t.db.get('SELECT pipeline_id FROM resource_types WHERE resource_type_id = ?', [rid2]).pipeline_id, pid);
 });
+
+test('파이프라인 이름은 20자까지(리소스 표 칸에 다 보이게)', () => {
+  const t = open('normal');
+  const apply = (e, c = ctx()) => applyEdit(t.db, t.session, e, c);
+  assert.throws(() => apply({ kind: 'createPipeline', name: '가'.repeat(21) }), /20자 이하/);
+  const pid = apply({ kind: 'createPipeline', name: '가'.repeat(20) }).createdId;
+  assert.throws(() => apply({ kind: 'renamePipeline', pipelineId: pid, name: '나'.repeat(21) }), /20자 이하/);
+  apply({ kind: 'renamePipeline', pipelineId: pid, name: '캐릭터 제작' });
+  assert.equal(t.db.get('SELECT name FROM pipelines WHERE pipeline_id = ?', [pid]).name, '캐릭터 제작');
+});

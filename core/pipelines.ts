@@ -5,6 +5,7 @@ import type { ProjectSession } from './pipeline.ts';
 import type { EditContext, EditResult } from './edits.ts';
 import { log, nextId, fail } from './edits.ts';
 import { syncProgress, assetDriven } from './assets.ts';
+import { PIPELINE_NAME_MAX } from './limits.ts';
 
 export type PipelineEdit =
   | { kind: 'createPipeline'; name: string; partIds?: string[] }
@@ -181,6 +182,7 @@ export function applyPipelineEdit(db: SqlDb, session: ProjectSession, edit: Pipe
     case 'createPipeline': {
       const nm = edit.name.trim();
       if (!nm) fail('파이프라인 이름을 입력하십시오.');
+      if (nm.length > PIPELINE_NAME_MAX) fail(`파이프라인 이름은 ${PIPELINE_NAME_MAX}자 이하입니다.`);
       if (db.get('SELECT 1 AS ok FROM pipelines WHERE name = ?', [nm])) fail('같은 이름의 파이프라인이 있습니다.');
       const id = nextId(db, 'pipelines', 'pipeline_id', 'L', 2);
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM pipelines')?.s ?? 0) + 1;
@@ -194,6 +196,7 @@ export function applyPipelineEdit(db: SqlDb, session: ProjectSession, edit: Pipe
       const old = db.get('SELECT * FROM pipelines WHERE pipeline_id = ?', [edit.pipelineId]) ?? fail('없는 파이프라인입니다.');
       const nm = edit.name.trim();
       if (!nm) fail('파이프라인 이름은 비울 수 없습니다.');
+      if (nm.length > PIPELINE_NAME_MAX) fail(`파이프라인 이름은 ${PIPELINE_NAME_MAX}자 이하입니다.`);
       if (old.name === nm) return { changed: false };
       if (db.get('SELECT 1 AS ok FROM pipelines WHERE name = ? AND pipeline_id <> ?', [nm, edit.pipelineId])) fail('같은 이름의 파이프라인이 있습니다.');
       db.run('UPDATE pipelines SET name = ? WHERE pipeline_id = ?', [nm, edit.pipelineId]);
