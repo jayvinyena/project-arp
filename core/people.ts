@@ -6,7 +6,7 @@ import { log, nextId, fail } from './edits.ts';
 
 export type PersonField = 'name' | 'team' | 'email' | 'note' | 'active';
 export type PeopleEdit =
-  | { kind: 'createPerson'; name: string; team?: string | null }
+  | { kind: 'createPerson'; name: string; team?: string | null; email?: string | null; note?: string | null }
   | { kind: 'personField'; personId: string; field: PersonField; value: string | null }
   | { kind: 'deletePerson'; personId: string };
 export const PEOPLE_EDIT_KINDS = new Set<string>(['createPerson', 'personField', 'deletePerson']);
@@ -31,9 +31,13 @@ export function applyPeopleEdit(db: SqlDb, edit: PeopleEdit, ctx: EditContext): 
       const name = clean(edit.name);
       if (!name) fail('이름을 입력하십시오.');
       if (name!.length > 40) fail('이름은 40자 이하입니다.');
+      const email = clean(edit.email);
+      if (email && !EMAIL.test(email)) fail('이메일 형식이 올바르지 않습니다(예: name@company.com).');
+      const note = (edit.note ?? '').replace(/\s+$/, '') || null;
+      if (note && note.length > 1000) fail('특이사항은 1천 자 이하입니다.');
       const id = nextId(db, 'people', 'person_id', 'P', 3);
       const sortOrder = Number(db.get('SELECT coalesce(max(sort_order), 0) AS s FROM people')?.s ?? 0) + 1;
-      const row = { person_id: id, name, team: clean(edit.team), email: null, note: null, active: 1, sort_order: sortOrder };
+      const row = { person_id: id, name, team: clean(edit.team), email, note, active: 1, sort_order: sortOrder };
       db.run('INSERT INTO people (person_id, name, team, email, note, active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)', Object.values(row));
       log(db, ctx, 'INSERT', 'people', id, null, undefined, row);
       return { changed: true, createdId: id };

@@ -1308,3 +1308,40 @@ table.grid.people-table tr.row.off td { opacity: .55; }
 .news-body { margin: 6px 0 0; white-space: pre-wrap; color: var(--text-2); font-size: 13px; line-height: 1.6; }
 @media (max-width: 640px) { .news-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .news-forecasts li { grid-template-columns: minmax(0, 1fr) auto; } .news-forecasts li .pill { grid-column: 2; } }
 
+/* ───────── 작업자 명단 다듬기 ───────── */
+.sub-tabs button:focus { outline: none; }
+.sub-tabs button:focus-visible { outline: none; border-radius: 8px 8px 0 0; box-shadow: var(--ring); }
+.sub-tabs button.on:focus-visible { box-shadow: inset 0 -2px 0 var(--accent), var(--ring); }
+.people-head { align-items: flex-start; flex-wrap: wrap; gap: 10px 16px; }
+.people-search { width: 280px; max-width: 100%; }
+.people-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.people-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+.people-chip:hover { border-color: var(--line-strong); color: var(--text); }
+.people-chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.people-chip:focus-visible { outline: none; box-shadow: var(--ring); }
+.people-chip-n { font-size: 11px; font-variant-numeric: tabular-nums; color: inherit; opacity: .75; }
+.people-add { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(110px, .8fr) minmax(160px, 1.2fr) minmax(160px, 1.6fr) auto; gap: 8px; align-items: center; padding: 10px; margin-bottom: 12px; border-radius: 12px; border: 1px dashed var(--line-strong); background: var(--surface-2); }
+.people-add .btn { height: 34px; }
+.people-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 32px 16px; text-align: center; border-radius: 12px; background: var(--surface-2); }
+.people-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.people-name .field { flex: 1; min-width: 0; }
+.people-av { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--hue); background: color-mix(in srgb, var(--hue) 16%, var(--surface)); }
+.people-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hue); }
+.av-0 { --hue: #5b6fd6; } .av-1 { --hue: #2f9e62; } .av-2 { --hue: #d07a2d; } .av-3 { --hue: #9a5bd0; } .av-4 { --hue: #2a93a8; } .av-5 { --hue: #d0506a; }
+table.grid.people-table tr.row.off td { opacity: 1; }
+table.grid.people-table tr.row.off td > *:not(.switch) { opacity: .5; }
+.people-del { opacity: .35; }
+table.grid.people-table tr.row:hover .people-del, .people-del:focus-visible { opacity: 1; }
+/* 참여 스위치 */
+.switch { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text-3); }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; width: 32px; height: 18px; border-radius: 999px; background: var(--line-strong); transition: background .15s; }
+.switch-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 20%); transition: transform .15s; }
+.switch.on { color: var(--accent-ink); }
+.switch.on .switch-track { background: var(--accent); }
+.switch.on .switch-track::after { transform: translateX(14px); }
+.switch input:focus-visible + .switch-track { box-shadow: var(--ring); }
+.switch input:disabled + .switch-track { opacity: .5; }
+.switch-text { min-width: 2.4em; }
+@media (max-width: 860px) { .people-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .people-add .btn { grid-column: 1 / -1; } .people-search { width: 100%; } }
+

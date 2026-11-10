@@ -35,10 +35,40 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("[...document.querySelectorAll('[aria-label=\"인력 화면\"] button')].find(b => b.textContent.startsWith('작업자')).click()");
   await cdp.waitUntil("document.querySelector('table.people-table')", 5000);
   check('작업자 탭: 소속팀은 공정 순(원화 → 모델링 → 애니메이션)', (await names(cdp)) === '김원화,이원화,박모델,최애니', await names(cdp));
-  const summary = await cdp.eval("document.querySelector('.card-head .small.muted').textContent");
-  check('요약: 참여 중 3명 · 팀별 인원', summary.includes('참여 중 3명') && summary.includes('원화 2'), summary);
+  const summary = await cdp.eval("document.querySelector('.people-head .small.muted').textContent");
+  const chips = await cdp.eval("[...document.querySelectorAll('.people-chip')].map(c => c.textContent).join(',')");
+  check('요약: 참여 중 3명 · 팀 거르기 칩(전체 · 팀별 인원 · 빠진 사람)', summary.includes('참여 중 3명') && chips === '전체4,원화2,모델링1,애니메이션1,빠진 사람1', chips);
+  const groups = await cdp.eval("[...document.querySelectorAll('table.people-table tr.group b')].map(b => b.textContent).join(',')");
+  check('팀별로 묶어 보기(공정 순)', groups === '원화,모델링,애니메이션', groups);
+  // 팀 거르기 · 찾기
+  await cdp.eval("[...document.querySelectorAll('.people-chip')].find(c => c.textContent.startsWith('원화')).click()");
+  await sleep(200);
+  const onlyWon = await names(cdp);
+  await cdp.eval("[...document.querySelectorAll('.people-chip')].find(c => c.textContent.startsWith('빠진 사람')).click()");
+  await sleep(200);
+  const offOnly = await names(cdp);
+  await cdp.eval("[...document.querySelectorAll('.people-chip')].find(c => c.textContent.startsWith('전체')).click()");
+  await cdp.eval("(() => { const i = document.querySelector('input[aria-label=\"작업자 찾기\"]'); i.value = '휴가'; i.dispatchEvent(new Event('input', { bubbles: true })); })()");
+  await sleep(200);
+  const found = await names(cdp);
+  await cdp.eval("(() => { const i = document.querySelector('input[aria-label=\"작업자 찾기\"]'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()");
+  await sleep(200);
+  check('팀 칩(원화 · 빠진 사람) · 찾기(특이사항 "휴가")', onlyWon === '김원화,이원화' && offOnly === '최애니' && found === '이원화', `${onlyWon} / ${offOnly} / ${found}`);
 
   // 더하기 · 이메일 · 특이사항
+  // 한 번에 더하기: 이름 · 소속팀 · 이메일 · 특이사항, Enter
+  await typeIn(cdp, '새 작업자 이름', '한모델', false);
+  await typeIn(cdp, '새 작업자 소속팀', '모델링', false);
+  await typeIn(cdp, '새 작업자 이메일', 'han@example.com', false);
+  await typeIn(cdp, '새 작업자 특이사항', '외주', false);
+  await cdp.eval("document.querySelector('input[aria-label=\"새 작업자 특이사항\"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))");
+  await cdp.waitUntil("[...document.querySelectorAll('table.people-table input')].some(i => i.value === '한모델')", 5000).catch(() => {});
+  const han = await cdp.eval("(() => { const v = l => document.querySelector(`input[aria-label=\"한모델 ${l}\"]`)?.value; return [v('소속팀'), v('이메일'), v('특이사항')].join('|'); })()");
+  const keep = await cdp.eval("[document.querySelector('input[aria-label=\"새 작업자 이름\"]').value, document.querySelector('input[aria-label=\"새 작업자 소속팀\"]').value].join('|')");
+  check('한 번에 더하기(Enter): 소속팀 · 이메일 · 특이사항까지, 소속팀은 남겨 다음 사람 입력이 빠르다', han === '모델링|han@example.com|외주' && keep === '|모델링', `${han} · ${keep}`);
+  await cdp.eval("document.querySelector('button[aria-label=\"한모델 지우기\"]').click()");
+  await sleep(400);
+
   await typeIn(cdp, '새 작업자 이름', '정이펙트', false);
   await typeIn(cdp, '새 작업자 소속팀', 'FX', false);
   await cdp.eval("[...document.querySelectorAll('button')].find(b => b.textContent.includes('작업자 더하기')).click()");
@@ -54,7 +84,7 @@ await withBrowser(async (cdp, base) => {
   // 참여 끄기 · 지우기
   await cdp.eval("document.querySelector('input[aria-label=\"정이펙트 참여\"]').click()");
   await sleep(500);
-  check('참여를 끄면 흐리게', await cdp.eval("[...document.querySelectorAll('table.people-table tr.row')].find(r => r.querySelector('input').value === '정이펙트').classList.contains('off')"));
+  check('참여 스위치를 끄면 흐리게 · "빠짐"', await cdp.eval("(() => { const r = [...document.querySelectorAll('table.people-table tr.row')].find(r => r.querySelector('input').value === '정이펙트'); return r.classList.contains('off') && r.querySelector('.switch-text').textContent === '빠짐'; })()"));
   const okPeople = await shot(cdp, 'people-1440');
   const okPeople390 = await shot(cdp, 'people-390', 390);
   await cdp.eval("document.querySelector('button[aria-label=\"정이펙트 지우기\"]').click()");

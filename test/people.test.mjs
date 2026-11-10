@@ -53,3 +53,13 @@ test('에셋 화면 담당 제안: 참여 중인 작업자만', () => {
   const names = assetsView(t.db, 'LAUNCH').people.map(p => p.name);
   assert.ok(names.includes('김원화') && names.includes('박모델') && !names.includes('최애니'), names.join());
 });
+
+test('한 번에 더하기: 이메일 · 특이사항까지, 이메일 형식 검사', () => {
+  const t = open('normal');
+  const id = applyEdit(t.db, t.session, { kind: 'createPerson', name: '한모델', team: '모델링', email: 'han@example.com', note: '외주\n' }, ctx()).createdId;
+  const p = capacityView(t.db).people.find(x => x.personId === id);
+  assert.deepEqual([p.team, p.email, p.note], ['모델링', 'han@example.com', '외주']);
+  assert.throws(() => applyEdit(t.db, t.session, { kind: 'createPerson', name: '틀림', email: 'nope' }, ctx()), /이메일 형식/);
+  assert.equal(capacityView(t.db).people.some(x => x.name === '틀림'), false, '틀리면 만들지 않는다');
+});
+
