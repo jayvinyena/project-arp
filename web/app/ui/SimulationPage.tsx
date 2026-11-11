@@ -94,7 +94,7 @@ function Compare(props: { view: CompareView | null; scenarios: ScenarioSummary[]
                             : c.status == null ? <span class="faint">—</span>
                               : (
                                 <span class="cmp-cell">
-                                  <span class={`dot ${TONE[c.status]}`} title={STATUS_TEXT[c.status]} />
+                                  <span class={`v-ic ${TONE[c.status]}`} title={STATUS_TEXT[c.status]} aria-label={STATUS_TEXT[c.status]}>{UPDATE_STATUS[c.status].icon}</span>
                                   <span class="num">{c.completion ? fmtShortDate(c.completion) : '기간 밖'}</span>
                                   {i > 0 && <Delta d={c.delta} />}
                                 </span>

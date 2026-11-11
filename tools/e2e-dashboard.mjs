@@ -38,10 +38,10 @@ await withBrowser(async (cdp, base) => {
   // 추이 그래프: 실제 · 계획선 · 오늘 · 완료 예정, 올리면 주 값
   const chart = await cdp.eval("(() => { const s = document.querySelector('.burnup svg'); return { actual: !!s.querySelector('.line-actual')?.getAttribute('d'), ideal: !!s.querySelector('.line-ideal')?.getAttribute('d'), today: !!s.querySelector('.mark-line.today'), forecast: !!s.querySelector('.dot-forecast') }; })()");
   check('추이: 실제 선 · 계획선 · 오늘 · 완료 예정 표시', chart.actual && chart.ideal && chart.today && chart.forecast, JSON.stringify(chart));
-  await cdp.eval("(() => { const s = document.querySelector('.burnup svg'); const r = s.getBoundingClientRect(); s.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + r.width * 0.6, clientY: r.top + 60 })); })()");
+  await cdp.eval("(() => { const s = document.querySelector('.burnup svg'); const r = s.getBoundingClientRect(); s.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse', clientX: r.left + r.width * 0.6, clientY: r.top + 60 })); })()");
   await cdp.waitUntil("document.querySelector('.chart-tip')", 5000).catch(() => {});
   const tip = await cdp.eval("document.querySelector('.chart-tip')?.textContent ?? ''");
-  check('그래프에 올리면 그 주의 실제 · 계획선 값', /주/.test(tip) && tip.includes('계획선'), tip);
+  check('그래프에 올리면(터치도) 그 주의 실제 · 계획선 값', /주/.test(tip) && tip.includes('계획선'), tip);
 
   // 항목 × 파트 · 단계 분포 · 배치
   const cell = await cdp.eval("(() => { const r = [...document.querySelectorAll('table.dash-matrix tbody tr.row')].find(x => x.textContent.includes('신규 캐릭터')); return [...r.querySelectorAll('td.heat')].map(c => c.textContent.trim()).join(','); })()");

@@ -145,6 +145,17 @@ await withBrowser(async (cdp, base) => {
   const cw = await cdp.eval("(() => { const w = document.querySelector('.asset-card-window'); return { note: w.querySelector('textarea[aria-label=\"설명\"]').value, due: w.querySelector('input[aria-label=\"에셋 마감일\"]').value, links: [...w.querySelectorAll('.cw-links a')].map(a => a.textContent), comments: w.querySelectorAll('.cw-feed li.cmt').length }; })()");
   check('카드 창: 설명(여러 줄) · 마감일 · 링크(Jira + 문서) · 댓글', cw.note.includes('\n') && cw.due === '2027-01-15' && cw.links.includes('ART-101') && cw.links.includes('컨셉 문서') && cw.comments === 1, JSON.stringify(cw));
   const okCard = await shot(cdp, 'assets-card-1440');
+  // 옆 패널(docs/34 D3): 오른쪽 끝에 붙고, 입력 칸 밖에서 ↓ · ↑로 앞뒤 카드
+  const nameOf = "document.querySelector('.asset-card-window input[aria-label=\"에셋 이름\"]')?.value ?? ''";
+  const panel = await cdp.eval("(() => { const r = document.querySelector('.asset-card-window').getBoundingClientRect(); return Math.round(window.innerWidth - r.right) + ',' + Math.round(r.top) + ',' + Math.round(r.width); })()");
+  const n0 = await cdp.eval(nameOf);
+  await cdp.eval("document.body.focus(); document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))");
+  await cdp.waitUntil(`(${nameOf}) !== ${JSON.stringify(n0)}`, 5000).catch(() => {});
+  const n1 = await cdp.eval(nameOf);
+  await cdp.eval("document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))");
+  await cdp.waitUntil(`(${nameOf}) === ${JSON.stringify(n0)}`, 5000).catch(() => {});
+  const n2 = await cdp.eval(nameOf);
+  check('카드 옆 패널: 오른쪽 끝 · ↓ 다음 카드 · ↑ 되돌아옴', panel.startsWith('0,0,') && n1 !== n0 && n1 !== '' && n2 === n0, `${panel} · ${n0} → ${n1} → ${n2}`);
   await cdp.eval("document.querySelector('.asset-card-window .cw-close').click()");
   await sleep(300);
   check('보드 카드에도 썸네일 · 댓글 수', await cdp.eval("(() => { const c = document.querySelector('.kb-card[data-id=\"A00001\"]'); return !!c.querySelector('img') && c.textContent.includes('💬 1'); })()"));

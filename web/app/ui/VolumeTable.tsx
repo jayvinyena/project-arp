@@ -1,6 +1,7 @@
 // 물량 표: 분류별 묶음, 칸 안에서 바로 고치기(Enter·칸 벗어나면 반영, Esc 되돌리기).
 // 물량 템플릿 세 개(최소안·기본안·최대안 등, 이름은 프로젝트마다)를 열로 나란히 보여 주고, 편집 중인 템플릿 열만 강조해 입력한다.
 // 다른 열 머리글(또는 값)을 누르면 그 템플릿을 편집한다. 복사 버튼은 방향(A → B)을 그대로 쓴다.
+import { useDensity } from './density.tsx';
 import { useState, useEffect } from 'preact/hooks';
 import { Field } from './SetupPage.tsx';
 import type { LaunchEdit, LaunchRow } from '../../../core/launch.ts';
@@ -71,6 +72,7 @@ export function VolumeTable(props: {
   /** 다른 템플릿 열을 눌러 편집할 템플릿 바꾸기(없으면 열은 보기만) */
   onSelectMode?: (m: PlanMode) => void;
 }) {
+  const density = useDensity('volume');
   const { byResource, totalDays, readOnly, onEdit } = props;
   const launchId = props.updateId;
   const rowErrors = new Map<string, Finding[]>();
@@ -145,7 +147,8 @@ export function VolumeTable(props: {
         </div>
       </div>
       <div class="card-body" style="padding-top: 8px">
-        <div class="table-wrap">
+        <div class="table-tools">{density.toggle}</div>
+        <div class={`table-wrap${density.cls}`}>
           <table class="grid vol">
             <colgroup><col />{PLAN_MODES.map(() => <col class="qty-col" />)}<col class="qty-col" /><col class="days-col" /><col class="act-col" /></colgroup>
             <thead>

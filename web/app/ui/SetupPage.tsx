@@ -1,5 +1,6 @@
 // 프로젝트·파트·리소스: 새 프로젝트 마법사에서 입력한 것(기본 정보·파트·인원·가동률·리소스·공수)을 만든 뒤에 고친다.
 // AI: 리소스 × 파트마다 "기본(AI 없이)"과 "AI 사용 시" 공수, 파트마다 AI 활용 비율 → 공수 = 기본 × (1 − 비율) + AI × 비율
+import { useDensity } from './density.tsx';
 import { Dialog } from './Dialog.tsx';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
@@ -47,6 +48,7 @@ function PartRows(props: { v: SetupView; ro: boolean; apply: (e: Edit) => Promis
 }
 
 export function SetupPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean>; /** 다음 단계(인력)로 */ onNext?: () => void }) {
+  const density = useDensity('setup-res');
   const [v, setV] = useState<SetupView | null>(null);
   const [newPart, setNewPart] = useState('');
   const [newRes, setNewRes] = useState({ group: '', name: '', pipe: '' });
@@ -183,7 +185,8 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         </div>
         <div class="card-body" style="padding-top: 8px">
           <datalist id="setup-groups">{groups.map(g => <option value={g.name} />)}</datalist>
-          <div class="table-wrap ref-wrap">
+          <div class="table-tools">{density.toggle}</div>
+          <div class={`table-wrap ref-wrap${density.cls}`}>
             <table class="grid edit ref setup-res">
               <colgroup><col style="width: 200px" /><col style={`width: ${pipeColW}px`} />{activeParts.map(() => <><col class="eff-col" /><col class="eff-col" /></>)}<col style="width: 64px" /><col style="width: 150px" /><col style="width: 48px" /></colgroup>
               <thead>

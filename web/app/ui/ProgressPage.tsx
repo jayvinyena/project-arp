@@ -1,4 +1,5 @@
 // 진행 실적: 업데이트 × 리소스 × 파트 완료 수량, 기준일, 진행률
+import { useDensity } from './density.tsx';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
@@ -48,6 +49,7 @@ export function ProgressPage(props: {
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
   updateId: string | null; onUpdate: (id: string) => void;
 }) {
+  const density = useDensity('progress');
   const [wanted, setWanted] = useState<string | null>(props.updateId);
   const [field, setField] = useState<'done' | 'spent'>('done');
   const [view, setView] = useState<ProgressView | null>(null);
@@ -118,6 +120,7 @@ export function ProgressPage(props: {
               ? '칸 = 그 파트가 끝낸 리소스 개수. 0이나 빈칸은 아직 없음. 빗금 칸은 거치지 않는 파트입니다.'
               : '칸 = 그 완료 수량을 만드는 데 실제로 든 인·일. 공수 보정 제안에 사용됩니다.'}</p></div>
           <div class="inline">
+            {density.toggle}
             <div class="segmented wide" role="radiogroup" aria-label="입력 항목">
               <button type="button" role="radio" aria-checked={field === 'done'} class={field === 'done' ? 'on' : ''} onClick={() => setField('done')}>완료 수량</button>
               <button type="button" role="radio" aria-checked={field === 'spent'} class={field === 'spent' ? 'on' : ''} onClick={() => setField('spent')}>실투입 인·일</button>
@@ -127,7 +130,7 @@ export function ProgressPage(props: {
           </div>
         </div>
         <div class="card-body" style="padding-top: 8px">
-          <div class="table-wrap">
+          <div class={`table-wrap${density.cls}`}>
             <table class="grid progress-grid">
               <thead><tr>
                 <th>리소스</th><th class="n">목표</th>

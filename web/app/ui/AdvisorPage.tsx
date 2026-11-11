@@ -20,10 +20,10 @@ const KIND_TEXT: Record<string, string> = { headcount: '인원', outsource: '외
 
 function Result(props: { o: Outcome; showLate: boolean }) {
   const { o } = props;
-  if (o.unfinished) return <span class="pill bad">{UPDATE_STATUS.UNFINISHED.text}</span>;
-  if (o.late > 0) return <span class="pill bad">{fmtShortDate(o.completion)} · {UPDATE_STATUS.LATE.text} {fmtWorkdays(o.late)}</span>;
+  if (o.unfinished) return <span class="pill bad" data-icon={UPDATE_STATUS.UNFINISHED.icon}>{UPDATE_STATUS.UNFINISHED.text}</span>;
+  if (o.late > 0) return <span class="pill bad" data-icon={UPDATE_STATUS.LATE.icon}>{fmtShortDate(o.completion)} · {UPDATE_STATUS.LATE.text} {fmtWorkdays(o.late)}</span>;
   if (!o.deadline) return <span class="pill plain">{fmtShortDate(o.completion)} · 마감 없음</span>;
-  return <span class="pill ok">{fmtShortDate(o.completion)}{props.showLate ? ` · ${UPDATE_STATUS.ON_TRACK.text}` : ''}</span>;
+  return <span class="pill ok" data-icon={UPDATE_STATUS.ON_TRACK.icon}>{fmtShortDate(o.completion)}{props.showLate ? ` · ${UPDATE_STATUS.ON_TRACK.text}` : ''}</span>;
 }
 
 export function AdvisorPage(props: {

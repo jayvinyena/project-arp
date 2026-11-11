@@ -45,12 +45,12 @@ function BurnUp(props: { v: View }) {
   for (const p of pts) {
     const d = new Date(Date.parse(p.date) - 6 * 86400000);
     const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + (d.getUTCDate() > 1 ? 1 : 0), 1));
-    const label = first.getUTCMonth() === 0 ? `${String(first.getUTCFullYear()).slice(2)}.1` : `${first.getUTCMonth() + 1}월`;
+    const label = first.getUTCMonth() === 0 ? `${String(first.getUTCFullYear()).slice(2)}년 1월` : `${first.getUTCMonth() + 1}월`;
     if (first.getTime() <= t1 && !months.some(m => m.t === first.getTime())) months.push({ t: first.getTime(), label });
   }
   const step = Math.max(1, Math.ceil(months.length / Math.max(2, Math.floor((w - L - R) / 56))));
   const hp = hover == null ? null : pts[hover];
-  const onMove = (e: MouseEvent) => {
+  const onMove = (e: PointerEvent) => {
     const r = (e.currentTarget as SVGElement).getBoundingClientRect();
     const mx = e.clientX - r.left;
     let best = 0; let bd = Infinity;
@@ -60,7 +60,7 @@ function BurnUp(props: { v: View }) {
   const lastActual = [...pts].reverse().find(p => p.actual != null);
   return (
     <div ref={wrap} class="burnup">
-      <svg width={w} height={H} role="img" aria-label={`누적 완료 공수 추이: 지금 ${fmtPct(props.v.summary.rate)}`} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg width={w} height={H} role="img" aria-label={`누적 완료 공수 추이: 지금 ${fmtPct(props.v.summary.rate)}`} onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} style="touch-action: pan-y">
         {[0, 0.25, 0.5, 0.75, 1].map(f => (
           <g>
             <line x1={L} x2={w - R} y1={y(trend.total * f)} y2={y(trend.total * f)} class="grid-line" />
@@ -90,6 +90,8 @@ function BurnUp(props: { v: View }) {
           <span><i class="key-ideal" />계획선 {hp.ideal == null ? '—' : fmtPct(hp.ideal / trend.total)}</span>
         </div>
       )}
+      {/* 그래프를 글로도(docs/34 B-22): 마우스 · 터치 없이 읽게 */}
+      <p class="small muted chart-sum">{lastActual ? <>지금까지 실제 <b>{fmtPct(lastActual.actual! / trend.total)}</b>{lastActual.ideal != null ? <> · 같은 때 계획선 {fmtPct(lastActual.ideal / trend.total)}</> : ''}</> : '아직 완료 기록이 없습니다'}{forecast?.completion ? <> · 완료 예정 {fmtShortDate(forecast.completion)}</> : ''}{win.target ? <> · {win.targetLabel} {fmtShortDate(win.target)}</> : ''}</p>
     </div>
   );
 }
@@ -170,7 +172,7 @@ export function DashboardPage(props: {
         <div class="stat">
           <span class="stat-label">계획선 대비</span>
           <b class={`stat-num${ahead == null ? '' : ahead < 0 ? ' bad-num' : ' ok-num'}`}>{ahead == null ? '—' : ahead === 0 ? '계획선과 같음' : `${Math.abs(ahead)}영업일 ${ahead > 0 ? '앞섬' : '늦음'}`}</b>
-          <span class="small faint">{v.forecast?.completion ? <>완료 예정 {fmtDate(v.forecast.completion)} {verdict && <span class={`pill ${verdict.tone} plain`}>{verdict.text}</span>}</> : '완료 예정을 계산할 수 없습니다'}</span>
+          <span class="small faint">{v.forecast?.completion ? <>완료 예정 {fmtDate(v.forecast.completion)} {verdict && <span class={`pill ${verdict.tone} plain`} data-icon={verdict.icon}>{verdict.text}</span>}</> : '완료 예정을 계산할 수 없습니다'}</span>
         </div>
         <div class="stat">
           <span class="stat-label">이번 주 완료</span>
@@ -272,7 +274,7 @@ export function DashboardPage(props: {
               </div>
             ) : (
               <>
-                <div class="stage-legend small">{v.stages.list.map((st, i) => <span><i class={`stg stg-${i === 0 ? 'todo' : i === v.stages!.list.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} />{st.name}</span>)}</div>
+                <div class="stage-legend small">{v.stages.list.map((st, i) => <span><i class={`stg stg-${i === 0 ? 'todo' : i === v.stages!.list.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} />{st.name} <b class="num">{v.stages!.groups.reduce((a, g) => a + (g.counts[i] ?? 0), 0)}</b></span>)}</div>
                 <div class="stage-bars">
                   {v.stages.groups.map(g => (
                     <div class="stage-row">
@@ -295,7 +297,7 @@ export function DashboardPage(props: {
             {!v.batches.length ? <p class="small faint">배치가 없습니다. 에셋 제작 현황의 "배치" 탭에서 더합니다.</p> : (
               <div class="table-wrap ref-wrap">
                 <table class="grid ref dash-batch-table">
-                  <colgroup><col /><col style="width: 92px" /><col style="width: 58px" /><col style="width: 86px" /></colgroup>
+                  <colgroup><col /><col style="width: 92px" /><col style="width: 58px" /><col style="width: 52px" /></colgroup>
                   <thead><tr><th>배치</th><th>마감</th><th class="n">완료</th><th>진행</th></tr></thead>
                   <tbody>
                     {v.batches.map(b => (

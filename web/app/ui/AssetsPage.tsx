@@ -1,6 +1,7 @@
 // 에셋 제작 현황(docs/20-asset-management.md 16절): 에셋 리스트 + 트렐로식 보드(칸반) + 에셋 카드 창.
 // 보드 열 = 제작 단계(대기 · 원화 · 모델링 · … · 완료) 또는 파트별 상태. 카드를 끌면 파트 상태가 바뀌고 작업 진척에 자동 집계된다.
 // 보조 탭: 배치 · 물량 대조.
+import { useDensity } from './density.tsx';
 import { Dialog } from './Dialog.tsx';
 import { BatchPill, batchWhen } from './BatchPill.tsx';
 import type { BatchRow } from '../../../core/plan.ts';
@@ -163,8 +164,12 @@ function TextArea(props: { value: string; label: string; placeholder?: string; d
 
 // ───────── 에셋 카드 창(트렐로 카드 참고) ─────────
 function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: Stage; name: string }[]; readOnly: boolean; version: number;
-  apply: (e: Edit) => Promise<boolean>; move: (ids: string[], stage: Stage) => void; onClose: () => void }) {
+  apply: (e: Edit) => Promise<boolean>; move: (ids: string[], stage: Stage) => void; onClose: () => void;
+  /** 옆 패널에서 리스트 · 보드 순서대로 앞뒤 카드로(docs/34 D3) */
+  nav?: { index: number; total: number; go: (dir: 1 | -1) => void } }) {
   const { view, asset: a, readOnly: ro, apply } = props;
+  const navRef = useRef(props.nav); navRef.current = props.nav;
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [d, setD] = useState<AssetDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -174,6 +179,22 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
   const [showActivity, setShowActivity] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => { void rpc.assetDetail(a.assetId).then(setD); }, [a.assetId, props.version]);
+  // 다른 카드로 넘어가면 입력 중이던 것 · 확인 상태를 비우고 맨 위로
+  useEffect(() => {
+    setLink({ title: '', url: '' }); setComment(''); setAttr({ name: '', value: '' }); setConfirmDelete(false); setShowActivity(false);
+    bodyRef.current?.scrollTo(0, 0);
+  }, [a.assetId]);
+  // ↑ ↓(또는 K · J): 입력 칸 밖에서 앞뒤 카드로
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const n = navRef.current;
+      if (!n || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+      if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); n.go(1); }
+      if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); n.go(-1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const putThumb = async (file: Blob) => {
     if (ro) return;
     setBusy(true);
@@ -207,13 +228,20 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
         <div class={`cw-cover${drag ? ' drag' : ''}${a.thumbAt ? '' : ' band'}`} onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
           onDrop={e => { e.preventDefault(); setDrag(false); const f = [...(e.dataTransfer?.files ?? [])].find(x => x.type.startsWith('image/')); if (f) void putThumb(f); }}>
           {a.thumbAt ? <Thumb asset={a} size="big" /> : <span class="small faint cw-band-text">썸네일이 없습니다{ro ? '' : ' · 이미지를 여기로 끌어 놓아도 됩니다'}</span>}
-          <button type="button" class="btn ghost icon-btn cw-close" aria-label="닫기" onClick={props.onClose}><IconX /></button>
+          <span class="cw-top">
+            {props.nav && props.nav.total > 1 && <span class="cw-nav">
+              <button type="button" class="btn ghost icon-btn" aria-label="이전 에셋" title="이전 에셋(↑)" disabled={props.nav.index <= 0} onClick={() => props.nav!.go(-1)}>↑</button>
+              <span class="small faint num">{props.nav.index + 1} / {props.nav.total}</span>
+              <button type="button" class="btn ghost icon-btn" aria-label="다음 에셋" title="다음 에셋(↓)" disabled={props.nav.index >= props.nav.total - 1} onClick={() => props.nav!.go(1)}>↓</button>
+            </span>}
+            <button type="button" class="btn ghost icon-btn cw-close" aria-label="닫기" onClick={props.onClose}><IconX /></button>
+          </span>
           {!ro && <span class="cw-cover-actions">
             <button type="button" class="btn sm" disabled={busy} onClick={pick}><IconImage />{busy ? '줄이는 중…' : a.thumbAt ? '썸네일 바꾸기' : '썸네일 넣기'}</button>
             {a.thumbAt && <button type="button" class="btn sm" onClick={() => void apply({ kind: 'assetThumb', assetId: a.assetId, data: null })}>지우기</button>}
           </span>}
         </div>
-        <div class="cw-body">
+        <div class="cw-body" ref={bodyRef}>
           <div class="cw-main">
             <Field class="title-input" value={a.name} label="에셋 이름" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'name', value: t })} />
             <p class="small muted cw-sub">{group?.name} · {rt?.name}{a.category && a.category !== rt?.name ? ` · ${a.category}` : ''}{a.code ? ` · ${a.code}` : ''} · 단계 <b>{stageName}</b> · 진행 {fmtPct(a.progress)}{a.retakes ? ` · 리테이크 ${a.retakes}회` : ''}</p>
@@ -231,7 +259,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
               <div class="cw-progress"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></div>
               <div class="table-wrap ref-wrap">
                 <table class="grid edit ref asset-parts-table">
-                  <colgroup><col style="width: 96px" /><col style="width: 130px" /><col style="width: 150px" /><col /><col style="width: 150px" /><col style="width: 64px" /></colgroup>
+                  <colgroup><col style="width: 88px" /><col style="width: 112px" /><col style="width: 136px" /><col /><col style="width: 108px" /><col style="width: 56px" /></colgroup>
                   <thead><tr><th>파트</th><th>상태</th><th>완료일</th><th>담당</th><th>Jira</th><th class="n">리테이크</th></tr></thead>
                   <tbody>
                     {partsInOrder(a, view.parts, view.pipelines).map(p => {
@@ -414,6 +442,7 @@ export function AssetsPage(props: {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
+  const density = useDensity('assets');
   const [adding, setAdding] = useState(false);
   const [add, setAdd] = useState({ rt: '', names: '' });
   const [newBatch, setNewBatch] = useState({ name: '', due: '' });
@@ -685,8 +714,9 @@ export function AssetsPage(props: {
                 <div class="segmented wide" role="radiogroup" aria-label="리스트 묶기">
                   {([['group', '항목'], ['category', '세부 분류'], ['batch', '배치'], ['stage', '단계'], ['none', '없음']] as [GroupBy, string][]).map(([k, l]) => <button type="button" role="radio" aria-checked={groupBy === k} class={groupBy === k ? 'on' : ''} onClick={() => setGroupBy(k)}>{l}</button>)}
                 </div>
+                <span class="table-tools-end">{density.toggle}</span>
               </div>
-              <div class="table-wrap ref-wrap">
+              <div class={`table-wrap ref-wrap${density.cls}`}>
                 <table class="grid edit ref asset-list">
                   <colgroup><col style="width: 40px" /><col style="width: 56px" /><col style="width: 210px" />{groupBy !== 'group' && <col style="width: 150px" />}<col style="width: 112px" /><col style="width: 112px" /><col style="width: 104px" /><col style="width: 112px" /><col style="width: 104px" /><col style="width: 96px" /><col style="width: 92px" /></colgroup>
                   <thead><tr>
@@ -892,6 +922,11 @@ export function AssetsPage(props: {
       )}
 
       {open && <CardWindow view={v} asset={open} stages={stages} readOnly={ro} version={props.version} apply={apply} move={move}
+        nav={(() => {
+          const order = view === 'board' ? boardCols.flatMap(c => c.items) : groupsOfList.flatMap(g => g.items);
+          const i = order.findIndex(x => x.assetId === open.assetId);
+          return i < 0 ? undefined : { index: i, total: order.length, go: (dir: 1 | -1) => { const nx = order[i + dir]; if (nx) setOpenId(nx.assetId); } };
+        })()}
         onClose={() => { setOpenId(null); if (backTo && props.onBack) { const b = backTo; setBackTo(null); props.onBack(b); } }} />}
     </div>
   );

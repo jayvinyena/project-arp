@@ -46,7 +46,7 @@ function ModeCards(props: { modes: ModeOutcome[]; selected: PlanMode; onSelect: 
             class={`mode-card${props.selected === m.planMode ? ' selected' : ''}`} onClick={() => props.onSelect(m.planMode)}>
             <div class="top">
               <span class="label">{MODE_LABEL[m.planMode]}</span>
-              {st && <span class={`pill ${st.tone}`}>{st.text}</span>}
+              {st && <span class={`pill ${st.tone}`} data-icon={st.icon}>{st.text}</span>}
             </div>
             <div>
               <div class="small faint">아트 작업 완료 예정</div>
@@ -214,7 +214,7 @@ function OutcomeBar(props: { mode: ModeOutcome; version: number; deadlineLabel: 
   return (
     <div class="outcome-bar" role="status" aria-live="polite">
       <span class="small muted">물량을 고치면 바로 다시 계산합니다</span>
-      <span class="outcome-main">완료 예정 <b>{cur.completion ? fmtShortDate(cur.completion) : '기간 밖'}</b> <span class={`pill ${st.tone}`}>{st.text}</span></span>
+      <span class="outcome-main">완료 예정 <b>{cur.completion ? fmtShortDate(cur.completion) : '기간 밖'}</b> <span class={`pill ${st.tone}`} data-icon={({ ok: '✓', warn: '!', bad: '▲' } as Record<string, string>)[st.tone] ?? '–'}>{st.text}</span></span>
       <span class="small outcome-delta">{delta ? <>직전 {delta.from ? fmtShortDate(delta.from) : '기간 밖'} → 지금{delta.days != null ? <b class={delta.days > 0 ? ' bad-num' : ' ok-num'}> {fmtWorkdays(delta.days)}</b> : ''}</> : '\u00a0'}</span>
     </div>
   );
