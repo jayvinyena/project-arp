@@ -77,6 +77,8 @@ export interface HistoryBatch {
   undone: boolean;
   /** 되돌리기 묶음인가 */
   isUndo: boolean;
+  /** 되돌리기 묶음이면 되돌린 원래 묶음 */
+  undoOf: string | null;
 }
 
 const parse = (v: unknown) => (v == null ? undefined : JSON.parse(String(v)));
@@ -133,8 +135,28 @@ export function historyView(db: SqlDb, limit = 200): { batches: HistoryBatch[]; 
       entries,
       undone: undoneSet.has(id),
       isUndo: !!reason && reason.startsWith('되돌리기: '),
+      undoOf: reason && reason.startsWith('되돌리기: ') ? reason.slice('되돌리기: '.length) : null,
     };
   });
+  // 되돌리기 줄은 "무엇을 되돌렸나"로 보인다(되돌리며 지운 표 이름 대신 원래 수정의 요약 · 대상)
+  const byId = new Map(batches.map(b => [b.batchId, b]));
+  for (const b of batches) {
+    if (!b.undoOf) continue;
+    const orig = byId.get(b.undoOf) ?? (() => {
+      // 불러온 범위 밖이면 원래 묶음의 요약만 따로 계산
+      const rows = db.all('SELECT target, action, field, reason FROM change_log WHERE batch_id = ? ORDER BY log_id', [b.undoOf]);
+      if (!rows.length) return null;
+      const ks = [...new Set(rows.map(r => (String(r.action) === 'UPDATE'
+        ? `${TARGET_NAME[String(r.target)] ?? r.target} ${QTY_NAME[String(r.field ?? '')] ?? FIELD_NAME[String(r.field ?? '')] ?? r.field ?? ''}`.trim()
+        : `${TARGET_NAME[String(r.target)] ?? r.target} ${String(r.action) === 'INSERT' ? '더함' : '지움'}`)))];
+      return { summary: ks.length > 2 ? `${ks.slice(0, 2).join(' · ')} 외 ${ks.length - 2}` : ks.join(' · '), reason: rows[0].reason == null ? null : String(rows[0].reason), subject: '', area: b.area } as Pick<HistoryBatch, 'summary' | 'reason' | 'subject' | 'area'>;
+    })();
+    if (!orig) continue;
+    b.summary = `${orig.reason && !orig.reason.startsWith('되돌리기: ') ? orig.reason : orig.summary} 되돌림`;
+    if (orig.subject) b.subject = orig.subject;
+    b.area = orig.area;
+    b.change = null;
+  }
   return { batches, total };
 }
 

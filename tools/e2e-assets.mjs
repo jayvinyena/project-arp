@@ -74,7 +74,7 @@ await withBrowser(async (cdp, base) => {
   const row = await cdp.eval("(() => { const r = [...document.querySelectorAll('table.progress-grid tbody tr.row')].find(x => x.textContent.includes('신규 캐릭터')); return { locked: !!r.querySelector('.locked-cell'), first: r.querySelectorAll('td')[2].textContent.trim() }; })()");
   check('작업 진척: 에셋에서 집계(잠금 · 원화 3 → 4)', row.locked && row.first === '4', JSON.stringify(row));
   await cdp.eval("[...document.querySelectorAll('table.progress-grid tbody tr.row')].find(x => x.textContent.includes('신규 캐릭터')).querySelector('.tag-link').click()");
-  await cdp.waitUntil("document.querySelector('.page h1')?.textContent === '에셋 제작 현황'", 8000);
+  await cdp.waitUntil("document.querySelector('.page h1')?.textContent.startsWith('에셋 제작 현황')", 8000);
   check('"에셋에서 집계"를 누르면 에셋 화면으로', true);
 
   // 2. 보드: 앞으로 끌기 · 뒤로 끌면 확인 · 놓을 수 없는 열 · 순서
@@ -216,6 +216,28 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("document.querySelector('.width-toggle').click()");
   await sleep(300);
   check('기본으로 되돌리기', !(await cdp.eval("document.querySelector('.app').classList.contains('wide')")) && (await pageW()) <= 1240);
+
+  // 7. 물량 대조 보정 여러 번 → 변경 이력에서 묶인 줄 "모두 되돌리기" → 만든 에셋이 사라진다
+  await nav(cdp, '에셋 제작 현황'); await sleep(600);
+  await cdp.eval("[...document.querySelectorAll('.sub-tabs button')].find(b => b.textContent.startsWith('물량 대조')).click()");
+  await cdp.waitUntil("document.querySelector('table.vol-compare')", 8000);
+  const assetTotal = () => cdp.eval("Number([...document.querySelectorAll('.sub-tabs button')].find(b => b.textContent.startsWith('에셋'))?.querySelector('.tab-n')?.textContent ?? 'NaN')");
+  const t0 = await assetTotal();
+  for (const name of ['프랍', '아이콘', '이펙트']) {
+    await cdp.eval(`[...document.querySelectorAll('table.vol-compare tbody tr.row')].find(r => r.textContent.startsWith(${JSON.stringify(name)}))?.querySelector('button')?.click()`);
+    await sleep(900);
+  }
+  const t1 = await assetTotal();
+  await nav(cdp, '변경 이력');
+  await cdp.waitUntil("document.querySelector('.hist-run')", 8000).catch(() => {});
+  const runTitle = await cdp.eval("document.querySelector('.hist-run .hist-summary')?.textContent ?? ''");
+  await cdp.eval("[...document.querySelectorAll('.hist-run button')].find(b => b.textContent.includes('모두 되돌리기'))?.click()"); await sleep(200);
+  await cdp.eval("[...document.querySelectorAll('.hist-run button')].find(b => /건 모두 되돌리기/.test(b.textContent))?.click()");
+  await cdp.waitUntil("document.querySelector('.hist-run .hist-item.undone')", 15000).catch(() => {});
+  const undoTitles = await cdp.eval("[...document.querySelectorAll('.hist-item')].filter(x => [...x.querySelectorAll('.tag')].some(t => t.textContent === '되돌리기')).map(x => x.querySelector('.hist-summary').textContent).slice(0, 3).join(' / ')");
+  await nav(cdp, '에셋 제작 현황'); await sleep(800);
+  const t2 = await assetTotal();
+  check('보정 3번 → 이력 한 줄 "모두 되돌리기" → 만든 에셋이 모두 사라짐 · 되돌리기 줄은 원래 수정 이름', t1 > t0 && t2 === t0 && /에셋 더함/.test(runTitle) && /에셋 더함 되돌림/.test(undoTitles), `${t0} → ${t1} → ${t2} · ${runTitle} · ${undoTitles}`);
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(x => !x).length;

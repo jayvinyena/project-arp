@@ -1,6 +1,8 @@
 // 에셋 제작 현황(docs/20-asset-management.md 16절): 에셋 리스트 + 트렐로식 보드(칸반) + 에셋 카드 창.
 // 보드 열 = 제작 단계(대기 · 원화 · 모델링 · … · 완료) 또는 파트별 상태. 카드를 끌면 파트 상태가 바뀌고 작업 진척에 자동 집계된다.
 // 보조 탭: 배치 · 물량 대조.
+import type { PlanMode } from '../../../engine/types.ts';
+import { UpdateBar, updateName } from './UpdateBar.tsx';
 import { useDensity } from './density.tsx';
 import { Dialog } from './Dialog.tsx';
 import { BatchPill, batchWhen } from './BatchPill.tsx';
@@ -477,6 +479,8 @@ export function AssetsPage(props: {
   onBack?: (page: 'dashboard') => void;
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
   updateId: string | null; onUpdate: (id: string) => void;
+  /** 업데이트 띠의 판정 기준 물량 템플릿 */
+  planMode?: PlanMode;
 }) {
   const ro = props.readOnly;
   const pref = <T,>(k: string, d: T): T => { try { return (localStorage.getItem(`arp.assets.${k}`) as T | null) ?? d; } catch { return d; } };
@@ -655,16 +659,13 @@ export function AssetsPage(props: {
     <div class="page assets-page">
       {/* 담당 칸 제안: 인력 화면의 작업자 명단(참여 중) */}
       <datalist id="asset-people">{v.people.map(p => <option value={p.name}>{p.team ?? ''}</option>)}</datalist>
+      <UpdateBar updates={v.updates} value={v.updateId} planMode={props.planMode ?? 'TARGET'} version={props.version} onChange={id => { setUpdateId(id); props.onUpdate(id); setGroup('all'); setBatch('all'); }} />
       <header class="page-head">
         <div>
           <PageEyebrow page="assets" />
-          <h1>에셋 제작 현황</h1>
+          <h1>에셋 제작 현황{updateName(v.updates, v.updateId) && <span class="h1-sub"> · {updateName(v.updates, v.updateId)}</span>}</h1>
           <p class="muted" style="margin-top: 6px">지금 만들고 있는 에셋의 단계와 상태를 리스트 · 보드에서 보고 바로 고칩니다. 완료는 작업 진척에 자동 집계됩니다.</p>
         </div>
-        <label class="inline"><span class="small faint">업데이트(마일스톤)</span>
-          <select class="field" aria-label="업데이트(마일스톤)" value={v.updateId ?? ''} onChange={e => { const id = (e.target as HTMLSelectElement).value; setUpdateId(id); props.onUpdate(id); setGroup('all'); setBatch('all'); }}>
-            {v.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (완료 · 취소)'}</option>)}
-          </select></label>
       </header>
 
       <nav class="sub-tabs" role="tablist" aria-label="에셋 화면">

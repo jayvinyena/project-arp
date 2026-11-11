@@ -1,5 +1,6 @@
 // 제작 현황판(docs/20-asset-management.md 18절): 업데이트(마일스톤) 하나의 제작 상황을 한 화면에.
 // 요약 4칸 · 추이(누적 완료 공수 대 계획선, 완료 예정) · 처리할 것 · 항목 × 파트 진행 · 단계 분포 · 배치.
+import { UpdateBar, updateName } from './UpdateBar.tsx';
 import { UPDATE_STATUS } from '../lib/terms.ts';
 import { BatchPill, batchWhen } from './BatchPill.tsx';
 import type { BatchRow } from '../../../core/plan.ts';
@@ -153,16 +154,14 @@ export function DashboardPage(props: {
 
   return (
     <div class="page dashboard">
+      <UpdateBar updates={v.updates} value={v.updateId} planMode={props.planMode} version={props.version} onChange={id => { setUpdateId(id); props.onUpdate(id); }} />
       <header class="page-head">
         <div>
           <PageEyebrow page="dashboard" />
-          <h1>제작 현황판</h1>
+          <h1>제작 현황판{updateName(v.updates, v.updateId) && <span class="h1-sub"> · {updateName(v.updates, v.updateId)}</span>}</h1>
           <p class="muted" style="margin-top: 6px">업데이트(마일스톤) 하나의 제작 상황입니다. 진행은 작업 진척의 완료 수량을 기본 공수로 바꿔 계산합니다({MODE_LABEL[props.planMode]} 물량 기준).</p>
         </div>
         <div class="inline">
-          <select class="field" aria-label="업데이트(마일스톤)" title="업데이트(마일스톤) — 에셋 · 작업 진척 · 시뮬레이션도 같은 업데이트로 열립니다" value={v.updateId ?? ''} onChange={e => { const id = (e.target as HTMLSelectElement).value; setUpdateId(id); props.onUpdate(id); }}>
-            {v.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (완료 · 취소)'}</option>)}
-          </select>
           <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />
         </div>
       </header>

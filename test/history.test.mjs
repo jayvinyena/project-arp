@@ -183,3 +183,23 @@ test('조작된 변경 이력의 칸 이름은 실행하지 않는다', () => {
   assert.ok(db.get('SELECT count(*) AS n FROM parts').n > 0);
   raw.close();
 });
+
+test('이력: 되돌리기 줄은 되돌린 수정의 이름으로(빈 에셋 만들기 → "에셋 더함 되돌림"), 되돌리면 에셋이 사라진다', () => {
+  const { raw, db, edit, undo } = open();
+  const upd = String(db.get('SELECT update_id FROM updates ORDER BY priority LIMIT 1').update_id);
+  const rts = db.all('SELECT resource_type_id FROM volumes WHERE update_id = ? AND stretch_qty > 0 LIMIT 2', [upd]).map(r => String(r.resource_type_id));
+  const count = () => Number(db.get('SELECT count(*) AS n FROM assets').n);
+  const n0 = count();
+  edit({ kind: 'fillAssets', updateId: upd, resourceTypeId: rts[0] });
+  edit({ kind: 'fillAssets', updateId: upd, resourceTypeId: rts[1] });
+  assert.ok(count() > n0);
+  undo('B2'); undo('B1');
+  assert.equal(count(), n0);
+  const h = historyView(db);
+  raw.close();
+  const u = h.batches.filter(b => b.isUndo);
+  assert.equal(u.length, 2);
+  assert.ok(u.every(b => /^에셋 더함.* 되돌림$/.test(b.summary)), u.map(b => b.summary).join(' / '));
+  assert.deepEqual(u.map(b => b.undoOf).sort(), ['B1', 'B2']);
+  assert.ok(h.batches.filter(b => !b.isUndo).every(b => b.undone));
+});

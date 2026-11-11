@@ -1992,3 +1992,28 @@ table.grid.vol-compare { min-width: 760px; }
 .vol-guide dt { font-weight: 700; color: var(--text); }
 .vol-guide dd { margin: 0; color: var(--text-2); }
 @media (max-width: 640px) { .vol-guide { grid-template-columns: minmax(0, 1fr); } .vol-guide dd { margin-bottom: 4px; } }
+
+.hist-run-open { flex: none; }
+.hist-item.undone .hist-subject { color: var(--text-3); }
+
+/* ───────── 업데이트 띠(docs/36) ───────── */
+.update-bar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 0 0 18px; padding: 8px 10px 8px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.update-bar-h { flex: none; font-size: var(--fs-12); font-weight: 700; color: var(--text-3); letter-spacing: .02em; }
+.update-tabs { display: flex; gap: 4px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
+.update-tabs::-webkit-scrollbar { display: none; }
+.update-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid transparent; background: transparent; font: inherit; font-size: var(--fs-14); font-weight: 600; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.update-tab:hover { background: var(--hover); color: var(--text); }
+.update-tab:focus-visible { outline: none; box-shadow: var(--ring); }
+.update-tab.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent-ink); font-weight: 750; }
+.update-tab.done { color: var(--text-3); }
+.update-more { flex: none; height: 32px; font-size: var(--fs-13); color: var(--text-2); }
+.update-facts { margin-left: auto; gap: 4px 18px; }
+.update-facts dd { font-size: var(--fs-13); }
+.h1-sub { color: var(--accent-ink); }
+@media (max-width: 860px) {
+  .update-bar { padding: 8px 10px; }
+  .update-tabs { flex: 1 1 100%; order: 2; margin: 0 -10px; padding: 0 10px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 24px), transparent); }
+  .update-more { order: 1; margin-left: auto; }
+  .update-facts { order: 3; margin-left: 0; }
+}
+@media (pointer: coarse) { .update-tab { min-height: 40px; } }

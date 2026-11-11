@@ -1,4 +1,6 @@
 // 진행 실적: 업데이트 × 리소스 × 파트 완료 수량, 기준일, 진행률
+import type { PlanMode } from '../../../engine/types.ts';
+import { UpdateBar, updateName } from './UpdateBar.tsx';
 import { useDensity } from './density.tsx';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
@@ -48,6 +50,8 @@ export function ProgressPage(props: {
   onTemplate: () => Promise<void>; onImport: () => Promise<void>;
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
   updateId: string | null; onUpdate: (id: string) => void;
+  /** 업데이트 띠의 판정 기준 물량 템플릿 */
+  planMode?: PlanMode;
 }) {
   const density = useDensity('progress');
   const [wanted, setWanted] = useState<string | null>(props.updateId);
@@ -69,19 +73,14 @@ export function ProgressPage(props: {
 
   return (
     <div class="page">
+      <UpdateBar updates={view.updates} value={updateId} planMode={props.planMode ?? 'TARGET'} version={props.version} onChange={id => { setWanted(id); props.onUpdate(id); }} />
       <header class="page-head">
         <div>
           <PageEyebrow page="progress" />
-          <h1>파트별 완료 수량</h1>
+          <h1>파트별 완료 수량{updateName(view.updates, updateId) && <span class="h1-sub"> · {updateName(view.updates, updateId)}</span>}</h1>
           <p class="muted" style="margin-top: 6px">에셋이 없는 리소스의 완료 수량과 모든 리소스의 실투입 인·일을 입력합니다. 에셋이 있는 리소스는 에셋 상태에서 자동으로 셉니다. 입력하면 남은 일만 다시 계산해 완료 예정이 바로 바뀝니다.</p>
         </div>
         <div class="inline">
-          <label class="form-row" style="gap: 4px">
-            <span class="small faint">업데이트</span>
-            <select class="field" aria-label="진척 업데이트" value={updateId} onChange={e => { const id = (e.target as HTMLSelectElement).value; setWanted(id); props.onUpdate(id); }}>
-              {view.updates.map(u => <option value={u.updateId}>{u.name}{u.live ? '' : ' (계산 밖)'}</option>)}
-            </select>
-          </label>
           <label class="form-row" style="gap: 4px">
             <span class="small faint">기준일 · 새로 입력하는 값에 남습니다</span>
             <input class="field" type="date" aria-label="진척 기준일" value={asOf} onInput={e => setAsOf((e.target as HTMLInputElement).value || today())} />

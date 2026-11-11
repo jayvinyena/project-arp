@@ -998,8 +998,8 @@ export function App() {
         {page === 'news' && <NewsPage version={version} readOnly={file.readOnly} project={view.snapshot.projectName} seenAt={newsSeen}
           onSeen={() => { const at = new Date().toISOString(); writeNewsSeen(file.name, at); setNewsSeen(at); }} onApply={onApply} onToast={showToast} />}
         {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} viewer={!!file.viewer} updateId={curUpdate} onUpdate={setCurUpdate} />}
-        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} onBack={p => setPage(p)} updateId={curUpdate} onUpdate={setCurUpdate} />}
-        {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} updateId={curUpdate} onUpdate={setCurUpdate} />}
+        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} onBack={p => setPage(p)} updateId={curUpdate} onUpdate={setCurUpdate} planMode={planMode} />}
+        {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} updateId={curUpdate} onUpdate={setCurUpdate} planMode={planMode} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
         {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} onGoPlan={() => setPage('plan')} focus={simFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'advisor' && <AdvisorPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onMakeScenario={onAdviceScenario} />}
