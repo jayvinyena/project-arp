@@ -1,4 +1,4 @@
-// 시뮬레이션: ① 시나리오 고르기 · ② 바꿀 것(넣은 변경 · 결과 미리보기 · 변경 추가 · 복제·지우기·원본에 반영) · ③ 결과 비교 · ④ 업데이트 자세히 보기
+// 시뮬레이션: ① 시나리오 고르기 · ② 바꿀 것(넣은 변경 · 결과 미리보기 · 변경 더하기 · 복제 · 지우기) · ③ 결과 비교 · ④ 원본에 반영(docs/34 C-07) · ⑤ 업데이트 자세히 보기
 import { UPDATE_STATUS } from '../lib/terms.ts';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
@@ -359,6 +359,8 @@ export function SimulationPage(props: {
   version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean;
   onScenario: (op: ScenarioOp) => Promise<{ ok: boolean; createdId?: string }>;
   onApplyScenario: (scenarioId: string, force: boolean) => Promise<boolean>;
+  /** 반영한 뒤 업데이트 계획으로 */
+  onGoPlan?: () => void;
   /** 다른 화면에서 만든 시나리오: 고르고 원본과 비교 */
   focus?: string | null;
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
@@ -469,18 +471,26 @@ export function SimulationPage(props: {
                   {confirmDelete
                     ? <><span class="small">"{cur.name}" 시나리오를 지우시겠습니까?</span><button type="button" class="btn sm danger" onClick={() => void props.onScenario({ kind: 'delete', scenarioId: cur.scenarioId })}>지우기</button><button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
                     : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>지우기</button>}
-                  <span style="flex: 1" />
-                  {!cur.appliedAt && cur.actions.length > 0 && (confirmApply
-                    ? <><span class="small">{cur.stale ? '원본이 바뀐 뒤입니다. 그래도 ' : ''}원본에 반영하시겠습니까? 변경 이력에 남습니다.</span>
-                      <button type="button" class="btn sm primary" onClick={async () => { if (await props.onApplyScenario(cur.scenarioId, cur.stale)) setConfirmApply(false); }}>{cur.stale ? '그래도 반영' : '반영'}</button>
-                      <button type="button" class="btn sm ghost" onClick={() => setConfirmApply(false)}>그만두기</button></>
-                    : <button type="button" class="btn sm primary" onClick={() => setConfirmApply(true)}>원본에 반영</button>)}
                 </div>
               )}
             </div>
           </section>
         )}
         <Compare view={compare} scenarios={data.scenarios} picked={picked} onToggle={toggle} />
+        {cur && !props.readOnly && cur.actions.length > 0 && (
+          <section class="card apply-step">
+            <div class="card-head"><div><h2>④ 원본에 반영</h2><p class="small muted" style="margin-top: 2px">비교해 보고 이 시나리오대로 하기로 했으면 원본(계획)에 넣습니다. 변경 이력에 남아 되돌릴 수 있습니다.</p></div></div>
+            <div class="card-body inline" style="padding-top: 4px">
+              {cur.appliedAt
+                ? <><span class="pill ok">원본에 반영됨 · {fmtDate(cur.appliedAt.slice(0, 10))}</span>{props.onGoPlan && <button type="button" class="btn sm" onClick={props.onGoPlan}>업데이트 계획에서 보기 →</button>}</>
+                : confirmApply
+                  ? <><span class="small">{cur.stale ? '원본이 바뀐 뒤입니다. 그래도 ' : ''}"{cur.name}"을(를) 원본에 반영하시겠습니까?</span>
+                    <button type="button" class="btn sm primary" onClick={async () => { if (await props.onApplyScenario(cur.scenarioId, cur.stale)) setConfirmApply(false); }}>{cur.stale ? '그래도 반영' : '반영'}</button>
+                    <button type="button" class="btn sm ghost" onClick={() => setConfirmApply(false)}>그만두기</button></>
+                  : <button type="button" class="btn sm primary" onClick={() => setConfirmApply(true)}>"{cur.name}" 원본에 반영</button>}
+            </div>
+          </section>
+        )}
         <Analysis meta={data.meta} scenario={cur && !cur.appliedAt ? cur : null} planMode={props.planMode} version={props.version} updateId={props.updateId} onUpdate={props.onUpdate} />
       </div>
     </div>

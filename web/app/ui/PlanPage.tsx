@@ -128,7 +128,13 @@ function LoadMap(props: { view: PlanView }) {
   );
 }
 
-function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApply: (e: Edit) => void; readOnly: boolean }) {
+/** 늦은 까닭 한 줄(docs/34 C-03): 가장 늦게 끝나는 곳과 인력을 기다린 날 */
+function Reason(props: { reason: { partName: string; resourceName: string; waitWorkdays: number | null } }) {
+  const w = props.reason.waitWorkdays;
+  return <div class="small faint reason-line" style="margin-top: 4px">까닭: {props.reason.resourceName}의 {props.reason.partName}{w ? `(인력 대기 ${fmtWorkdays(w, false)})` : ''}에서 가장 늦게 끝남</div>;
+}
+
+function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApply: (e: Edit) => void; readOnly: boolean; onFix?: () => void }) {
   const live = props.view.rows.filter(r => r.live);
   const rest = props.view.rows.filter(r => !r.live);
   // 진행 중 · 예정 업데이트는 손잡이나 줄을 길게 눌러 끌어 우선순위를 바꾼다(docs/27 4.3)
@@ -158,8 +164,9 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
         </td>
         <td>
           {st && <span class={`pill ${st.tone}`}>{st.text}{r.result?.lateWorkdays ? ` ${fmtWorkdays(r.result.lateWorkdays)}` : ''}</span>}
-          {r.result?.reason && r.result.status !== 'ON_TRACK' && (
-            <div class="small faint" style="margin-top: 4px">{r.result.reason.partName} · {r.result.reason.resourceName}</div>
+          {r.result?.reason && r.result.status !== 'ON_TRACK' && <Reason reason={r.result.reason} />}
+          {props.onFix && (r.result?.status === 'LATE' || r.result?.status === 'UNFINISHED' || r.batches.some(b => b.status === 'LATE' || b.status === 'UNFINISHED')) && (
+            <button type="button" class="link-btn small fix-link" onClick={props.onFix}>맞추는 방법 보기 →</button>
           )}
         </td>
       </tr>
@@ -174,7 +181,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
       <td class="n num small">{b.dueDate ? <>마감 {fmtShortDate(b.dueDate)}</> : <span class="faint">마감 없음</span>}</td>
       <td />
       <td class="n num">{batchWhen(b)}</td>
-      <td><BatchPill b={b} />{b.reason && b.status !== 'ON_TRACK' && b.status !== 'NO_DUE' && <div class="small faint" style="margin-top: 4px">{b.reason.partName} · {b.reason.resourceName}</div>}</td>
+      <td><BatchPill b={b} />{b.reason && b.status !== 'ON_TRACK' && b.status !== 'NO_DUE' && <Reason reason={b.reason} />}</td>
     </tr>
   ));
   return (
@@ -271,8 +278,18 @@ function UpdateDrawer(props: {
                   {Object.entries(LIFE).map(([k, v]) => <option value={k}>{v}</option>)}
                 </select>
                 {st && <span class={`pill ${st.tone}`}>{st.text}</span>}
-                {props.row?.result?.completion && <span class="muted small">완료 예정 {fmtDate(props.row.result.completion)}</span>}
+                {props.row?.result?.completion && <span class="muted small">완료 예정 {fmtDate(props.row.result.completion)}{props.row.range ? ` · 범위 ${props.row.range.min ? fmtShortDate(props.row.range.min) : '기간 밖'} ~ ${props.row.range.stretch ? fmtShortDate(props.row.range.stretch) : '기간 밖'}` : ''}</span>}
               </div>
+              <p class="small muted" style="margin: 6px 0 0">날짜 · 물량을 고치면 바로 다시 계산합니다.</p>
+              {props.row?.result?.reason && props.row.result.status !== 'ON_TRACK' && <Reason reason={props.row.result.reason} />}
+              {props.row && props.row.batches.length > 0 && (
+                <div class="drawer-batches">
+                  <b class="small">배치</b>
+                  {props.row.batches.map(b => (
+                    <div class="drawer-batch small"><span>{b.name}</span><span class="faint">{b.dueDate ? `마감 ${fmtShortDate(b.dueDate)}` : '마감 없음'}</span><span class="num">{batchWhen(b)}</span><BatchPill b={b} /></div>
+                  ))}
+                </div>
+              )}
               <div class="dates">
                 {([['start_date', '작업 시작', d.startDate], ['freeze_date', '제작 완료 목표', d.freezeDate], ['release_date', '출시', d.releaseDate]] as const).map(([k, label, value]) => (
                   <div class={`date-chip${k === 'freeze_date' ? ' key' : ''}`}>
@@ -327,6 +344,8 @@ export function planTitle(rows: { isLaunch: boolean }[]): string {
 export function PlanPage(props: {
   version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean;
   names: Record<string, string>; onApply: (e: Edit) => Promise<boolean>;
+  /** 늦음 → 마감 맞추기, 계산 막힘 → 데이터 점검 */
+  onGo?: (page: 'advisor' | 'check') => void;
 }) {
   const [view, setView] = useState<PlanView | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -338,6 +357,7 @@ export function PlanPage(props: {
   const live = view.rows.filter(r => r.live);
   const late = live.filter(r => r.result && (r.result.status === 'LATE' || r.result.status === 'UNFINISHED')).length;
   const tight = live.filter(r => r.result?.status === 'TIGHT').length;
+  const batchLate = live.reduce((n, r) => n + r.batches.filter(b => b.status === 'LATE' || b.status === 'UNFINISHED').length, 0);
   return (
     <div class="page">
       <header class="page-head">
@@ -345,7 +365,7 @@ export function PlanPage(props: {
           <PageEyebrow page="plan" />
           {/* 개수는 런칭을 뺀 업데이트만 센다(런칭 + 시즌 3개 = "런칭과 업데이트 3개") */}
           <h1>{planTitle(live)}</h1>
-          <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 사용합니다.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개.`}</p>
+          <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 사용합니다.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개${batchLate ? ` · 늦는 배치 ${batchLate}개` : ''}.`}</p>
         </div>
         <div class="inline">
           <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />
@@ -354,12 +374,13 @@ export function PlanPage(props: {
       </header>
       {errors.length > 0 && (
         <div class="banner bad" role="alert"><IconAlert /><div><b>계산할 수 없습니다 · 고칠 곳 {errors.length}개</b>
-          <ul class="small">{errors.slice(0, 6).map(f => <li>{humanKey(f.key, names)} — {f.title} ({f.detail})</li>)}</ul></div></div>
+          <ul class="small">{errors.slice(0, 6).map(f => <li>{humanKey(f.key, names)} — {f.title} ({f.detail})</li>)}</ul>
+          {props.onGo && <button type="button" class="btn sm" style="margin-top: 8px" onClick={() => props.onGo!('check')}>데이터 점검에서 고치기</button>}</div></div>
       )}
-      {!errors.length && <Timeline view={view} onOpen={setOpenId} />}
-      {!errors.length && <LoadMap view={view} />}
-      <UpdateList view={view} onOpen={setOpenId} onApply={e => void props.onApply(e)} readOnly={props.readOnly} />
-      <p class="small faint">계산 {fmtDays(view.ms)}ms · 세 구간 동시 계산</p>
+      {errors.length > 0
+        ? <section class="card blocked-card"><div class="card-body small muted">계산할 수 없어 타임라인과 파트 부하를 비워 두었습니다. 위 고칠 곳을 고치면 다시 그립니다.</div></section>
+        : <><Timeline view={view} onOpen={setOpenId} /><LoadMap view={view} /></>}
+      <UpdateList view={view} onOpen={setOpenId} onApply={e => void props.onApply(e)} readOnly={props.readOnly} onFix={props.onGo ? () => props.onGo!('advisor') : undefined} />
       {creating && <CreateUpdate view={view} onClose={() => setCreating(false)} onCreate={async e => { if (await props.onApply(e)) setCreating(false); }} />}
       {openId && (
         <UpdateDrawer updateId={openId} planMode={props.planMode} version={props.version} readOnly={props.readOnly} types={view.types}

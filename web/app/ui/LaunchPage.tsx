@@ -1,12 +1,13 @@
 // 런칭 물량 설계 화면: 날짜 · 구간 비교 · 파트 부하 · 역산 · 물량 표
+import type { ScenarioAction } from '../../../core/scenarios.ts';
 import { UPDATE_STATUS } from '../lib/terms.ts';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import type { View } from '../lib/rpc.ts';
 import { rpc } from '../lib/rpc.ts';
 import type { LaunchEdit, MaxScaleResult, HeadcountResult, ModeOutcome } from '../../../core/launch.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
-import { fmtDate, fmtShortDate, fmtDays, fmtPct, fmtHeads, fmtInt, fmtWorkdays } from '../lib/format.ts';
+import { fmtDate, fmtShortDate, fmtDays, fmtPct, fmtHeads, fmtInt, fmtWorkdays, fmtMonthRange } from '../lib/format.ts';
 import { VolumeTable } from './VolumeTable.tsx';
 import type { Edit } from '../../../core/edits.ts';
 import { IconAlert, IconSpark, IconUsers } from './icons.tsx';
@@ -103,7 +104,8 @@ function PartLoad(props: { mode: ModeOutcome }) {
   );
 }
 
-function Reverse(props: { planMode: PlanMode; version: number; names: Record<string, string>; resNames: Record<string, string>; deadlineLabel: string }) {
+function Reverse(props: { planMode: PlanMode; version: number; names: Record<string, string>; resNames: Record<string, string>; deadlineLabel: string;
+  /** 답을 시나리오로(docs/34 C-06) */ updateId: string; onMakeScenario?: (name: string, actions: ScenarioAction[]) => Promise<boolean> }) {
   const [scale, setScale] = useState<{ r: MaxScaleResult; v: number; mode: PlanMode } | null>(null);
   const [heads, setHeads] = useState<{ r: HeadcountResult; v: number; mode: PlanMode } | null>(null);
   const [busy, setBusy] = useState<'' | 'scale' | 'heads'>('');
@@ -162,6 +164,9 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
               {changed.length > 0 && (
                 <div class="chips">{changed.map(s => <span class="tag">{props.resNames[s.resourceTypeId] ?? s.resourceTypeId} {fmtInt(s.current)} → {fmtInt(s.suggested)}</span>)}</div>
               )}
+              {props.onMakeScenario && scale.r.scale != null && Math.abs(scale.r.scale - 1) > 0.005 && !stale(scale) && (
+                <button type="button" class="btn sm ask-make" onClick={() => void props.onMakeScenario!(`물량 ${fmtPct(scale.r.scale!)}`, [{ kind: 'volumeScale', updateId: props.updateId, scale: scale.r.scale! }])}>이대로 시나리오 만들기</button>
+              )}
             </div>
           )}
         </div>
@@ -178,7 +183,11 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
                 : !heads.r.feasible ? <span class="big">인원만으로는 어렵습니다</span>
                   : <div class="chips">{heads.r.additions.map(a => <span class="pill accent plain" style="height: 28px; font-size: 13px">{props.names[a.partId] ?? a.partId} +{fmtHeads(a.heads)}</span>)}</div>}
               {heads.r.feasible && !heads.r.currentOk && heads.r.months && (
-                <span class="small muted">{heads.r.months.from} ~ {heads.r.months.to} 동안 더하면 {fmtDate(heads.r.completion)}에 끝납니다.</span>
+                <span class="small muted">{fmtMonthRange(heads.r.months.from, heads.r.months.to)} 동안 더하면 {fmtDate(heads.r.completion)}에 끝납니다.</span>
+              )}
+              {props.onMakeScenario && heads.r.feasible && !heads.r.currentOk && heads.r.months && !stale(heads) && (
+                <button type="button" class="btn sm ask-make" onClick={() => void props.onMakeScenario!(heads.r.additions.map(a => `${props.names[a.partId] ?? a.partId} +${a.heads}명`).join(' · '),
+                  heads.r.additions.map(a => ({ kind: 'headcount' as const, partId: a.partId, fromMonth: heads.r.months!.from, toMonth: heads.r.months!.to, delta: a.heads })))}>이대로 시나리오 만들기</button>
               )}
               {!heads.r.feasible && <span class="small muted">날짜를 늦추거나 물량을 줄여야 합니다.</span>}
             </div>
@@ -189,9 +198,32 @@ function Reverse(props: { planMode: PlanMode; version: number; names: Record<str
   );
 }
 
+/** 물량 표 바로 위 결과 줄: 지금 완료 예정과 바로 전 고치기 대비 변화(바꾼 곳 옆에서 결과를 본다, docs/34 C-05) */
+function OutcomeBar(props: { mode: ModeOutcome; version: number; deadlineLabel: string }) {
+  const prev = useRef<{ v: number; slack: number | null; completion: string | null } | null>(null);
+  const [delta, setDelta] = useState<{ from: string | null; days: number | null } | null>(null);
+  const cur = { slack: props.mode.slackWorkdays, completion: props.mode.launch?.expectedCompletionDate ?? null };
+  useEffect(() => {
+    const p = prev.current;
+    if (p && p.v !== props.version && p.completion !== cur.completion) {
+      setDelta({ from: p.completion, days: p.slack != null && cur.slack != null ? cur.slack - p.slack : null });
+    }
+    prev.current = { v: props.version, ...cur };
+  }, [props.version, cur.completion, cur.slack]);
+  const st = slackText(props.mode);
+  return (
+    <div class="outcome-bar" role="status" aria-live="polite">
+      <span class="small muted">물량을 고치면 바로 다시 계산합니다</span>
+      <span class="outcome-main">완료 예정 <b>{cur.completion ? fmtShortDate(cur.completion) : '기간 밖'}</b> <span class={`pill ${st.tone}`}>{st.text}</span></span>
+      <span class="small outcome-delta">{delta ? <>직전 {delta.from ? fmtShortDate(delta.from) : '기간 밖'} → 지금{delta.days != null ? <b class={delta.days > 0 ? ' bad-num' : ' ok-num'}> {fmtWorkdays(delta.days)}</b> : ''}</> : '\u00a0'}</span>
+    </div>
+  );
+}
+
 export function LaunchPage(props: {
   view: View; version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; readOnly: boolean; onEdit: (e: LaunchEdit) => unknown;
   onApply?: (e: Edit) => Promise<boolean>;
+  onMakeScenario?: (name: string, actions: ScenarioAction[]) => Promise<boolean>;
 }) {
   const { snapshot, compare } = props.view;
   const launch = snapshot.launch;
@@ -254,11 +286,12 @@ export function LaunchPage(props: {
           <ModeCards modes={compare.modes} selected={props.planMode} onSelect={props.setPlanMode} deadlineLabel={deadlineLabel} horizonEnd={snapshot.horizon.end} />
           <div class="grid-2">
             <PartLoad mode={selected} />
-            <Reverse planMode={props.planMode} version={props.version} names={names} resNames={resNames} deadlineLabel={deadlineLabel} />
+            <Reverse planMode={props.planMode} version={props.version} names={names} resNames={resNames} deadlineLabel={deadlineLabel} updateId={launch.updateId} onMakeScenario={props.readOnly ? undefined : props.onMakeScenario} />
           </div>
         </>
       )}
 
+      {!compare.blocked && selected?.launch && <OutcomeBar mode={selected} version={props.version} deadlineLabel={deadlineLabel} />}
       <VolumeTable
         updateId={launch.updateId}
         rows={snapshot.rows}

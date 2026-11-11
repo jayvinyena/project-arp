@@ -95,9 +95,9 @@ export const RULES = [
     code: 'S03', level: 'ERROR', title: '설정 값이 범위를 벗어난다',
     fix: '여유율·기본 겹침률은 0–1, 부하율 기준은 0 < 주의 < 초과 < 심각, 근무 요일은 하루 이상, 늦음 기준은 0 이상.',
     sql: q(`
-      SELECT 'settings.buffer_rate' AS key, printf('여유율 %g', buffer_rate) AS detail FROM settings WHERE buffer_rate NOT BETWEEN 0 AND 1
-      UNION ALL SELECT 'settings.default_overlap_rate', printf('기본 겹침률 %g', default_overlap_rate) FROM settings WHERE default_overlap_rate NOT BETWEEN 0 AND 1
-      UNION ALL SELECT 'settings.load_rates', printf('부하율 기준 %g / %g / %g', load_warn_rate, load_over_rate, load_critical_rate) FROM settings
+      SELECT 'settings.buffer_rate' AS key, printf('여유율 %g%%', round(buffer_rate * 100, 1)) AS detail FROM settings WHERE buffer_rate NOT BETWEEN 0 AND 1
+      UNION ALL SELECT 'settings.default_overlap_rate', printf('기본 겹침률 %g%%', round(default_overlap_rate * 100, 1)) FROM settings WHERE default_overlap_rate NOT BETWEEN 0 AND 1
+      UNION ALL SELECT 'settings.load_rates', printf('부하율 기준 %g%% / %g%% / %g%%', round(load_warn_rate * 100, 1), round(load_over_rate * 100, 1), round(load_critical_rate * 100, 1)) FROM settings
         WHERE NOT (0 < load_warn_rate AND load_warn_rate < load_over_rate AND load_over_rate < load_critical_rate)
       UNION ALL SELECT 'settings.work_weekdays', '근무 요일이 하루도 없습니다' FROM settings WHERE work_weekdays = '0000000'
       UNION ALL SELECT 'settings.late_warn_workdays', printf('늦음 기준 %d영업일', late_warn_workdays) FROM settings WHERE late_warn_workdays < 0`),

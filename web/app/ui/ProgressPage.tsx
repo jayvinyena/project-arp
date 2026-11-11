@@ -132,7 +132,7 @@ export function ProgressPage(props: {
               <thead><tr>
                 <th>리소스</th><th class="n">목표</th>
                 {view.parts.map(p => <th class="n">{p.name}</th>)}
-                <th class="n" style="width: 150px">마지막 공정 기준</th><th style="width: 80px" />
+                <th class="n" style="width: 150px" title="마지막 공정까지 끝난 수 ÷ 만들 수(현황판의 진행(공수)과 다릅니다)">끝까지 완료</th><th style="width: 80px" />
               </tr></thead>
               <tbody>
                 {groups.map(g => (

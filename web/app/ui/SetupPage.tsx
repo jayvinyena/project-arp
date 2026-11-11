@@ -46,7 +46,7 @@ function PartRows(props: { v: SetupView; ro: boolean; apply: (e: Edit) => Promis
   );
 }
 
-export function SetupPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean> }) {
+export function SetupPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean>; /** 다음 단계(인력)로 */ onNext?: () => void }) {
   const [v, setV] = useState<SetupView | null>(null);
   const [newPart, setNewPart] = useState('');
   const [newRes, setNewRes] = useState({ group: '', name: '', pipe: '' });
@@ -54,6 +54,8 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
   const [moveReq, setMoveReq] = useState<MoveRequest | PipelineRequest | null>(null);
   /** 리소스 지우기: 쓰이는 곳이 있으면 무엇이 함께 지워지는지 보여 주고 고르게 한다 */
   const [delRes, setDelRes] = useState<SetupView['resources'][number] | null>(null);
+  /** 기본 인원 · 가동률: 달마다 다른 값이 있으면 모든 달을 덮어쓰기 전에 묻는다(docs/34 A-06) */
+  const [fillReq, setFillReq] = useState<{ partId: string; name: string; field: 'headcount' | 'utilization'; value: number; text: string; months: number } | null>(null);
   useEffect(() => { void rpc.setup().then(setV); }, [props.version]);
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const ro = props.readOnly;
@@ -136,9 +138,17 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                   <>
                     <td><Field value={p.name} label={`${p.name} 파트 이름`} disabled={ro} onCommit={t => apply({ kind: 'renamePart', partId: p.partId, name: t })} /></td>
                     <td class="n"><Field class="field n num-in" numeric value={numText(p.headcount)} label={`${p.name} 기본 인원`} disabled={ro || !p.active}
-                      onCommit={t => (num(t) == null || num(t)! < 0 ? false : fillAll(p.partId, 'headcount', num(t)!))} /></td>
+                      onCommit={t => {
+                        if (num(t) == null || num(t)! < 0) return false;
+                        if (p.mixed.headcount) { setFillReq({ partId: p.partId, name: p.name, field: 'headcount', value: num(t)!, text: `${num(t)}명`, months: p.mixed.headcount }); return false; }
+                        return fillAll(p.partId, 'headcount', num(t)!);
+                      }} />{p.mixed.headcount > 0 && <span class="cell-note" title="계획 기간 안에서 달마다 인원이 다릅니다. 보이는 값은 가장 흔한 값입니다">달마다 다름</span>}</td>
                     <td class="n"><Field class="field n num-in" numeric value={pctText(p.utilization)} label={`${p.name} 기본 가동률`} disabled={ro || !p.active}
-                      onCommit={t => (num(t) == null || num(t)! < 0 || num(t)! > 100 ? false : fillAll(p.partId, 'utilization', num(t)! / 100))} /></td>
+                      onCommit={t => {
+                        if (num(t) == null || num(t)! < 0 || num(t)! > 100) return false;
+                        if (p.mixed.utilization) { setFillReq({ partId: p.partId, name: p.name, field: 'utilization', value: num(t)! / 100, text: `${num(t)}%`, months: p.mixed.utilization }); return false; }
+                        return fillAll(p.partId, 'utilization', num(t)! / 100);
+                      }} />{p.mixed.utilization > 0 && <span class="cell-note" title="계획 기간 안에서 달마다 가동률이 다릅니다. 보이는 값은 가장 흔한 값입니다">달마다 다름</span>}</td>
                     <td class="n"><Field class="field n num-in" numeric value={pctText(p.aiShare)} label={`${p.name} AI 활용 비율`} disabled={ro || !p.active}
                       onCommit={t => apply({ kind: 'aiShare', partId: p.partId, share: (num(t) ?? 0) / 100 })} /></td>
                     <td class="part-pipes">{(() => {
@@ -267,6 +277,20 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           )}
         </div>
       </section>
+      {props.onNext && !ro && (
+        <div class="next-step" role="note"><span class="small muted">파트 · 파이프라인 · 리소스 공수를 넣었으면, 다음은 파트마다 달별 인원입니다. 인원이 0인 파트는 일이 계산되지 않습니다.</span>
+          <button type="button" class="btn sm" onClick={props.onNext}>다음: 인력 →</button></div>
+      )}
+      {fillReq && (
+        <Dialog label="인력 덮어쓰기 확인" onClose={() => setFillReq(null)} class="confirm-dialog">
+          <h2 style="font-size: 16px">{fillReq.name} {fillReq.field === 'headcount' ? '인원' : '가동률'}을 모든 달 {fillReq.text}로 바꿀까요?</h2>
+          <p class="small muted" style="margin: 8px 0 14px">계획 기간 안에서 <b>{fillReq.months}개 달</b>의 값이 다릅니다(채용 · 충원 계획 등). 바꾸면 모든 달이 같은 값이 됩니다. 달마다 고치려면 인력 화면을 쓰십시오. 변경 이력에서 되돌릴 수 있습니다.</p>
+          <div class="inline" style="justify-content: flex-end">
+            <button type="button" class="btn sm ghost" onClick={() => setFillReq(null)}>그만두기</button>
+            <button type="button" class="btn sm primary" onClick={() => { const r = fillReq; setFillReq(null); void fillAll(r.partId, r.field, r.value); }}>모든 달 바꾸기</button>
+          </div>
+        </Dialog>
+      )}
       {delRes && (() => {
         const u = delRes.usage;
         const lines = [

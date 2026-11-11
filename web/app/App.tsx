@@ -1,4 +1,5 @@
 // 앱 틀: 시작 화면, 옆 메뉴, 파일 열기·저장(자동 저장, 편집 중 표시, 저장 전 충돌 확인)
+import { humanKey } from './ui/LaunchPage.tsx';
 import { TEMPLATE_LEAVES_OUT } from '../../core/import-spec.ts';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -69,6 +70,27 @@ const storage = {
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 저장소를 못 써도 앱은 돈다 */ } },
 };
 
+/** 지운 뒤 알림 글(되돌리기 단추가 붙는다, docs/34 T3). 기록이 사라지는 큰 지우기는 먼저 확인 창을 띄운다 */
+const UNDO_NOTICE: Record<string, string> = {
+  deleteBatch: '배치를 지웠습니다', deleteAssets: '에셋을 지웠습니다', removeLink: '링크를 지웠습니다', removeComment: '댓글을 지웠습니다',
+  deleteNews: '소식을 지웠습니다', deletePerson: '작업자를 지웠습니다', deleteTeam: '지원 팀을 지웠습니다', deletePart: '파트를 지웠습니다',
+  deletePipeline: '파이프라인을 지웠습니다', deleteResource: '리소스를 지웠습니다', removeHoliday: '휴일을 뺐습니다', deleteType: '유형을 지웠습니다',
+  removeTemplateResource: '템플릿에서 리소스를 뺐습니다', removeResource: '물량에서 리소스를 뺐습니다', deleteUpdate: '업데이트를 지웠습니다',
+  completeRow: '그 줄을 모두 완료로 바꿨습니다', fillCapacity: '인력을 한 번에 채웠습니다', dropResourcePart: '공수 · 기록을 지웠습니다',
+  moveStage: '단계를 옮겼습니다', fillAssets: '빈 에셋을 만들었습니다',
+};
+
+/** 알림: 오류는 빨갛게(role=alert), 되돌릴 수 있으면 "되돌리기" */
+function Toast(props: { t: { text: string; bad?: boolean; undo?: string }; onUndo: (batchId: string) => void; onClose: () => void }) {
+  return (
+    <div class={`toast${props.t.bad ? ' bad' : ''}`} role={props.t.bad ? 'alert' : 'status'}>
+      <span class="toast-text">{props.t.text}</span>
+      {props.t.undo && <button type="button" class="toast-undo" onClick={() => props.onUndo(props.t.undo!)}>되돌리기</button>}
+      <button type="button" class="toast-x" aria-label="알림 닫기" onClick={props.onClose}>×</button>
+    </div>
+  );
+}
+
 export function App() {
   const [editor, setEditor] = useState(storage.get('arp.editor') ?? '');
   const [file, setFile] = useState<FileState | null>(null);
@@ -84,7 +106,9 @@ export function App() {
   const pageRef = useRef(page);
   pageRef.current = page;
   const [save, setSave] = useState<{ state: SaveState; at?: number; message?: string }>({ state: 'saved' });
-  const [toast, setToast] = useState<string | null>(null);
+  /** 알림: 글 · 오류 여부 · 되돌릴 묶음(지운 뒤 "되돌리기", docs/34 T3) */
+  const [toast, setToast] = useState<{ text: string; bad?: boolean; undo?: string } | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
   // 화면 폭: 기본(가운데 1240px) · 넓게(창 폭 전부). 모든 화면에 적용, 이 브라우저에 기억
   const [wide, setWide] = useState(() => { try { return localStorage.getItem('arp.width') === 'wide'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('arp.width', wide ? 'wide' : 'normal'); } catch { /* 없어도 된다 */ } }, [wide]);
@@ -111,7 +135,12 @@ export function App() {
   const savedSeq = useRef(0);
   const unsaved = () => editSeq.current !== savedSeq.current;
 
-  const showToast = (m: string) => { setToast(m); window.setTimeout(() => setToast(null), 4000); };
+  // 새 알림이 오면 타이머를 새로(연달아 뜬 알림이 일찍 사라지지 않게). 되돌리기가 있으면 8초
+  const showToast = (m: string, opts: { bad?: boolean; undo?: string } = {}) => {
+    setToast({ text: m, ...opts });
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), opts.undo ? 8000 : opts.bad ? 6000 : 4000);
+  };
   const me = editor.trim() || '이름 없음';
   const meRef = useRef(me);
   meRef.current = me;
@@ -634,10 +663,13 @@ export function App() {
         setSave(s => (s.state === 'conflict' ? s : { state: 'dirty' }));
         scheduleAutosave();
         setView(await rpc.view());
+        const done = UNDO_NOTICE[edit.kind];
+        if (done) showToast(`${done}${(r as { note?: string }).note ? ` · ${(r as { note?: string }).note}` : ''}`, { undo: r.batchId });
+        else if ((r as { note?: string }).note) showToast(String((r as { note?: string }).note));
       }
       return true;
     } catch (error) {
-      showToast((error as Error).message);
+      showToast((error as Error).message, { bad: true });
       return false;
     }
   };
@@ -665,9 +697,10 @@ export function App() {
 
   const [simFocus, setSimFocus] = useState<string | null>(null);
   // 다른 화면(작업 진척 · 물량 표)에서 에셋 화면으로: 업데이트 · 리소스 종류를 넘긴다
-  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string; assetId?: string } | null>(null);
+  // partId · who · status = 에셋 화면 거르기, back = 카드를 닫으면 돌아갈 화면(현황판 → 카드 → 현황판, docs/34 B-02)
+  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; back?: 'dashboard' } | null>(null);
   useEffect(() => {
-    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string; assetId?: string }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
+    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; back?: 'dashboard' }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
     window.addEventListener('arp:assets', go);
     return () => window.removeEventListener('arp:assets', go);
   }, []);
@@ -711,10 +744,12 @@ export function App() {
         setVersion(x => x + 1);
         setSave(s => (s.state === 'conflict' ? s : { state: 'dirty' }));
         scheduleAutosave();
+        const done = UNDO_NOTICE[edit.kind];
+        if (done) showToast(done, { undo: v.batchId });
       }
       return true;
     } catch (error) {
-      showToast((error as Error).message);
+      showToast((error as Error).message, { bad: true });
       return false;
     }
   };
@@ -723,7 +758,7 @@ export function App() {
     return (
       <>
         <NewProject onCancel={() => setCreating(false)} onCreate={createProject} />
-        {toast && <div class="toast" role="status">{toast}</div>}
+        {toast && <Toast t={toast} onUndo={id => { setToast(null); void onUndo(id, false); }} onClose={() => setToast(null)} />}
       </>
     );
   }
@@ -788,7 +823,7 @@ export function App() {
           )}
           <p class="small faint">{canSaveInPlace ? '크롬·엣지에서는 수정한 내용이 연 파일에 바로 저장됩니다.' : '이 브라우저에서는 저장할 때 파일을 내려받습니다. 크롬·엣지를 사용하면 연 파일에 바로 저장됩니다.'}</p>
         </div>
-        {toast && <div class="toast" role="status">{toast}</div>}
+        {toast && <Toast t={toast} onUndo={id => { setToast(null); void onUndo(id, false); }} onClose={() => setToast(null)} />}
       </div>
     );
   }
@@ -938,21 +973,21 @@ export function App() {
             <SetupGuide status={view.setup} onGo={p => setPage(p)} onHide={() => { setGuideHidden(true); writeGuideHidden(file.name); }} />
           </div>
         )}
-        {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} />}
-        {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
+        {page === 'launch' && <LaunchPage view={view} version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onEdit={onEdit} onApply={onApply} onMakeScenario={onAdviceScenario} />}
+        {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} onGo={p => setPage(p)} />}
         {page === 'news' && <NewsPage version={version} readOnly={file.readOnly} project={view.snapshot.projectName} seenAt={newsSeen}
           onSeen={() => { const at = new Date().toISOString(); writeNewsSeen(file.name, at); setNewsSeen(at); }} onApply={onApply} onToast={showToast} />}
         {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} viewer={!!file.viewer} updateId={curUpdate} onUpdate={setCurUpdate} />}
-        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
+        {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} onBack={p => setPage(p)} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}
-        {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} focus={simFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
+        {page === 'simulation' && <SimulationPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onScenario={onScenario} onApplyScenario={onApplyScenario} onGoPlan={() => setPage('plan')} focus={simFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'advisor' && <AdvisorPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} onMakeScenario={onAdviceScenario} />}
-        {page === 'setup' && <SetupPage version={version} readOnly={file.readOnly} onApply={onApply} />}
+        {page === 'setup' && <SetupPage version={version} readOnly={file.readOnly} onApply={onApply} onNext={() => setPage('capacity')} />}
         {page === 'templates' && <TemplatesPage version={version} readOnly={file.readOnly} onApply={onApply} />}
-        {page === 'capacity' && <CapacityPage version={version} readOnly={file.readOnly} onApply={onApply} />}
+        {page === 'capacity' && <CapacityPage version={version} readOnly={file.readOnly} onApply={onApply} onNext={() => setPage('launch')} />}
         {page === 'history' && <HistoryPage version={version} readOnly={file.readOnly} onUndo={onUndo} />}
-        {page === 'check' && <ChecksPage view={view} />}
+        {page === 'check' && <ChecksPage view={view} names={names} onGo={p => setPage(p)} />}
       </main>
       {imported && (
         <ImportReport report={imported} findings={view.compare.findings}
@@ -962,26 +997,52 @@ export function App() {
       )}
       {sheetImport && <SheetImportDialog fileName={sheetImport.name} scan={sheetImport.scan} busy={sheetImport.busy} onImport={p => void onImportSheet(p)} onClose={() => setSheetImport(null)} />}
       {help && <HelpPanel page={help} onClose={() => setHelp(null)} onGo={p => { setHelp(null); setPage(p); }} />}
-      {toast && <div class="toast" role="status">{toast}</div>}
+      {toast && <Toast t={toast} onUndo={id => { setToast(null); void onUndo(id, false); }} onClose={() => setToast(null)} />}
     </div>
   );
 }
 
-function ChecksPage(props: { view: View }) {
+/** 규칙 영역 → 고치는 화면(규칙 코드 첫 글자, docs/34 A-04) */
+const FIX_PAGE: Record<string, { page: Page; label: string }> = {
+  S: { page: 'setup', label: '프로젝트 설정' }, P: { page: 'setup', label: '파트 · 파이프라인' }, E: { page: 'setup', label: '리소스 · 공수' },
+  U: { page: 'plan', label: '업데이트 계획' }, V: { page: 'launch', label: '물량' }, A: { page: 'progress', label: '작업 진척' },
+  C: { page: 'capacity', label: '인력' }, T: { page: 'templates', label: '유형 템플릿' }, X: { page: 'simulation', label: '시뮬레이션' }, B: { page: 'assets', label: '에셋 · 배치' },
+};
+/** 설정 키 이름 */
+const SETTING_LABEL: Record<string, string> = {
+  settings: '설정', 'settings.buffer_rate': '여유율', 'settings.default_overlap_rate': '기본 겹침률', 'settings.load_rates': '부하율 기준',
+  'settings.work_weekdays': '근무 요일', 'settings.late_warn_workdays': '늦음 경고 영업일',
+};
+
+function ChecksPage(props: { view: View; names: Record<string, string>; onGo: (p: Page) => void }) {
   const findings = props.view.compare.findings;
+  const errors = findings.filter(f => f.level === 'ERROR');
+  const warns = findings.filter(f => f.level !== 'ERROR');
+  const where = (key: string) => SETTING_LABEL[key] ?? humanKey(key, props.names);
+  const list = (items: typeof findings, title: string, desc: string) => items.length > 0 && (
+    <section class="card">
+      <div class="card-head"><div><h2>{title} {items.length}개</h2><p class="small muted" style="margin-top: 2px">{desc}</p></div></div>
+      <div class="card-body" style="padding-top: 4px">
+        {items.map(f => {
+          const fix = FIX_PAGE[f.code[0]];
+          return (
+            <div class="finding">
+              <span class={`pill ${f.level === 'ERROR' ? 'bad' : 'warn'}`}>{f.level === 'ERROR' ? '오류' : '주의'}</span>
+              <div style="flex: 1; min-width: 0"><div style="font-weight: 600">{f.title}</div><div class="small muted">{where(f.key)} · {f.detail}</div></div>
+              {fix && <button type="button" class="btn sm" title={`${fix.label} 화면에서 고칩니다`} onClick={() => props.onGo(fix.page)}>{fix.label}에서 고치기 →</button>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
   return (
     <div class="page">
-      <header class="page-head"><div><PageEyebrow page="check" /><h1>고칠 곳 {findings.length}개</h1>
-        <p class="muted" style="margin-top: 6px">오류가 있으면 계산하지 않습니다. 주의는 계산하되 표시만 합니다.</p></div></header>
-      <section class="card"><div class="card-body">
-        {findings.length === 0 && <p class="muted">문제가 없습니다.</p>}
-        {findings.map(f => (
-          <div class="finding">
-            <span class={`pill ${f.level === 'ERROR' ? 'bad' : 'warn'}`}>{f.level === 'ERROR' ? '오류' : '주의'}</span>
-            <div><div style="font-weight: 600">{f.title} <span class="faint code">{f.code}</span></div><div class="small muted">{f.key} · {f.detail}</div></div>
-          </div>
-        ))}
-      </div></section>
+      <header class="page-head"><div><PageEyebrow page="check" /><h1>데이터 점검</h1>
+        <p class="muted" style="margin-top: 6px">{findings.length ? `고칠 곳 ${errors.length}개 · 살펴볼 곳 ${warns.length}개. 오류가 있으면 계산하지 않습니다. 주의는 계산하되 표시만 합니다.` : '오류가 있으면 계산하지 않습니다. 주의는 계산하되 표시만 합니다.'}</p></div></header>
+      {findings.length === 0 && <div class="banner ok" role="status"><IconCheck /><div><b>문제가 없습니다</b><p class="small muted">모든 점검 규칙을 통과했습니다.</p></div></div>}
+      {list(errors, '오류', '고치기 전에는 계산하지 않습니다.')}
+      {list(warns, '주의', '계산은 하지만 결과가 실제와 다를 수 있는 곳입니다.')}
     </div>
   );
 }

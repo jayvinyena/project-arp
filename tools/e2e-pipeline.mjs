@@ -114,7 +114,17 @@ await withBrowser(async (cdp, base) => {
   const rowsN = await cdp.eval("document.querySelectorAll('.move-dialog .move-table tbody tr').length");
   check('밖 파트에 공수가 있으면 파이프라인 바꾸기 창(파트마다 옮길 곳)', dlg === '파이프라인 바꾸기' && rowsN >= 1, `${dlg} · ${rowsN}줄`);
   check('창이 열려도 고르기 칸은 아직 그대로(기본)', (await cdp.eval(`document.querySelector('select[aria-label="신규 캐릭터 파이프라인"]').value`)) === 'L00');
-  await clickText(cdp, '파이프라인 바꾸기', "document.querySelector('.move-dialog')");
+  // 옮길 곳을 찾지 못한 파트는 "고르지 않음"이라 단추가 꺼져 있다(docs/34 A-22) → 지우기를 고르면 빨간 단추
+  const offBefore = await cdp.eval("document.querySelector('.move-dialog .dialog-foot .btn:last-child').disabled");
+  const nSel = await cdp.eval("document.querySelectorAll('.move-dialog select').length");
+  for (let k = 0; k < nSel; k++) {
+    await cdp.eval(`(() => { const s = document.querySelectorAll('.move-dialog select')[${k}]; if (s.selectedIndex === 0) { s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); } })()`);
+    await sleep(200);
+  }
+  await sleep(300);
+  const btnText = await cdp.eval("document.querySelector('.move-dialog .dialog-foot .btn:last-child').textContent");
+  check('옮길 곳을 고르기 전에는 바꾸지 않고, 지우기를 고르면 빨간 단추', offBefore === true && (btnText.includes('지우고 바꾸기') || btnText === '파이프라인 바꾸기'), `${offBefore} · ${btnText}`);
+  await cdp.eval("document.querySelector('.move-dialog .dialog-foot .btn:last-child').click()");
   await cdp.waitUntil("!document.querySelector('.move-dialog')", 8000).catch(() => {});
   const locked = await cdp.eval(`document.querySelectorAll('[aria-label^="신규 캐릭터 "][aria-label$=" 파이프라인 밖"]').length`);
   check('파이프라인을 바꾸면 밖 파트 칸은 잠김', (await cdp.eval(`document.querySelector('select[aria-label="신규 캐릭터 파이프라인"]').value`)) === pid && locked === rowsN, `잠긴 칸 ${locked}`);

@@ -34,7 +34,7 @@ function Cell(props: { value: number; pct?: boolean; label: string; disabled: bo
     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setText(show(props.value, props.pct)); (e.target as HTMLInputElement).blur(); } }} />;
 }
 
-export function CapacityPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean> }) {
+export function CapacityPage(props: { version: number; readOnly: boolean; onApply: (e: Edit) => Promise<boolean>; /** 다음 단계(물량)로 */ onNext?: () => void }) {
   const [view, setView] = useState<CapacityView | null>(null);
   const [field, setField] = useState<CapacityField>('headcount');
   const [horizon, setHorizon] = useState({ start: '', end: '' });
@@ -82,6 +82,10 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
       </nav>
 
       {tab === 'people' && <PeopleCard people={view.people} candidates={view.candidates} teams={view.teams} readOnly={props.readOnly} apply={apply} />}
+      {props.onNext && !props.readOnly && tab !== 'people' && (
+        <div class="next-step" role="note"><span class="small muted">인원을 넣었으면, 다음은 런칭과 업데이트의 물량입니다.</span>
+          <button type="button" class="btn sm" onClick={props.onNext}>다음: 런칭 물량 설계 →</button></div>
+      )}
 
       {tab === 'capacity' && <section class="card">
         <div class="card-head">

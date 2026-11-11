@@ -107,7 +107,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("[...document.querySelectorAll('.scenario-name')].find(b => b.textContent.includes('FX 충원')).click()");
   await sleep(400);
   const expected = await cdp.eval(`(() => { const hs = ${headers}; const i = hs.indexOf('FX 충원'); return i < 0 ? null : (${launchCells})[i].match(/\\d+월 \\d+일/)?.[0]; })()`);
-  await clickText(cdp, '원본에 반영');
+  await cdp.eval("[...document.querySelectorAll('.apply-step button')].find(b => b.textContent.includes('원본에 반영')).click()");
   await sleep(150);
   await clickText(cdp, '반영');
   await cdp.waitUntil("document.querySelector('.pill.ok')?.textContent.includes('반영됨')", 10000);

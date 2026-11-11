@@ -387,7 +387,8 @@ export function progressView(db: SqlDb, wanted: string | null): ProgressView {
 export interface SetupView {
   project: { name: string; bufferRate: number; workWeekdays: string; holidays: { date: string; name: string; kind: string }[]; jiraBase: string | null };
   horizon: { start: string; end: string };
-  parts: { partId: string; name: string; active: boolean; usedBy: number; hasProgress: boolean; headcount: number | null; utilization: number | null; aiShare: number }[];
+  /** mixed: 계획 기간 안에서 달마다 값이 다른 칸(기본 값으로 바꾸면 모든 달을 덮어쓴다, docs/34 A-06) */
+  parts: { partId: string; name: string; active: boolean; usedBy: number; hasProgress: boolean; headcount: number | null; utilization: number | null; aiShare: number; mixed: { headcount: number; utilization: number } }[];
   groups: { groupId: string; name: string }[];
   resources: {
     resourceTypeId: string; name: string; groupId: string | null; groupName: string; active: boolean; used: boolean;
@@ -416,11 +417,18 @@ export function setupView(db: SqlDb): SetupView {
     const r = db.get(`SELECT ${col} AS v, count(*) AS n FROM capacity WHERE part_id = ? AND month BETWEEN ? AND ? GROUP BY ${col} ORDER BY n DESC, ${col} DESC LIMIT 1`, [partId, start, end]);
     return r ? Number(r.v) : null;
   };
+  // 달마다 다른 값이면 기본 값과 다른 달 수(0 = 모든 달이 같음)
+  const distinct = (partId: string, col: string): number => {
+    const v = common(partId, col);
+    if (v == null) return 0;
+    return Number(db.get(`SELECT count(*) AS n FROM capacity WHERE part_id = ? AND month BETWEEN ? AND ? AND ${col} <> ?`, [partId, start, end, v])?.n ?? 0);
+  };
   const parts = db.all('SELECT * FROM parts ORDER BY sort_order, part_id').map(p => ({
     partId: String(p.part_id), name: String(p.name), active: Number(p.active) === 1,
     usedBy: Number(db.get('SELECT count(*) AS n FROM resource_parts WHERE part_id = ?', [p.part_id])?.n ?? 0),
     hasProgress: !!db.get('SELECT 1 AS ok FROM progress WHERE part_id = ? LIMIT 1', [p.part_id]),
     headcount: common(String(p.part_id), 'headcount'), utilization: common(String(p.part_id), 'utilization'),
+    mixed: { headcount: distinct(String(p.part_id), 'headcount'), utilization: distinct(String(p.part_id), 'utilization') },
     aiShare: Number(db.get("SELECT share FROM effort_mix WHERE part_id = ? AND profile_id = 'AI'", [p.part_id])?.share ?? 0),
   }));
   const groups = db.all('SELECT group_id, name FROM resource_groups ORDER BY sort_order, group_id').map(g => ({ groupId: String(g.group_id), name: String(g.name) }));

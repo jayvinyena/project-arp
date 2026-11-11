@@ -133,14 +133,17 @@ const handlers: Record<string, (payload: any) => unknown> = {
 
   edit(p: { edit: LaunchEdit; editor: string }) {
     const { sql: s, session: ss } = need();
-    const changed = applyLaunchEdit(s, ss, p.edit, { editor: p.editor || '이름 없음', batchId: newBatchId() });
-    return { changed, ...view() };
+    const batchId = newBatchId();
+    const changed = applyLaunchEdit(s, ss, p.edit, { editor: p.editor || '이름 없음', batchId });
+    return { changed, batchId, ...view() };
   },
 
   /** 업데이트·유형·인력 고치기 (3단계) */
   apply(p: { edit: Edit; editor: string }) {
     const { sql: s, session: ss } = need();
-    return applyEdit(s, ss, p.edit, { editor: p.editor || '이름 없음', batchId: newBatchId() });
+    // 묶음 ID를 돌려준다: 지운 뒤 알림의 "되돌리기"(docs/34 T3)
+    const batchId = newBatchId();
+    return { ...applyEdit(s, ss, p.edit, { editor: p.editor || '이름 없음', batchId }), batchId };
   },
 
   plan(p: { planMode: PlanMode }) {

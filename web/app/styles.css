@@ -1502,3 +1502,45 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 .inline:has(> .field) > .btn.sm, .inline:has(> input) > .btn.sm, .people-head-tools > .btn.sm, .people-team-pick > .btn.sm { height: 34px; }
 /* 읽기 전용 고르기: 펼침 화살표 없이 글자처럼(고칠 수 있어 보이지 않게) */
 select.field:disabled, select:disabled.field { appearance: none; -webkit-appearance: none; background-image: none; border-color: transparent; background-color: transparent; color: var(--text-2); opacity: 1; cursor: default; }
+
+/* 알림: 되돌리기 · 닫기, 오류는 빨강(docs/34 T3 · B-36), 390에서도 화면 안에 */
+.toast { display: flex; align-items: center; gap: 10px; max-width: min(520px, calc(100vw - 32px)); }
+.toast .toast-text { flex: 1 1 auto; }
+.toast.bad { background: var(--bad); color: #fff; }
+.toast-undo { flex: none; height: 28px; padding: 0 10px; border: 1px solid currentColor; border-radius: 7px; background: transparent; color: inherit; font-weight: 650; cursor: pointer; }
+.toast-undo:hover { background: rgb(255 255 255 / 14%); }
+.toast-x { flex: none; width: 24px; height: 24px; border: 0; background: transparent; color: inherit; opacity: .7; font-size: 16px; cursor: pointer; }
+.toast-x:hover { opacity: 1; }
+@media (max-width: 640px) { .toast { left: 16px; right: 16px; max-width: none; } }
+
+/* 표 칸 아래 작은 알림(달마다 다름 등) */
+.cell-note { display: block; margin-top: 2px; font-size: 11px; color: var(--warn); text-align: right; white-space: nowrap; }
+
+/* 아직 골라야 하는 칸 */
+select.field.need { border-color: var(--warn); color: var(--warn); }
+
+/* 현황판 칸 · 에셋 요약을 눌러 거르기(docs/34 B-03 · B-21) */
+.heat-btn { all: unset; display: block; width: 100%; height: 100%; text-align: center; cursor: pointer; border-radius: 4px; }
+.heat-btn:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+.heat-btn:focus-visible { box-shadow: var(--ring); }
+.sum-btn { border: 1px solid transparent; background: transparent; padding: 2px 8px; border-radius: 12px; font: inherit; cursor: pointer; }
+.sum-btn:hover { background: var(--hover); }
+.sum-btn.on { border-color: currentColor; background: var(--surface); }
+
+/* 업데이트 계획: 맞추는 방법 · 상세 배치 · 계산 막힘 자리(docs/34 C-03 · C-04 · C-24) */
+.fix-link { display: inline-block; margin-top: 4px; color: var(--accent-ink); }
+.drawer-batches { display: grid; gap: 6px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.drawer-batch { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; }
+.blocked-card .card-body { padding: 24px; text-align: center; }
+
+/* 런칭: 물량 표 위 결과 줄 · 거꾸로 계산 → 시나리오(docs/34 C-05 · C-06) */
+.outcome-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: -6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.outcome-main { font-size: 14px; display: inline-flex; gap: 6px; align-items: center; }
+.outcome-delta { margin-left: auto; min-width: 180px; text-align: right; color: var(--text-2); }
+.ask-make { margin-top: 8px; align-self: flex-start; }
+
+/* 변경 이력 값: 글자는 왼쪽, 숫자만 있는 값도 같은 칸 */
+table.grid.hist-table td.hist-val { font-variant-numeric: tabular-nums; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 다음 단계 띠(docs/34 A-11) */
+.next-step { display: flex; align-items: center; gap: 12px; justify-content: flex-end; flex-wrap: wrap; padding: 12px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; }

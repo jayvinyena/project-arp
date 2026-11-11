@@ -25,6 +25,9 @@ const guess = (v: SetupView, from: string, candidates: string[]): string => {
 
 type Props<R> = { v: SetupView; req: R; apply: (e: Edit) => Promise<boolean>; onClose: () => void };
 
+/** 옮길 곳을 아직 고르지 않음(고르기 전에는 바꾸지 않는다) */
+const UNPICKED = '\u0000';
+
 export function MoveDialog(props: Props<MoveRequest | PipelineRequest>) {
   return props.req.kind === 'cell' ? <CellMove {...(props as Props<MoveRequest>)} /> : <PipelineMove {...(props as Props<PipelineRequest>)} />;
 }
@@ -73,7 +76,7 @@ function CellMove(props: Props<MoveRequest>) {
               같은 분류({r.groupName || '분류 없음'})에서 {name(req.partId)}을(를) 거치는 리소스 {same.length}종도 함께({same.map(x => x.name).join(', ')})</label>}
           </div>
           <div class="dialog-foot"><button type="button" class="btn sm ghost" onClick={props.onClose}>그만두기</button>
-            <button type="button" class="btn sm primary" disabled={mode === 'move' && !to} onClick={() => void run()}>{mode === 'move' ? '옮기기' : '지우기'}</button></div>
+            <button type="button" class={`btn sm ${mode === 'move' ? 'primary' : 'danger'}`} disabled={mode === 'move' && !to} onClick={() => void run()}>{mode === 'move' ? '옮기기' : '기록까지 지우기'}</button></div>
         </Dialog>
     );
   }
@@ -90,9 +93,13 @@ function PipelineMove(props: Props<PipelineRequest>) {
   const [moves, setMoves] = useState<Record<string, string>>(() => {
     const free = steps.filter(s => !r.efforts[s]);
     const m: Record<string, string> = {};
-    for (const p of outside) { const g = guess(v, p, free.filter(x => !Object.values(m).includes(x))); m[p] = g || ''; }
+    // 옮길 곳을 찾지 못하면 "고르지 않음"(기록 지우기를 기본으로 두지 않는다, docs/34 A-22)
+    for (const p of outside) { const g = guess(v, p, free.filter(x => !Object.values(m).includes(x))); m[p] = g || UNPICKED; }
     return m;
   });
+  const unpicked = outside.filter(p => moves[p] === UNPICKED);
+  const dropping = outside.filter(p => moves[p] === '');
+  const lost = dropping.reduce((n, p) => n + (r.efforts[p].done || 0) + (r.efforts[p].assets || 0), 0);
   const run = async () => {
     const ok = await props.apply({ kind: 'resourcePipeline', resourceTypeIds: [r.resourceTypeId], pipelineId: pl.pipelineId,
       moves: outside.map(p => ({ fromPartId: p, toPartId: moves[p] || null })) });
@@ -112,9 +119,10 @@ function PipelineMove(props: Props<PipelineRequest>) {
                 return (
                   <tr class="row"><td><b>{name(p)}</b> <span class="small faint">공수 {e.base ?? '—'}</span></td>
                     <td class="small">{e.done || e.assets ? `진척 ${e.done} · 에셋 ${e.assets}` : <span class="faint">없음</span>}</td>
-                    <td><select class="field" aria-label={`${name(p)} 옮길 곳`} value={moves[p]} onChange={ev => setMoves({ ...moves, [p]: (ev.target as HTMLSelectElement).value })}>
-                      <option value="">지우기(기록까지)</option>
+                    <td><select class={`field${moves[p] === UNPICKED ? ' need' : ''}`} aria-label={`${name(p)} 옮길 곳`} value={moves[p]} onChange={ev => setMoves({ ...moves, [p]: (ev.target as HTMLSelectElement).value })}>
+                      <option value={UNPICKED} disabled>옮길 곳을 고르십시오</option>
                       {steps.map(s => <option value={s}>{name(s)}{r.efforts[s] ? ' (이미 거침 · 합침)' : ''}</option>)}
+                      <option value="">지우기(기록까지)</option>
                     </select></td></tr>
                 );
               })}
@@ -122,7 +130,8 @@ function PipelineMove(props: Props<PipelineRequest>) {
           </table>
         </div>
         <div class="dialog-foot"><button type="button" class="btn sm ghost" onClick={props.onClose}>그만두기</button>
-          <button type="button" class="btn sm primary" onClick={() => void run()}>파이프라인 바꾸기</button></div>
+          {unpicked.length > 0 && <span class="small warn-text" style="margin-right: auto">옮길 곳을 고르지 않은 파트 {unpicked.length}개</span>}
+          <button type="button" class={`btn sm ${lost > 0 ? 'danger' : 'primary'}`} disabled={unpicked.length > 0} onClick={() => void run()}>{lost > 0 ? `기록 ${lost}개 지우고 바꾸기` : '파이프라인 바꾸기'}</button></div>
       </Dialog>
   );
 }

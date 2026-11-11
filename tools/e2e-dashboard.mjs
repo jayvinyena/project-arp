@@ -70,10 +70,22 @@ await withBrowser(async (cdp, base) => {
   // 처리할 것 → 그 에셋 카드가 에셋 화면에서 바로 열린다
   const tabs = await cdp.eval("[...document.querySelectorAll('.todo-tabs button')].map(b => b.textContent).join(',')");
   check('처리할 것 탭: 검수 요청 1 · 수정 1 · 보류 1', tabs.includes('검수 요청1') && tabs.includes('수정1') && tabs.includes('보류1'), tabs);
+  // 처음 탭 = 가장 급한 비어 있지 않은 탭(마감 지남 → 수정 → 검수 요청 …, docs/34 B-20)
+  const firstTab = await cdp.eval("document.querySelector('.todo-tabs button.on')?.textContent ?? ''");
+  check('처리할 것 처음 탭은 가장 급한 탭(수정)', firstTab.startsWith('수정'), firstTab);
+  const want = await cdp.eval("document.querySelector('.todo-item b, .todo-item .todo-name')?.textContent ?? document.querySelector('.todo-item').textContent");
   await cdp.eval("document.querySelector('.todo-item').click()");
   await cdp.waitUntil("document.querySelector('.asset-card-window')", 10000).catch(() => {});
   const title = await cdp.eval("document.querySelector('.asset-card-window input[aria-label=\"에셋 이름\"]')?.value ?? ''");
-  check('처리할 것을 누르면 에셋 화면에서 그 카드가 열린다', title === '닌자맛 쿠키', title);
+  check('처리할 것을 누르면 에셋 화면에서 그 카드가 열린다', !!title && want.includes(title), `${title} / ${want}`);
+  // 카드를 닫으면(Esc) 현황판으로 돌아온다(docs/34 B-02)
+  await cdp.eval("document.querySelector('.asset-card-window').focus()");
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await cdp.waitUntil("!!document.querySelector('.dash-tiles')", 8000).catch(() => {});
+  check('카드를 닫으면(Esc) 현황판으로 돌아오고 고른 탭이 그대로', !!(await cdp.eval("document.querySelector('.dash-tiles')")) && (await cdp.eval("document.querySelector('.todo-tabs button.on')?.textContent ?? ''")).startsWith('수정'));
+  await cdp.eval("document.querySelector('.todo-item').click()");
+  await cdp.waitUntil("document.querySelector('.asset-card-window')", 10000).catch(() => {});
 
   // 에셋이 없는 예시
   // 업데이트 계획: 배치가 있는 업데이트 아래 배치 줄(docs/33)

@@ -7,7 +7,6 @@ import { IconX } from './icons.tsx';
 import { fmtDateTime } from '../lib/format.ts';
 
 const ACTION: Record<string, string> = { UPDATE: '바꿈', INSERT: '더함', DELETE: '지움' };
-const show = (v: unknown) => (v === undefined ? '—' : v === null ? '빈칸' : typeof v === 'object' ? JSON.stringify(v).slice(0, 80) : String(v));
 
 export function HistoryPage(props: { version: number; readOnly: boolean; onUndo: (batchId: string, force: boolean) => Promise<{ ok: boolean; needsForce?: boolean }> }) {
   const [data, setData] = useState<{ batches: HistoryBatch[]; total: number } | null>(null);
@@ -53,11 +52,11 @@ export function HistoryPage(props: { version: number; readOnly: boolean; onUndo:
               {open === b.batchId && (
                 <div class="table-wrap">
                   <table class="grid hist-table">
-                    <thead><tr><th>동작</th><th>대상</th><th>위치</th><th>항목</th><th class="n">이전</th><th class="n">이후</th></tr></thead>
+                    <thead><tr><th>동작</th><th>대상</th><th>위치</th><th>항목</th><th>이전</th><th>이후</th></tr></thead>
                     <tbody>
                       {b.entries.map(e => (
-                        <tr class="row"><td>{ACTION[e.action] ?? e.action}</td><td>{e.target}</td><td class="small">{e.key}</td><td>{e.field ?? '—'}</td>
-                          <td class="n num">{show(e.old)}</td><td class="n num">{show(e.next)}</td></tr>
+                        <tr class="row"><td>{ACTION[e.action] ?? e.action}</td><td>{e.targetName}</td><td class="small">{e.where}</td><td>{e.fieldName}</td>
+                          <td class="hist-val">{e.oldText}</td><td class="hist-val">{e.nextText}</td></tr>
                       ))}
                     </tbody>
                   </table>

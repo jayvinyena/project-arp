@@ -1,5 +1,5 @@
 // 새 프로젝트 마법사: 기본 정보 → 파트 → 리소스 → 런칭
-import { useState } from 'preact/hooks';
+import { useState, useRef } from 'preact/hooks';
 import type { NewProjectInput, NewPart, NewResource, InputProblem } from '../../../core/new-project.ts';
 import { defaultNewProject, checkNewProject, fixedKoreanHolidays, monthsBetween } from '../../../core/new-project.ts';
 import { IconLogo, IconPlus, IconX, IconAlert } from './icons.tsx';
@@ -212,7 +212,9 @@ function Launch(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) 
 
 export function NewProject(props: { onCancel: () => void; onCreate: (input: NewProjectInput) => Promise<void> }) {
   const [v, setV] = useState<NewProjectInput>(() => defaultNewProject());
+  const initial = useRef(JSON.stringify(defaultNewProject()));
   const [step, setStep] = useState(0);
+  const [quit, setQuit] = useState(false);
   const [shown, setShown] = useState<InputProblem[]>([]);
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<NewProjectInput>) => { setV(prev => ({ ...prev, ...patch })); setShown([]); };
@@ -252,7 +254,10 @@ export function NewProject(props: { onCancel: () => void; onCreate: (input: NewP
           {step === 3 && <Launch v={v} set={set} />}
         </div>
         <div class="wizard-foot">
-          <button type="button" class="btn ghost" onClick={props.onCancel}>그만두기</button>
+          {/* 입력한 것이 있으면 버리기 전에 한 번 묻는다(docs/34 A-07) */}
+          {quit
+            ? <><span class="small warn-text">입력한 내용을 버릴까요?</span><button type="button" class="btn ghost" onClick={() => setQuit(false)}>계속 입력</button><button type="button" class="btn danger" onClick={props.onCancel}>버리기</button></>
+            : <button type="button" class="btn ghost" onClick={() => (step > 0 || JSON.stringify(v) !== initial.current ? setQuit(true) : props.onCancel())}>그만두기</button>}
           <div style="display: flex; gap: 8px">
             {step > 0 && <button type="button" class="btn" onClick={() => { setStep(step - 1); setShown([]); }}>이전</button>}
             <button type="button" class="btn primary" disabled={busy} onClick={() => void next()}>

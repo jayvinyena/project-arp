@@ -389,7 +389,9 @@ export function AssetsPage(props: {
   onExport: (updateId: string | null) => Promise<void>;
   onImport: () => Promise<void>;
   /** 다른 화면에서 넘어올 때: 업데이트 · 리소스 종류 · 바로 열 에셋 */
-  focus?: { updateId: string; resourceTypeId?: string; assetId?: string } | null;
+  focus?: { updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; back?: 'dashboard' } | null;
+  /** 카드를 닫으면 넘어온 화면으로 */
+  onBack?: (page: 'dashboard') => void;
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
   updateId: string | null; onUpdate: (id: string) => void;
 }) {
@@ -415,17 +417,22 @@ export function AssetsPage(props: {
   const [adding, setAdding] = useState(false);
   const [add, setAdd] = useState({ rt: '', names: '' });
   const [newBatch, setNewBatch] = useState({ name: '', due: '' });
-  const [bulk, setBulk] = useState({ stage: '', batch: '', part: '', partStatus: 'OMIT' as AssetStatus });
+  // 일괄 고치기는 고르기 전에는 단추가 꺼져 있다(기본값으로 크게 바뀌지 않게, docs/34 B-06). batch '' = 아직 고르지 않음('' = 미배정)
+  const [bulk, setBulk] = useState({ stage: '', batch: '', part: '', partStatus: '' as AssetStatus | '' });
   const [limit, setLimit] = useState(300);
   const [dragIds, setDragIds] = useState<string[]>([]);
   const [over, setOver] = useState<{ col: string; index: number } | null>(null);
   const [confirm, setConfirm] = useState<{ ids: string[]; stage: Stage; text: string } | null>(null);
   const [focusRt, setFocusRt] = useState<string | null>(props.focus?.resourceTypeId ?? null);
+  const [backTo, setBackTo] = useState<'dashboard' | null>(null);
 
   useEffect(() => {
     if (!props.focus) return;
     setUpdateId(props.focus.updateId); setFocusRt(props.focus.resourceTypeId ?? null); setTab('assets');
-    if (props.focus.assetId) { clearFilters(); setOpenId(props.focus.assetId); }
+    const f = props.focus;
+    // 다른 화면의 칸 · 줄에서 넘어오면 그 거르기로(파트 · 담당 · 상태, docs/34 B-21)
+    if (f.partId || f.who || f.status) { clearFilters(); if (f.partId) setTeam(f.partId); if (f.who) setWho(f.who); if (f.status) setStatus(f.status); setView('list'); }
+    if (f.assetId) { clearFilters(); setOpenId(f.assetId); setBackTo(f.back ?? null); }
   }, [props.focus]);
   useEffect(() => { void rpc.assets(updateId).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, updateId]);
   useEffect(() => { try { localStorage.setItem('arp.assets.view', view); localStorage.setItem('arp.assets.boardBy', boardBy); localStorage.setItem('arp.assets.groupBy', groupBy); localStorage.setItem('arp.assets.team', team); localStorage.setItem('arp.assets.pipe', pipe); } catch { /* 없어도 된다 */ } }, [view, boardBy, groupBy, team, pipe]);
@@ -458,6 +465,7 @@ export function AssetsPage(props: {
   const attrOptions = new Map<string, Set<string>>();
   for (const a of v.assets) for (const x of a.attrs) { if (!attrOptions.has(x.name)) attrOptions.set(x.name, new Set()); attrOptions.get(x.name)!.add(x.value); }
   const [attrName, attrValue] = attrF === 'all' ? ['', ''] : JSON.parse(attrF) as [string, string];
+  const isOverdue = (a: AssetItem) => { const d = a.dueDate ?? (a.batchId ? v.batches.find(b => b.batchId === a.batchId)?.dueDate ?? null : null); return !!d && d < today() && a.stage !== 'DONE'; };
   const filtered = [group, cat, batch, team, who, status, attrF].filter(x => x !== 'all').length + (q.trim() ? 1 : 0);
   const query = q.trim().toLowerCase();
   const shown = v.assets.filter(a => rtIds.has(a.resourceTypeId)
@@ -465,7 +473,7 @@ export function AssetsPage(props: {
     && (cat === 'all' || (cat === 'none' ? !a.category : a.category === cat))
     && (team === 'all' || (a.parts[team] && a.parts[team].status !== 'OMIT'))
     && (who === 'all' || whoOf(a).includes(who))
-    && (status === 'all' || (team !== 'all' ? a.parts[team]?.status === status : Object.values(a.parts).some(p => p.status === status)))
+    && (status === 'all' || (status === 'OVERDUE' ? isOverdue(a) : team !== 'all' ? a.parts[team]?.status === status : Object.values(a.parts).some(p => p.status === status)))
     && (attrF === 'all' || a.attrs.some(x => x.name === attrName && x.value === attrValue))
     && (!query || [a.name, a.code, a.category, a.jiraKey, ...a.attrs.map(x => x.value)].some(x => (x ?? '').toLowerCase().includes(query))));
   const count = (pred: (a: AssetItem) => boolean) => shown.filter(pred).length;
@@ -547,9 +555,10 @@ export function AssetsPage(props: {
       <b>{shown.length}개</b>
       {stages.map(s => <span class="sum-item"><span class={`sum-dot${s.id === 'DONE' ? ' st-DONE' : s.id === 'TODO' ? ' st-TODO' : ' st-WIP'}`} />{s.name} {count(a => a.stage === s.id)}</span>)}
       <span class="sum-sep" />
-      <span class="sum-item warn-num">검수 요청 {count(a => Object.values(a.parts).some(p => p.status === 'REVIEW'))}</span>
-      <span class="sum-item bad-num">수정 {count(a => Object.values(a.parts).some(p => p.status === 'RETAKE'))}</span>
-      <span class="sum-item">마감 지남 {count(a => !!dueOf(a) && dueOf(a)! < t0 && a.stage !== 'DONE')}</span>
+      {/* 누르면 그 상태로 거른다(다시 누르면 풀림, docs/34 B-03) */}
+      <button type="button" class={`sum-item sum-btn warn-num${status === 'REVIEW' ? ' on' : ''}`} aria-pressed={status === 'REVIEW'} onClick={() => setStatus(status === 'REVIEW' ? 'all' : 'REVIEW')}>검수 요청 {count(a => Object.values(a.parts).some(p => p.status === 'REVIEW'))}</button>
+      <button type="button" class={`sum-item sum-btn bad-num${status === 'RETAKE' ? ' on' : ''}`} aria-pressed={status === 'RETAKE'} onClick={() => setStatus(status === 'RETAKE' ? 'all' : 'RETAKE')}>수정 {count(a => Object.values(a.parts).some(p => p.status === 'RETAKE'))}</button>
+      <button type="button" class={`sum-item sum-btn${status === 'OVERDUE' ? ' on' : ''}`} aria-pressed={status === 'OVERDUE'} onClick={() => setStatus(status === 'OVERDUE' ? 'all' : 'OVERDUE')}>마감 지남 {count(isOverdue)}</button>
     </div>
   );
 
@@ -614,6 +623,7 @@ export function AssetsPage(props: {
             <select class={`field${status !== 'all' ? ' on' : ''}`} aria-label="상태 거르기" value={status} onChange={e => setStatus((e.target as HTMLSelectElement).value)}>
               <option value="all">{team !== 'all' ? `모든 ${v.parts.find(p => p.partId === team)?.name ?? ''} 상태` : '모든 상태'}</option>
               {STATUS.map(x => <option value={x.s}>{x.label}</option>)}
+              <option value="OVERDUE">마감 지남</option>
             </select>
             <select class={`field${attrF !== 'all' ? ' on' : ''}`} aria-label="속성 거르기" value={attrF} onChange={e => setAttrF((e.target as HTMLSelectElement).value)} disabled={attrOptions.size === 0}>
               <option value="all">{attrOptions.size ? '모든 속성' : '속성 없음'}</option>
@@ -644,17 +654,17 @@ export function AssetsPage(props: {
               : <>
                 <b class="small">{selIds.length}개 선택</b>
                 {!ro && <>
-                  <select class="field" aria-label="일괄 단계" value={bulk.stage || 'DONE'} onChange={e => setBulk({ ...bulk, stage: (e.target as HTMLSelectElement).value })}>{stages.map(s => <option value={s.id}>{s.name}</option>)}</select>
-                  <button type="button" class="btn sm" onClick={() => move(selIds, bulk.stage || 'DONE')}>단계 옮기기</button>
+                  <select class="field" aria-label="일괄 단계" value={bulk.stage} onChange={e => setBulk({ ...bulk, stage: (e.target as HTMLSelectElement).value })}><option value="" disabled>단계 고르기…</option>{stages.map(s => <option value={s.id}>{s.name}</option>)}</select>
+                  <button type="button" class="btn sm" disabled={!bulk.stage} onClick={() => move(selIds, bulk.stage as Stage)}>단계 옮기기</button>
                   <span class="bulk-sep" />
                   <select class="field" aria-label="옮길 배치" value={bulk.batch} onChange={e => setBulk({ ...bulk, batch: (e.target as HTMLSelectElement).value })}>
-                    <option value="">미배정</option>{v.batches.map(b => <option value={b.batchId}>{b.name}</option>)}
+                    <option value={''} disabled>배치 고르기…</option><option value="">미배정</option>{v.batches.map(b => <option value={b.batchId}>{b.name}</option>)}
                   </select>
-                  <button type="button" class="btn sm" onClick={() => void apply({ kind: 'assetField', assetIds: selIds, field: 'batch_id', value: bulk.batch || null })}>배치 옮기기</button>
+                  <button type="button" class="btn sm" disabled={bulk.batch === ''} onClick={() => void apply({ kind: 'assetField', assetIds: selIds, field: 'batch_id', value: bulk.batch || null })}>배치 옮기기</button>
                   <span class="bulk-sep" />
                   <select class="field" aria-label="일괄 파트" value={bulk.part || v.parts[0]?.partId} onChange={e => setBulk({ ...bulk, part: (e.target as HTMLSelectElement).value })}>{v.parts.map(p => <option value={p.partId}>{p.name}</option>)}</select>
-                  <select class="field" aria-label="일괄 파트 상태" value={bulk.partStatus} onChange={e => setBulk({ ...bulk, partStatus: (e.target as HTMLSelectElement).value as AssetStatus })}>{STATUS.map(x => <option value={x.s}>{x.label}</option>)}</select>
-                  <button type="button" class="btn sm" title="고른 에셋의 그 파트 상태를 바꿉니다. 하지 않는 파트는 해당 없음, 나중에 하게 되면 대기로" onClick={() => void apply({ kind: 'assetPart', assetIds: selIds, partId: bulk.part || v.parts[0]?.partId, status: bulk.partStatus })}>파트 상태 바꾸기</button>
+                  <select class="field" aria-label="일괄 파트 상태" value={bulk.partStatus} onChange={e => setBulk({ ...bulk, partStatus: (e.target as HTMLSelectElement).value as AssetStatus })}><option value="" disabled>상태 고르기…</option>{STATUS.map(x => <option value={x.s}>{x.label}</option>)}</select>
+                  <button type="button" class="btn sm" disabled={!bulk.partStatus} title="고른 에셋의 그 파트 상태를 바꿉니다. 하지 않는 파트는 해당 없음, 나중에 하게 되면 대기로" onClick={() => void apply({ kind: 'assetPart', assetIds: selIds, partId: bulk.part || v.parts[0]?.partId, status: bulk.partStatus as AssetStatus })}>파트 상태 바꾸기</button>
                 </>}
                 <span style="flex: 1" />
                 <button type="button" class="btn sm ghost" onClick={() => setSel(new Set())}>선택 풀기</button>
@@ -881,7 +891,8 @@ export function AssetsPage(props: {
           </Dialog>
       )}
 
-      {open && <CardWindow view={v} asset={open} stages={stages} readOnly={ro} version={props.version} apply={apply} move={move} onClose={() => setOpenId(null)} />}
+      {open && <CardWindow view={v} asset={open} stages={stages} readOnly={ro} version={props.version} apply={apply} move={move}
+        onClose={() => { setOpenId(null); if (backTo && props.onBack) { const b = backTo; setBackTo(null); props.onBack(b); } }} />}
     </div>
   );
 }

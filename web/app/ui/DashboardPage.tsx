@@ -14,7 +14,11 @@ import { MODE_LABEL } from '../lib/modes.ts';
 
 type View = DashboardView & { forecast: { completion: string | null; status: string; batches: BatchRow[] } | null };
 const VERDICT = UPDATE_STATUS;
-const openAsset = (updateId: string, assetId: string) => window.dispatchEvent(new CustomEvent('arp:assets', { detail: { updateId, assetId } }));
+// 현황판에서 카드를 열면, 카드를 닫을 때 현황판으로 돌아온다(docs/34 B-02)
+const openAsset = (updateId: string, assetId: string) => window.dispatchEvent(new CustomEvent('arp:assets', { detail: { updateId, assetId, back: 'dashboard' } }));
+/** 현황판의 칸 · 줄 → 에셋 화면 거르기(docs/34 B-21) */
+const openAssets = (detail: { updateId: string; resourceTypeId?: string; partId?: string; who?: string; status?: string }) => window.dispatchEvent(new CustomEvent('arp:assets', { detail }));
+const TAB_KEY = 'arp.dash.todoTab';
 
 /** 추이: 누적 완료 공수(실제) 대 계획선. 오늘 · 목표일 · 완료 예정 표시, 주마다 가로 위치에 따라 값 보기 */
 function BurnUp(props: { v: View }) {
@@ -117,7 +121,9 @@ export function DashboardPage(props: {
 }) {
   const [updateId, setUpdateId] = useState<string | null>(props.updateId);
   const [v, setV] = useState<View | null>(null);
-  const [tab, setTab] = useState<keyof DashboardView['todo']>('review');
+  // 처리할 것 탭: 고른 탭은 이 탭(브라우저)에 기억, 처음엔 가장 급한 비어 있지 않은 탭(docs/34 B-20)
+  const [tab, setTabRaw] = useState<keyof DashboardView['todo'] | null>(() => { try { return (sessionStorage.getItem(TAB_KEY) as keyof DashboardView['todo'] | null); } catch { return null; } });
+  const setTab = (k: keyof DashboardView['todo']) => { setTabRaw(k); try { sessionStorage.setItem(TAB_KEY, k); } catch { /* 저장소 없음 */ } };
   // 단계 분포 묶음: 항목별 · 파이프라인별(docs/32 8). 고른 것은 이 브라우저에 남긴다
   const [stageBy, setStageBy] = useState<'group' | 'pipeline'>(() => { try { return localStorage.getItem('arp.dash.stageBy') === 'pipeline' ? 'pipeline' : 'group'; } catch { return 'group'; } });
   const pickStageBy = (x: 'group' | 'pipeline') => { setStageBy(x); try { localStorage.setItem('arp.dash.stageBy', x); } catch { /* 저장소 없음 */ } };
@@ -133,7 +139,8 @@ export function DashboardPage(props: {
     { k: 'stale', label: '오래 머문 진행', empty: '2주 넘게 진행 중인 작업이 없습니다.', since: '시작' },
     { k: 'hold', label: '보류', empty: '보류된 작업이 없습니다.', since: '' },
   ];
-  const cur = TABS.find(x => x.k === tab)!;
+  const urgent = (['overdue', 'retake', 'review', 'stale', 'hold'] as const).find(k => v.todo[k].length) ?? 'review';
+  const cur = TABS.find(x => x.k === (tab ?? urgent))!;
   const heat = (r: number) => `color-mix(in srgb, var(--accent) ${Math.round(8 + r * 52)}%, var(--surface))`;
   const ahead = s.aheadWorkdays;
 
@@ -175,6 +182,7 @@ export function DashboardPage(props: {
           {next ? <>
             <b class={`stat-num${next.daysLeft! < 0 ? ' bad-num' : next.daysLeft! <= 14 ? ' warn-num' : ''}`}>{next.daysLeft! < 0 ? `${-next.daysLeft!}일 지남` : `D-${next.daysLeft}`}</b>
             <span class="small faint">{next.name} · {fmtShortDate(next.due)} · 진행 {fmtPct(next.progress)}</span>
+            {(() => { const f = v.forecast?.batches.find(x => x.batchId === next.batchId); return f ? <span class="batch-when small">완료 예정 {batchWhen(f)} <BatchPill b={f} /></span> : null; })()}
           </> : <><b class="stat-num">—</b><span class="small faint">마감일이 있는 배치가 없습니다</span></>}
         </div>
       </div>
@@ -190,7 +198,7 @@ export function DashboardPage(props: {
           <div class="card-body" style="padding-top: 0">
             <nav class="todo-tabs" role="tablist" aria-label="처리할 것">
               {TABS.map(x => (
-                <button type="button" role="tab" aria-selected={tab === x.k} class={tab === x.k ? 'on' : ''} onClick={() => setTab(x.k)}>
+                <button type="button" role="tab" aria-selected={cur.k === x.k} class={cur.k === x.k ? 'on' : ''} onClick={() => setTab(x.k)}>
                   {x.label}<span class={`todo-n${v.todo[x.k].length ? (x.k === 'retake' || x.k === 'overdue' ? ' bad' : ' warn') : ''}`}>{v.todo[x.k].length}</span>
                 </button>
               ))}
@@ -204,12 +212,12 @@ export function DashboardPage(props: {
 
       <section class="card">
         <div class="card-head"><div><h2>항목 × 파트 진행</h2><p class="small muted" style="margin-top: 2px">칸 = 그 파트가 끝낸 수 / 만들 수(물량 − 외주). 진할수록 많이 끝났습니다. 빗금은 거치지 않는 파트입니다.</p></div>
-          <button type="button" class="btn sm" onClick={() => props.onGo('progress')}>작업 진척에서 보기</button></div>
+          {!props.viewer && <button type="button" class="btn sm" onClick={() => props.onGo('progress')}>작업 진척에서 보기</button>}</div>
         <div class="card-body" style="padding-top: 4px">
           <div class="table-wrap ref-wrap">
             <table class="grid ref dash-matrix">
               <colgroup><col />{v.parts.map(() => <col class="heat-col" />)}<col style="width: 170px" /></colgroup>
-              <thead><tr><th>리소스</th>{v.parts.map(p => <th class="c">{p.name}</th>)}<th>전체(공수 기준)</th></tr></thead>
+              <thead><tr><th>리소스</th>{v.parts.map(p => <th class="c">{p.name}</th>)}<th title="끝낸 파트 작업의 기본 공수 ÷ 전체 공수(작업 진척의 끝까지 완료와 다릅니다)">진행(공수)</th></tr></thead>
               <tbody>
                 {v.matrix.map(g => (
                   <>
@@ -219,8 +227,9 @@ export function DashboardPage(props: {
                         <td><b>{r.name}</b><span class="small faint"> · {r.need}개</span></td>
                         {r.cells.map((c, i) => c == null
                           ? <td class="heat off" aria-label={`${r.name} ${v.parts[i].name}: 거치지 않음`} />
-                          : <td class="heat" style={{ background: heat(c.rate) }} title={`${r.name} · ${v.parts[i].name}: ${c.done} / ${c.need} (${fmtPct(c.rate)})`}>
-                              <span class={c.rate >= 0.6 ? 'heat-text strong' : 'heat-text'}>{c.done} / {c.need}</span>
+                          : <td class="heat" style={{ background: heat(c.rate) }}>
+                              <button type="button" class="heat-btn" title={`${r.name} · ${v.parts[i].name}: ${c.done} / ${c.need} (${fmtPct(c.rate)}) — 누르면 에셋에서 봅니다`} aria-label={`${r.name} ${v.parts[i].name} ${c.done} / ${c.need} 에셋에서 보기`}
+                                onClick={() => openAssets({ updateId: v.updateId!, resourceTypeId: r.resourceTypeId, partId: v.parts[i].partId })}><span class={c.rate >= 0.6 ? 'heat-text strong' : 'heat-text'}>{c.done} / {c.need}</span></button>
                             </td>)}
                         <td><span class="share"><span class="num small">{fmtPct(r.rate)}</span><span class="bar"><span class={`fill${r.rate >= 1 ? ' done' : ''}`} style={{ width: `${Math.min(100, r.rate * 100)}%` }} /></span></span></td>
                       </tr>
@@ -317,7 +326,7 @@ export function DashboardPage(props: {
                 <tbody>
                   {v.people.rows.map(r => (
                     <tr class={`row${r.name ? '' : ' muted-row'}`}>
-                      <td>{r.name ? <b>{r.name}</b> : <span class="faint">담당 없음</span>}{r.name && !r.inRoster && <span class="pill plain warn people-miss" title="작업자 명단에 없는 이름입니다. 인력 › 작업자 › 담당에서 찾기로 더할 수 있습니다">명단에 없음</span>}</td>
+                      <td>{r.name ? <button type="button" class="link-btn" title="이 담당의 에셋만 보기" onClick={() => openAssets({ updateId: v.updateId!, who: r.name! })}><b>{r.name}</b></button> : <span class="faint">담당 없음</span>}{r.name && !r.inRoster && <span class="pill plain warn people-miss" title="작업자 명단에 없는 이름입니다. 인력 › 작업자 › 담당에서 찾기로 더할 수 있습니다">명단에 없음</span>}</td>
                       <td class="small">{r.team ?? <span class="faint">—</span>}</td>
                       {([r.todo, r.wip, r.review, r.retake, r.hold] as number[]).map((n, i) => <td class={`n num${n === 0 ? ' faint' : i === 3 && n ? ' bad-text' : i === 2 && n ? ' warn-text' : ''}`}>{n}</td>)}
                       <td class={`n num${r.overdue ? ' bad-text' : ' faint'}`}>{r.overdue}</td>

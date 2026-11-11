@@ -27,7 +27,8 @@ export interface AdvisorOptions {
   minName?: string;
 }
 
-export interface Outcome { updateId: string; name: string; deadline: string | null; completion: string | null; status: string; late: number; unfinished: boolean }
+/** key = 업데이트 ID 또는 batch:배치 ID(배치 마감도 맞출 대상, docs/34 C-02) */
+export interface Outcome { key: string; updateId: string; batchId: string | null; name: string; deadline: string | null; completion: string | null; status: string; late: number; unfinished: boolean }
 export interface AdvisorStep {
   kind: 'headcount' | 'outsource' | 'volumeToMin' | 'priority';
   label: string;
@@ -116,14 +117,21 @@ function outcomes(r: PlanResult, deadline: 'freeze' | 'release'): Outcome[] {
     while (lo < hi) { const mid = (lo + hi) >> 1; if (days[mid] <= d) lo = mid + 1; else hi = mid; }
     return lo - 1;
   };
-  return r.updates.map((u: UpdateResult) => {
+  const lateOf = (unfinished: boolean, remainingDays: number, dl: string | null, completion: string | null) =>
+    unfinished ? UNFINISHED_PENALTY + remainingDays / 10
+      : dl && completion && completion > dl ? Math.max(0, days.indexOf(completion) - lastIndexOnOrBefore(dl)) : 0;
+  const ups: Outcome[] = r.updates.map((u: UpdateResult) => {
     const dl = deadline === 'freeze' ? (u.freezeDate ?? u.releaseDate) : u.releaseDate;
     const unfinished = u.status === 'UNFINISHED';
-    let late = 0;
-    if (unfinished) late = UNFINISHED_PENALTY + u.remainingDays / 10;
-    else if (dl && u.expectedCompletionDate && u.expectedCompletionDate > dl) late = Math.max(0, days.indexOf(u.expectedCompletionDate) - lastIndexOnOrBefore(dl));
-    return { updateId: u.updateId, name: u.name, deadline: dl, completion: u.expectedCompletionDate, status: u.status, late, unfinished };
+    return { key: u.updateId, updateId: u.updateId, batchId: null, name: u.name, deadline: dl, completion: u.expectedCompletionDate, status: u.status, late: lateOf(unfinished, u.remainingDays, dl, u.expectedCompletionDate), unfinished };
   });
+  // 배치: 마감일이 있는 배치는 그 마감까지(제작 완료 목표 · 출시일 고르기와 상관없이)
+  const upName = new Map(r.updates.map(u => [u.updateId, u.name]));
+  const bats: Outcome[] = (r.batches ?? []).filter(b => b.dueDate).map(b => {
+    const unfinished = b.status === 'UNFINISHED';
+    return { key: `batch:${b.batchId}`, updateId: b.updateId, batchId: b.batchId, name: `${upName.get(b.updateId) ?? b.updateId} · ${b.name}`, deadline: b.dueDate, completion: b.expectedCompletionDate, status: b.status, late: lateOf(unfinished, b.remainingDays, b.dueDate, b.expectedCompletionDate), unfinished };
+  });
+  return [...ups, ...bats];
 }
 
 export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {}): AdvisorResult {
@@ -158,9 +166,9 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
   const steps: AdvisorStep[] = [];
   const stuck = new Map<string, string>();
 
-  const windowOf = (updateId: string): string[] => {
+  const windowOf = (updateId: string, due?: string | null): string[] => {
     const u = updates.get(updateId)!;
-    const dl = deadline === 'freeze' ? (u.freeze_date ?? u.release_date) : u.release_date;
+    const dl = due !== undefined ? due : deadline === 'freeze' ? (u.freeze_date ?? u.release_date) : u.release_date;
     if (!u.start_date) return [];
     const from = u.start_date.slice(0, 7) < s.horizon_start_month ? s.horizon_start_month : u.start_date.slice(0, 7);
     const toRaw = (dl ?? `${s.horizon_end_month}-28`).slice(0, 7);
@@ -175,12 +183,13 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
   });
 
   while (!out()) {
-    const late = cur.oc.filter(o => o.late > 0 && !stuck.has(o.updateId))
-      .sort((a, b) => state.order.indexOf(a.updateId) - state.order.indexOf(b.updateId));
+    // 우선순위가 높은 업데이트부터, 같은 업데이트 안에서는 배치(마감이 이른 것)를 업데이트보다 먼저
+    const late = cur.oc.filter(o => o.late > 0 && !stuck.has(o.key))
+      .sort((a, b) => state.order.indexOf(a.updateId) - state.order.indexOf(b.updateId) || (a.batchId ? 0 : 1) - (b.batchId ? 0 : 1) || String(a.deadline).localeCompare(String(b.deadline)));
     if (!late.length) break;
     const target = late[0];
     const reason = cur.r.updates.find(u => u.updateId === target.updateId)?.reason?.partId ?? null;
-    const months = windowOf(target.updateId);
+    const months = windowOf(target.updateId, target.batchId ? target.deadline : undefined);
     const name = target.name;
     // 후보 만들기. mult는 인원·외주 한 걸음 크기 배수(작은 걸음이 효과 없을 때 키운다). 물량·우선순위는 mult 1에서만
     const gen = (mult: number) => {
@@ -192,7 +201,7 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     const tdl = target.deadline;
     const lateParts = [...new Set([
       ...(reason ? [reason] : []),
-      ...cur.r.stages.filter(g => g.updateId === target.updateId && !g.alreadyDone && (g.completionDate == null || (tdl != null && g.completionDate > tdl))).map(g => g.partId),
+      ...cur.r.stages.filter(g => g.updateId === target.updateId && (!target.batchId || g.batchId === target.batchId) && !g.alreadyDone && (g.completionDate == null || (tdl != null && g.completionDate > tdl))).map(g => g.partId),
     ])];
     for (const part of months.length ? lateParts : []) {
       if (levers.headcount) {
@@ -212,7 +221,8 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
         }
       }
     }
-    if (levers.volume && mult === 1) {
+    // 물량 줄이기는 업데이트에만(배치 작업량은 에셋 목록이라 물량을 줄여도 배치 일이 줄지 않는다)
+    if (levers.volume && mult === 1 && !target.batchId) {
       const mode = state.mins.get(target.updateId);
       const cutCost = (st: State) => {
         const a = cur.r.updates.find(u => u.updateId === target.updateId)?.requiredDays ?? 0;
@@ -252,14 +262,14 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
         const gain = cur.score - next.score;
         if (gain <= 1e-9) continue;
         // 어떤 업데이트도 지금보다 늦어지면 안 된다(다른 업데이트를 희생해 맞추지 않는다)
-        const prev = new Map(cur.oc.map(o => [o.updateId, o.late]));
-        if (next.oc.some(o => o.late > (prev.get(o.updateId) ?? 0) + 1e-9)) continue;
+        const prev = new Map(cur.oc.map(o => [o.key, o.late]));
+        if (next.oc.some(o => o.late > (prev.get(o.key) ?? 0) + 1e-9)) continue;
         const value = gain / (c.step.cost + 0.5);
         if (!best || value > best.value) {
-          const before = new Map(cur.oc.map(o => [o.updateId, o]));
+          const before = new Map(cur.oc.map(o => [o.key, o]));
           let days = 0; let rescued = 0;
           for (const o of next.oc) {
-            const b = before.get(o.updateId);
+            const b = before.get(o.key);
             if (!b) continue;
             if (b.unfinished && !o.unfinished) rescued += 1;
             else if (!b.unfinished && !o.unfinished) days += b.late - o.late;
@@ -271,7 +281,7 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     }
     if (!best && out()) break;
     if (!best) {
-      stuck.set(target.updateId, !tried
+      stuck.set(target.key, !tried
         ? '허용한 수단을 다 사용했습니다(상한에 닿았거나 더 줄일 물량이 없습니다)'
         : '남은 수단으로는 더 당겨지지 않습니다(상한을 올리거나 다른 수단을 켜십시오)');
       continue;
@@ -349,7 +359,7 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     actions,
     runs,
     ms: now() - t0,
-    stuck: after.filter(o => o.late > 0).map(o => ({ name: o.name, why: stuck.get(o.updateId) ?? '계산 상한(횟수·시간)에 닿아 여기서 멈췄습니다' })),
+    stuck: after.filter(o => o.late > 0).map(o => ({ name: o.name, why: stuck.get(o.key) ?? '계산 상한(횟수·시간)에 닿아 여기서 멈췄습니다' })),
     limited,
   };
 }

@@ -18,11 +18,31 @@ const FIELD_NAME: Record<string, string> = {
   release_date: '출시', priority: '우선순위', days: '1개당 인·일', spent_days: '실투입', status: '상태', update_type_id: '유형', headcount: '인원', utilization: '가동률',
   productivity: '생산성', outsource_days: '외주', support_days: '지원', completed_qty: '완료', horizon: '계획 기간', share: '비율', overlap_rate: '겹침률',
   sort_order: '순서', active: '사용', group_id: '분류', rework_rate: '재작업률', buffer_rate: '여유율', work_weekdays: '근무 요일', value: '값',
-  tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', code: '리소스명', category: '세부 분류', team: '소속팀', email: '이메일', important: '중요', pipeline_id: '파이프라인', seq: '단계 순서', note: '메모', due_date: '마감일', done_at: '완료일', started_at: '시작일',
+  tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', code: '에셋 코드', category: '세부 분류', team: '소속팀', email: '이메일', important: '중요', pipeline_id: '파이프라인', seq: '단계 순서', note: '메모', due_date: '마감일', done_at: '완료일', started_at: '시작일',
   assignee: '담당', retakes: '리테이크', as_of: '기준일', image: '이미지', url: '주소', title: '제목', body: '내용',
 };
 
-export interface HistoryEntry { logId: number; action: string; target: string; key: string; field: string | null; old: unknown; next: unknown }
+/** targetName · fieldName · where · oldText · nextText = 사람이 읽는 이름과 값(표 이름 · 칸 이름 · 리소스 · 파트 · 달 이름, 비율은 %, docs/34 A-05) */
+export interface HistoryEntry { logId: number; action: string; target: string; key: string; field: string | null; old: unknown; next: unknown;
+  targetName: string; fieldName: string; where: string; oldText: string; nextText: string }
+
+/** 비율(0 ~ 1)로 적힌 칸: %로 보인다 */
+const RATIO_FIELDS = new Set(['utilization', 'share', 'overlap_rate', 'rework_rate', 'buffer_rate', 'reuse_rate', 'default_overlap_rate', 'load_warn_rate', 'load_over_rate', 'load_critical_rate']);
+const showValue = (field: string | null, v: unknown): string => {
+  if (v === undefined) return '—';
+  if (v === null) return '빈칸';
+  if (typeof v === 'number' && field && RATIO_FIELDS.has(field)) return `${Math.round(v * 1000) / 10}%`;
+  if (typeof v === 'object') {
+    // 행 전체(더함 · 지움): 이름이 있으면 이름, 없으면 칸 몇 개만
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === 'string') return o.name;
+    return Object.entries(o).filter(([k, x]) => x != null && typeof x !== 'object' && !k.endsWith('_id')).slice(0, 3)
+      .map(([k, x]) => `${FIELD_NAME[k] ?? k} ${typeof x === 'number' && RATIO_FIELDS.has(k) ? `${Math.round(x * 1000) / 10}%` : x}`).join(' · ') || '행';
+  }
+  if (v === 1 && field === 'active') return '사용';
+  if (v === 0 && field === 'active') return '사용 안 함';
+  return String(v);
+};
 export interface HistoryBatch {
   batchId: string;
   at: string;
@@ -46,15 +66,28 @@ export function historyView(db: SqlDb, limit = 200): { batches: HistoryBatch[]; 
   const total = Number(db.get('SELECT count(DISTINCT batch_id) AS n FROM change_log')?.n ?? 0);
   const ids = db.all('SELECT batch_id, min(log_id) AS first FROM change_log GROUP BY batch_id ORDER BY first DESC LIMIT ?', [limit]).map(r => String(r.batch_id));
   const undoneSet = new Set(db.all("SELECT DISTINCT reason FROM change_log WHERE reason LIKE '되돌리기: %'").map(r => String(r.reason).slice('되돌리기: '.length)));
+  // 키 조각 → 이름(리소스 · 파트 · 업데이트 · 배치 · 에셋 · 파이프라인 · 작업자 · 분류 · 유형)
+  const names = new Map<string, string>();
+  for (const [t, idc] of [['resource_types', 'resource_type_id'], ['parts', 'part_id'], ['updates', 'update_id'], ['batches', 'batch_id'], ['assets', 'asset_id'],
+    ['pipelines', 'pipeline_id'], ['people', 'person_id'], ['resource_groups', 'group_id'], ['update_types', 'update_type_id'], ['teams', 'team_id']] as const) {
+    try { for (const r of db.all(`SELECT ${idc} AS id, name FROM ${t}`)) names.set(String(r.id), String(r.name)); } catch { /* 옛 파일에 없는 표 */ }
+  }
   const batches = ids.map(id => {
     const rows = db.all('SELECT * FROM change_log WHERE batch_id = ? ORDER BY log_id', [id]);
-    const entries: HistoryEntry[] = rows.map(r => ({
-      logId: Number(r.log_id), action: String(r.action), target: String(r.target), key: String(r.target_key),
-      field: r.field == null ? null : String(r.field), old: parse(r.old_json), next: parse(r.new_json),
-    }));
+    const entries: HistoryEntry[] = rows.map(r => {
+      const field = r.field == null ? null : String(r.field);
+      const old = parse(r.old_json); const next = parse(r.new_json);
+      return {
+        logId: Number(r.log_id), action: String(r.action), target: String(r.target), key: String(r.target_key), field, old, next,
+        targetName: TARGET_NAME[String(r.target)] ?? String(r.target),
+        fieldName: field ? QTY_NAME[field] ?? FIELD_NAME[field] ?? field : '—',
+        where: String(r.target_key).split('|').map(x => names.get(x) ?? (/^\d{4}-\d{2}$/.test(x) ? `${x.slice(0, 4)}년 ${Number(x.slice(5))}월` : x)).join(' · '),
+        oldText: showValue(field, old), nextText: showValue(field, next),
+      };
+    });
     const kinds = [...new Set(entries.map(e => (e.action === 'UPDATE'
       ? `${TARGET_NAME[e.target] ?? e.target} ${QTY_NAME[e.field ?? ''] ?? FIELD_NAME[e.field ?? ''] ?? e.field ?? ''}`.trim()
-      : `${TARGET_NAME[e.target] ?? e.target} ${e.action === 'INSERT' ? '추가' : '삭제'}`)))];
+      : `${TARGET_NAME[e.target] ?? e.target} ${e.action === 'INSERT' ? '더함' : '지움'}`)))];
     const reason = rows[0]?.reason == null ? null : String(rows[0].reason);
     return {
       batchId: id,

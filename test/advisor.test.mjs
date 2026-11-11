@@ -166,3 +166,17 @@ test('물량 줄이기는 지금 물량 구간 기준: 확장안이면 확장 �
   const min = adviseDeadlines(data, { planMode: 'MIN', levers: { headcount: false, priority: false } });
   assert.ok(!min.steps.some(s => s.kind === 'volumeToMin'));
 });
+
+test('배치 마감도 맞출 대상(docs/34 C-02): 늦는 배치가 있으면 "이미 다 맞음"이 아니고, 배치를 위한 걸음은 물량을 줄이지 않는다', () => {
+  const { raw, session } = open('assets');
+  const r = adviseDeadlines(session.currentData());
+  raw.close();
+  const lateBatches = r.before.filter(o => o.batchId && o.late > 0);
+  assert.ok(lateBatches.length >= 1, '예시 파일의 1차 납품은 늦다');
+  assert.equal(r.alreadyOk, false);
+  assert.ok(lateBatches[0].name.includes(' · '), '이름 = 업데이트 · 배치');
+  // 어떤 대상(업데이트 · 배치)도 전보다 늦어지지 않는다
+  const before = new Map(r.before.map(o => [o.key, o.late]));
+  assert.ok(r.after.every(o => o.late <= (before.get(o.key) ?? 0) + 1e-9));
+  assert.ok(!r.steps.some(s => s.kind === 'volumeToMin' && lateBatches.some(b => s.forUpdate === b.name)), '배치를 위해 물량을 줄이지 않는다');
+});

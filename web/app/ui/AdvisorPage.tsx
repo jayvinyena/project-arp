@@ -113,7 +113,7 @@ export function AdvisorPage(props: {
       {r && (
         <div class={`stack${busy ? ' busy' : ''}`} aria-busy={busy}>
           {r.alreadyOk ? (
-            <div class="banner ok" role="status"><IconCheck /><div><b>모든 업데이트가 이미 {deadline === 'freeze' ? '제작 완료 목표일' : '출시일'}을 지킵니다</b><p class="small muted">바꿀 것이 없습니다.</p></div></div>
+            <div class="banner ok" role="status"><IconCheck /><div><b>모든 업데이트가 이미 {deadline === 'freeze' ? '제작 완료 목표일' : '출시일'}을, 모든 배치가 마감일을 지킵니다</b><p class="small muted">바꿀 것이 없습니다.</p></div></div>
           ) : r.feasible ? (
             <div class="banner ok advisor-verdict" role="status"><IconSpark /><div style="flex: 1"><b>{r.steps.length}걸음을 바꾸면 늦던 {lateBefore}개가 모두 마감을 지킵니다</b>
               <p class="small muted">시나리오로 만들어 시뮬레이션에서 비교한 뒤 원본에 반영할 수 있습니다.</p></div>
@@ -143,7 +143,7 @@ export function AdvisorPage(props: {
                   <thead><tr><th>업데이트</th><th>마감</th><th>지금</th><th>제안대로 하면</th></tr></thead>
                   <tbody>
                     {r.before.map(b => {
-                      const a = r.after.find(x => x.updateId === b.updateId)!;
+                      const a = r.after.find(x => x.key === b.key)!;
                       return (
                         <tr class="row">
                           <td><b>{b.name}</b></td>
