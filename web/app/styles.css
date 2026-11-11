@@ -2033,3 +2033,37 @@ table.grid.dash-matrix td:last-child .share { max-width: 320px; }
 table.grid.dash-matrix { table-layout: fixed; }
 table.grid.dash-matrix td.heat, table.grid.dash-matrix thead th.c { min-width: 96px; }
 table.grid.setup-parts { max-width: 1240px; }
+
+/* ───────── 제작 단계 흐름(docs/37) ───────── */
+.flow { display: flex; flex-direction: column; gap: 8px; }
+.flow-strip { display: grid; grid-template-columns: repeat(var(--cols), minmax(104px, 1fr)); gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.flow-strip::-webkit-scrollbar { display: none; }
+.flow-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.flow-col.done { background: color-mix(in srgb, var(--ok-soft) 60%, var(--surface)); }
+.flow-col.empty { opacity: .65; }
+.flow-head { all: unset; display: flex; flex-direction: column; gap: 0; cursor: pointer; border-radius: 6px; }
+.flow-head:disabled { cursor: default; }
+.flow-head:not(:disabled):hover .flow-name { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.flow-head:focus-visible { box-shadow: var(--ring); }
+.flow-name { font-size: var(--fs-12); font-weight: 650; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-n { font-size: var(--fs-24); font-weight: 750; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; }
+.flow-subs { display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; flex: 1; min-height: 22px; }
+.flow-sub { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border: 0; border-radius: 6px; background: var(--st-bg); color: var(--st-fg); font: inherit; font-size: var(--fs-11); font-weight: 650; cursor: pointer; white-space: nowrap; }
+.flow-sub:hover { filter: brightness(.97); box-shadow: inset 0 0 0 1px currentColor; }
+.flow-sub:focus-visible { outline: none; box-shadow: var(--ring); }
+.flow-stale { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); font-size: var(--fs-11); font-weight: 650; white-space: nowrap; }
+.flow-week { font-size: var(--fs-11); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.flow-week b.in { color: var(--accent-ink); }
+.flow-week b.out { color: var(--ok); margin-left: 2px; }
+.flow-bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; }
+.flow-bar .stg { min-width: 3px; }
+.flow-table-wrap { margin-top: 12px; }
+table.grid.flow-table { min-width: 0; }
+table.grid.flow-table td.flow-cell { font-weight: 650; color: var(--text); }
+table.grid.flow-table th:first-child, table.grid.flow-table td:first-child { width: 160px; }
+.flow-pipes { display: flex; flex-direction: column; gap: 16px; }
+.flow-pipe-h { margin: 0 0 6px; font-size: var(--fs-13); font-weight: 700; display: flex; align-items: baseline; gap: 6px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 6px 0 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-size: var(--fs-13); font-weight: 650; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+@media (max-width: 640px) { .flow-strip { grid-template-columns: repeat(var(--cols), minmax(96px, 1fr)); } }
+table.grid.flow-table td:first-child { white-space: nowrap; }
+@media (max-width: 640px) { table.grid.flow-table { min-width: 560px; } }

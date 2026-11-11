@@ -715,9 +715,9 @@ export function App() {
   const [simFocus, setSimFocus] = useState<string | null>(null);
   // 다른 화면(작업 진척 · 물량 표)에서 에셋 화면으로: 업데이트 · 리소스 종류를 넘긴다
   // partId · who · status = 에셋 화면 거르기, back = 카드를 닫으면 돌아갈 화면(현황판 → 카드 → 현황판, docs/34 B-02)
-  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; back?: 'dashboard' } | null>(null);
+  const [assetFocus, setAssetFocus] = useState<{ updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; stage?: string; pipe?: string; back?: 'dashboard' } | null>(null);
   useEffect(() => {
-    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; back?: 'dashboard' }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
+    const go = (e: Event) => { const d = (e as CustomEvent<{ updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; stage?: string; pipe?: string; back?: 'dashboard' }>).detail; setAssetFocus({ ...d }); setPage('assets'); };
     window.addEventListener('arp:assets', go);
     return () => window.removeEventListener('arp:assets', go);
   }, []);

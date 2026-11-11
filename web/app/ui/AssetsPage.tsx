@@ -474,7 +474,7 @@ export function AssetsPage(props: {
   onExport: (updateId: string | null) => Promise<void>;
   onImport: () => Promise<void>;
   /** 다른 화면에서 넘어올 때: 업데이트 · 리소스 종류 · 바로 열 에셋 */
-  focus?: { updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; back?: 'dashboard' } | null;
+  focus?: { updateId: string; resourceTypeId?: string; assetId?: string; partId?: string; who?: string; status?: string; stage?: string; pipe?: string; back?: 'dashboard' } | null;
   /** 카드를 닫으면 넘어온 화면으로 */
   onBack?: (page: 'dashboard') => void;
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
@@ -498,6 +498,7 @@ export function AssetsPage(props: {
   const [cat, setCat] = useState('all');
   const [status, setStatus] = useState('all');
   const [attrF, setAttrF] = useState('all'); // JSON [이름, 값]
+  const [stageF, setStageF] = useState('all'); // 단계 거르기(현황판 단계 칸에서): 단계 id, 병렬 묶음은 쉼표로
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -522,7 +523,7 @@ export function AssetsPage(props: {
     setUpdateId(props.focus.updateId); setFocusRt(props.focus.resourceTypeId ?? null); setTab('assets');
     const f = props.focus;
     // 다른 화면의 칸 · 줄에서 넘어오면 그 거르기로(파트 · 담당 · 상태, docs/34 B-21)
-    if (f.partId || f.who || f.status) { clearFilters(); if (f.partId) setTeam(f.partId); if (f.who) setWho(f.who); if (f.status) setStatus(f.status); setView('list'); }
+    if (f.partId || f.who || f.status || f.stage) { clearFilters(); if (f.partId) setTeam(f.partId); if (f.who) setWho(f.who); if (f.status) setStatus(f.status); if (f.stage) setStageF(f.stage); if (f.pipe) setPipe(f.pipe); setView('list'); }
     if (f.assetId) { clearFilters(); setOpenId(f.assetId); setBackTo(f.back ?? null); }
   }, [props.focus]);
   useEffect(() => { void rpc.assets(updateId).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, updateId]);
@@ -535,7 +536,7 @@ export function AssetsPage(props: {
   }, [v, focusRt]);
   useEffect(() => { setSel(new Set()); setLimit(300); }, [updateId, group, batch, who, q, team, cat, status, attrF]);
 
-  function clearFilters() { setGroup('all'); setBatch('all'); setWho('all'); setTeam('all'); setCat('all'); setStatus('all'); setAttrF('all'); setPipe('all'); setQ(''); }
+  function clearFilters() { setGroup('all'); setBatch('all'); setWho('all'); setTeam('all'); setCat('all'); setStatus('all'); setAttrF('all'); setPipe('all'); setStageF('all'); setQ(''); }
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const apply = props.onApply;
   const groupKey = (g: AssetsView['groups'][number]) => g.groupId ?? '_';
@@ -557,11 +558,12 @@ export function AssetsPage(props: {
   for (const a of v.assets) for (const x of a.attrs) { if (!attrOptions.has(x.name)) attrOptions.set(x.name, new Set()); attrOptions.get(x.name)!.add(x.value); }
   const [attrName, attrValue] = attrF === 'all' ? ['', ''] : JSON.parse(attrF) as [string, string];
   const isOverdue = (a: AssetItem) => { const d = a.dueDate ?? (a.batchId ? v.batches.find(b => b.batchId === a.batchId)?.dueDate ?? null : null); return !!d && d < today() && a.stage !== 'DONE'; };
-  const filtered = [group, pipe, cat, batch, team, who, status, attrF].filter(x => x !== 'all').length + (q.trim() ? 1 : 0);
+  const filtered = [group, pipe, cat, batch, team, who, status, attrF, stageF].filter(x => x !== 'all').length + (q.trim() ? 1 : 0);
   const noPipe = (a: AssetItem) => !a.pipelineId || !v.pipelines.some(p => p.pipelineId === a.pipelineId);
   const query = q.trim().toLowerCase();
   const shown = v.assets.filter(a => rtIds.has(a.resourceTypeId)
     && (pipe === 'all' || (pipe === 'base' ? noPipe(a) : a.pipelineId === pipe))
+    && (stageF === 'all' || stageF.split(',').includes(a.stage))
     && (batch === 'all' || (batch === 'none' ? !a.batchId : a.batchId === batch))
     && (cat === 'all' || (cat === 'none' ? !a.category : a.category === cat))
     && (team === 'all' || (a.parts[team] && a.parts[team].status !== 'OMIT'))
@@ -724,6 +726,8 @@ export function AssetsPage(props: {
               <option value="all">모든 속성</option>
               {[...attrOptions.entries()].map(([n, vals]) => <optgroup label={n}>{[...vals].sort((x, y) => x.localeCompare(y, 'ko')).map(x => <option value={JSON.stringify([n, x])}>{n}: {x}</option>)}</optgroup>)}
             </select>}
+            {stageF !== 'all' && <span class="filter-chip" title="현황판 단계 칸에서 고른 단계">단계 {stageF.split(',').map(x => x === 'TODO' ? '대기' : x === 'DONE' ? '완료' : v.parts.find(p => p.partId === x)?.name ?? x).join(' ∥ ')}
+              <button type="button" class="chip-x" aria-label="단계 거르기 풀기" onClick={() => setStageF('all')}><IconX /></button></span>}
             <button type="button" class="btn sm ghost" disabled={filtered === 0} onClick={clearFilters}>거르기 풀기{filtered ? ` (${filtered})` : ''}</button>
           </div>
           {adding && !ro && (

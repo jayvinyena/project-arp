@@ -47,7 +47,9 @@ await withBrowser(async (cdp, base) => {
   const cell = await cdp.eval("(() => { const r = [...document.querySelectorAll('table.dash-matrix tbody tr.row')].find(x => x.textContent.includes('신규 캐릭터')); return [...r.querySelectorAll('td.heat')].map(c => c.textContent.trim()).join(','); })()");
   check('항목 × 파트: 신규 캐릭터 원화 3/10 · 모델링 1/10', cell.startsWith('3 / 10,1 / 10'), cell);
   check('거치지 않는 파트는 빗금 칸', await cdp.eval("document.querySelectorAll('table.dash-matrix td.heat.off').length >= 5"));
-  check('제작 단계 분포 막대(캐릭터 20)', await cdp.eval("document.querySelector('.stage-row')?.textContent.includes('캐릭터')"));
+  // 단계 흐름(docs/37): 단계 칸 = 대기 + 파트 + 완료, 세부 상태 칩, 항목 표에 캐릭터 · 등록 / 계획
+  const flow = await cdp.eval("(() => ({ cols: document.querySelectorAll('.dash-stages .flow-col').length, subs: document.querySelectorAll('.dash-stages .flow-sub').length, row: [...document.querySelectorAll('table.flow-table tbody tr')].map(r => r.textContent).join('|') }))()");
+  check('제작 단계 흐름: 단계 칸 6개 · 세부 상태 칩 · 항목 표(캐릭터 · 등록 / 계획)', flow.cols === 6 && flow.subs > 0 && /캐릭터/.test(flow.row) && /\d+ \/ \d+/.test(flow.row), JSON.stringify(flow));
   check('배치 2개 · D-day', await cdp.eval("document.querySelectorAll('table.dash-batch-table tbody tr').length === 2 && document.querySelector('table.dash-batch-table').textContent.includes('D-')"));
   // 배치 카드: 완료 예정 칸(docs/33)
   const dfc = await cdp.eval("[...document.querySelectorAll('table.dash-batch-table tbody tr')].map(r => r.querySelector('.batch-when')?.textContent.trim() ?? '—').join(' | ')");
@@ -60,7 +62,7 @@ await withBrowser(async (cdp, base) => {
   // 단계 분포: 파이프라인별로 바꾸면 파이프라인 줄, 다시 항목별
   await cdp.eval("[...document.querySelectorAll('[aria-label=\"단계 분포 묶음\"] button')].find(b => b.textContent === '파이프라인별').click()");
   await sleep(200);
-  const pipeRows = await cdp.eval("[...document.querySelectorAll('.pipe-stage .pipe-stage-name')].map(b => b.textContent).join(',')");
+  const pipeRows = await cdp.eval("[...document.querySelectorAll('.flow-pipe .flow-pipe-h')].map(b => b.textContent.replace('개', '')).join(',')");
   check('단계 분포: 파이프라인별(파이프라인 이름 · 합계)', /기본 \d+/.test(pipeRows), pipeRows);
   await shot(cdp, 'dashboard-pipeline-1440');
   await cdp.eval("[...document.querySelectorAll('[aria-label=\"단계 분포 묶음\"] button')].find(b => b.textContent === '항목별').click()");
@@ -104,6 +106,16 @@ await withBrowser(async (cdp, base) => {
   const none = await cdp.eval("(() => ({ todo: document.querySelector('.dash-todo').textContent.includes('에셋을 등록하면'), stages: document.querySelector('.dash-stages').textContent.includes('에셋을 등록하면'), chart: !!document.querySelector('.burnup svg') }))()");
   check('에셋이 없는 예시도 진행률 · 추이 · 항목 × 파트가 나오고 에셋 칸은 안내', none.todo && none.stages && none.chart, JSON.stringify(none));
   check('가로 넘침 없음(1440 · 390)', okDash && okDash390);
+
+  // 단계 칸의 세부 상태를 누르면 에셋 화면이 그 단계 · 상태로 걸러져 열린다
+  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=assets&nosw&page=dashboard` });
+  await cdp.waitUntil("document.querySelector('.dash-stages .flow-sub')", 20000);
+  await sleep(500);
+  const chip = await cdp.eval("(() => { const b = document.querySelector('.dash-stages .flow-sub'); const n = Number(b.querySelector('b').textContent); const stage = b.closest('.flow-col').querySelector('.flow-name').textContent; b.click(); return { n, stage }; })()");
+  await cdp.waitUntil("document.querySelector('.assets-page table.asset-list')", 10000).catch(() => {});
+  await sleep(600);
+  const got = await cdp.eval("({ rows: document.querySelectorAll('.assets-page table.asset-list tbody tr.row').length, chip: document.querySelector('.filter-chip')?.textContent ?? '' })");
+  check('단계 칸 세부 상태를 누르면 에셋이 그 단계 · 상태로 걸러짐', got.rows === chip.n && got.chip.includes(chip.stage), `${JSON.stringify(chip)} → ${JSON.stringify(got)}`);
 }, { build: !process.argv.includes('--no-build') });
 
 const failed = results.filter(x => !x).length;

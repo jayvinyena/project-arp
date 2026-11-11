@@ -18,7 +18,10 @@ export interface DashPersonRow {
 /** 파트 인원 비교: 명단(참여 중, 소속팀 = 파트) vs 인력 표(그 달 인원) */
 export interface DashHeadcount { month: string | null; parts: { partId: string; name: string; roster: number; capacity: number | null }[] }
 /** 파이프라인별 단계 분포(docs/32 8): 열 = 대기 · 묶음(병렬은 한 칸) · 완료 */
-export interface DashPipelineStages { pipelineId: string | null; name: string; list: { id: string; name: string }[]; counts: number[]; total: number }
+/** 단계 칸 하나의 속(docs/37): 그 단계에 있는 에셋의 세부 상태 · 14일+ 머문 수 · 이번 주 들어옴(그 파트 시작) · 나감(그 파트 완료) */
+export interface StageCell { wait: number; wip: number; review: number; retake: number; hold: number; stale: number; weekIn: number; weekOut: number }
+const emptyCell = (): StageCell => ({ wait: 0, wip: 0, review: 0, retake: 0, hold: 0, stale: 0, weekIn: 0, weekOut: 0 });
+export interface DashPipelineStages { pipelineId: string | null; name: string; list: { id: string; name: string }[]; counts: number[]; total: number; cells: StageCell[]; colParts?: string[][] }
 
 export interface DashTodo { assetId: string; name: string; resource: string; part: string | null; since: string | null; who: string | null }
 export interface DashboardView {
@@ -39,7 +42,7 @@ export interface DashboardView {
   };
   matrix: { groupName: string; rows: { resourceTypeId: string; name: string; need: number; cells: ({ done: number; need: number; rate: number } | null)[]; rate: number }[] }[];
   partTotals: { doneDays: number; totalDays: number; rate: number }[];
-  stages: { list: { id: Stage; name: string }[]; groups: { name: string; counts: number[]; total: number }[] } | null;
+  stages: { list: { id: Stage; name: string }[]; cells: StageCell[]; groups: { name: string; counts: number[]; total: number; included: number; planned: number | null }[] } | null;
   trend: { points: { date: string; actual: number | null; ideal: number | null }[]; total: number; today: string };
   todo: { review: DashTodo[]; retake: DashTodo[]; hold: DashTodo[]; overdue: DashTodo[]; stale: DashTodo[] };
   batches: { batchId: string; name: string; due: string | null; daysLeft: number | null; count: number; done: number; progress: number }[];
@@ -167,6 +170,13 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
       LEFT JOIN resource_groups g ON g.group_id = r.group_id WHERE a.update_id = ? ORDER BY coalesce(g.sort_order, 999999), r.sort_order, a.sort_order`, [updateId]);
   const stageList: { id: Stage; name: string }[] = [{ id: 'TODO', name: '대기' }, ...parts.map(p => ({ id: p.partId, name: p.name })), { id: 'DONE', name: '완료' }];
   const stageGroups = new Map<string, number[]>();
+  const stageCells = stageList.map(emptyCell);
+  // 항목별 등록(이 물량 템플릿에 드는 에셋) · 계획 물량
+  const modeRank = planMode === 'MIN' ? 0 : planMode === 'STRETCH' ? 2 : 1;
+  const tierRank = (t: unknown) => (t === 'MIN' ? 0 : t === 'STRETCH' ? 2 : 1);
+  const groupIncluded = new Map<string, number>();
+  const groupPlanned = new Map<string, number>();
+  for (const v of vols) { const g = String(v.gname); groupPlanned.set(g, (groupPlanned.get(g) ?? 0) + Number(v[qtyField] ?? 0)); }
   const todo: DashboardView['todo'] = { review: [], retake: [], hold: [], overdue: [], stale: [] };
   const staleBefore = iso(parse(today) - 14 * DAY);
   // 담당별(명단 이름과 공백 · 대소문자 무시로 맞춤)
@@ -193,7 +203,26 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
     const stage = stageOf(st, statusOf);
     const g = String(a.gname);
     if (!stageGroups.has(g)) stageGroups.set(g, stageList.map(() => 0));
-    stageGroups.get(g)![stageList.findIndex(x => x.id === stage)] += 1;
+    const si = stageList.findIndex(x => x.id === stage);
+    stageGroups.get(g)![si] += 1;
+    if (tierRank(a.tier) <= modeRank) groupIncluded.set(g, (groupIncluded.get(g) ?? 0) + 1);
+    // 단계 칸 속: 세부 상태 · 머문 수(그 단계 파트 기준)
+    const sub = stage === 'TODO' || stage === 'DONE' ? null : statusOf(stage);
+    const stale = sub === 'WIP' && !!s.get(stage)?.started_at && String(s.get(stage)!.started_at) < staleBefore;
+    const bump = (c: StageCell) => {
+      if (sub === 'WIP') c.wip += 1; else if (sub === 'REVIEW') c.review += 1; else if (sub === 'RETAKE') c.retake += 1; else if (sub === 'HOLD') c.hold += 1; else if (sub) c.wait += 1;
+      if (stale) c.stale += 1;
+    };
+    bump(stageCells[si]);
+    // 이번 주 들어옴(파트 시작) · 나감(파트 완료). 완료 칸은 마지막 파트를 이번 주에 끝낸 에셋
+    const lastDone = st.map(p => (statusOf(p) === 'DONE' ? String(s.get(p)?.done_at ?? '') : '')).reduce((m, d) => (d > m ? d : m), '');
+    const weekOf = (d: unknown) => !!d && String(d) >= mon && String(d) <= today;
+    for (const p of st) {
+      const pi = stageList.findIndex(x => x.id === p); if (pi < 0) continue;
+      if (weekOf(s.get(p)?.started_at)) stageCells[pi].weekIn += 1;
+      if (statusOf(p) === 'DONE' && weekOf(s.get(p)?.done_at)) stageCells[pi].weekOut += 1;
+    }
+    if (stage === 'DONE' && weekOf(lastDone)) stageCells[stageCells.length - 1].weekIn += 1;
     {
       // 파이프라인별: 이 에셋 리소스의 묶음(병렬은 한 칸). 파이프라인이 같으면 열도 같다
       const pid = pipeOfRt.get(String(a.resource_type_id)) ?? null;
@@ -203,7 +232,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
         // 열 = 그 파이프라인의 묶음(병렬은 한 칸). 파이프라인이 없으면 파트 표 순서로 파트마다
         const groups = info ? info.groups : parts.map(x => [x.partId]);
         const list = [{ id: 'TODO', name: '대기' }, ...groups.map(gp => ({ id: gp[0], name: gp.map(x => partName.get(x) ?? x).join(' ∥ ') })), { id: 'DONE', name: '완료' }];
-        pipeStages.set(key, { pipelineId: key || null, name: info ? info.name : '파이프라인 고르지 않음', list, counts: list.map(() => 0), total: 0, groups });
+        pipeStages.set(key, { pipelineId: key || null, name: info ? info.name : '파이프라인 고르지 않음', list, counts: list.map(() => 0), total: 0, groups, cells: list.map(emptyCell) });
       }
       const ps = pipeStages.get(key)!;
       let col = stage === 'TODO' ? 0 : stage === 'DONE' ? ps.list.length - 1 : ps.list.findIndex(x => ps.groups.find(gp => gp.includes(stage))?.[0] === x.id);
@@ -212,10 +241,20 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
         const at = ps.list.length - 1;
         ps.list.splice(at, 0, { id: stage, name: `${partName.get(stage) ?? stage}(파이프라인 밖)` });
         ps.counts.splice(at, 0, 0);
+        ps.cells.splice(at, 0, emptyCell());
         ps.groups.push([stage]);
         col = at;
       }
       ps.counts[col] += 1; ps.total += 1;
+      bump(ps.cells[col]);
+      // 들어옴 · 나감: 파트 → 그 파트가 든 열
+      const colOfPart = (p: string) => ps.list.findIndex(x => ps.groups.find(gp => gp.includes(p))?.[0] === x.id);
+      for (const p of st) {
+        const pc = colOfPart(p); if (pc < 0) continue;
+        if (weekOf(s.get(p)?.started_at)) ps.cells[pc].weekIn += 1;
+        if (statusOf(p) === 'DONE' && weekOf(s.get(p)?.done_at)) ps.cells[pc].weekOut += 1;
+      }
+      if (stage === 'DONE' && weekOf(lastDone)) ps.cells[ps.list.length - 1].weekIn += 1;
     }
     for (const p of st) {
       const status = statusOf(p);
@@ -282,7 +321,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
     month: capRows.size ? month : null,
     parts: parts.map(p => ({ partId: p.partId, name: p.name, roster: roster.filter(r => Number(r.active) === 1 && r.team === p.name).length, capacity: capRows.get(p.partId) ?? null })),
   };
-  const pipelineStages = assets.length ? [...pipeStages.values()].map(({ groups: _g, ...rest }) => rest)
+  const pipelineStages = assets.length ? [...pipeStages.values()].map(({ groups, ...rest }) => ({ ...rest, colParts: rest.list.map(x => (x.id === 'TODO' || x.id === 'DONE' ? [x.id] : groups.find(g => g[0] === x.id) ?? [x.id])) }))
     .sort((x, y) => (x.pipelineId ? 0 : 1) - (y.pipelineId ? 0 : 1) || y.total - x.total) : [];
 
   return {
@@ -290,7 +329,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
     updates, updateId, parts, planMode, window: { start, target, targetLabel },
     summary: { doneDays, totalDays, rate, weekDone, lastWeekDone, idealRate, aheadWorkdays, assets: assets.length },
     matrix: [...groupMap.values()], partTotals,
-    stages: assets.length ? { list: stageList, groups: [...stageGroups.entries()].map(([name, counts]) => ({ name, counts, total: counts.reduce((x, y) => x + y, 0) })) } : null,
+    stages: assets.length ? { list: stageList, cells: stageCells, groups: [...stageGroups.entries()].map(([name, counts]) => ({ name, counts, total: counts.reduce((x, y) => x + y, 0), included: groupIncluded.get(name) ?? 0, planned: groupPlanned.has(name) ? groupPlanned.get(name)! : null })) } : null,
     trend: { points, total: totalDays, today },
     todo, batches,
   };

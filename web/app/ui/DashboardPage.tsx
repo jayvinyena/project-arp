@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { ModeSwitch } from './PlanPage.tsx';
 import { rpc } from '../lib/rpc.ts';
-import type { DashboardView, DashTodo } from '../../../core/dashboard.ts';
+import type { DashboardView, DashTodo, StageCell } from '../../../core/dashboard.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
 import { fmtPct, fmtDate, fmtInt, fmtShortDate } from '../lib/format.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
@@ -18,7 +18,45 @@ const VERDICT = UPDATE_STATUS;
 // 현황판에서 카드를 열면, 카드를 닫을 때 현황판으로 돌아온다(docs/34 B-02)
 const openAsset = (updateId: string, assetId: string) => window.dispatchEvent(new CustomEvent('arp:assets', { detail: { updateId, assetId, back: 'dashboard' } }));
 /** 현황판의 칸 · 줄 → 에셋 화면 거르기(docs/34 B-21) */
-const openAssets = (detail: { updateId: string; resourceTypeId?: string; partId?: string; who?: string; status?: string }) => window.dispatchEvent(new CustomEvent('arp:assets', { detail }));
+const openAssets = (detail: { updateId: string; resourceTypeId?: string; partId?: string; who?: string; status?: string; stage?: string; pipe?: string }) => window.dispatchEvent(new CustomEvent('arp:assets', { detail }));
+
+/** 단계 칸 속 세부 상태(보이는 순서): 칸 이름 · 에셋 상태 */
+const FLOW_SUBS: [keyof StageCell, string, string][] = [['wip', '진행', 'WIP'], ['review', '검수 요청', 'REVIEW'], ['retake', '수정', 'RETAKE'], ['hold', '보류', 'HOLD'], ['wait', '시작 전', 'TODO']];
+
+/** 단계 흐름 띠(docs/37): 단계마다 수 · 세부 상태 · 14일+ 머문 수 · 이번 주 들어옴/나감, 아래 전체 비율 막대 한 줄. 칸을 누르면 그 에셋으로 */
+function StageFlow(props: { list: { id: string; name: string }[]; counts: number[]; cells: StageCell[]; onOpen: (i: number, status?: string) => void }) {
+  const total = props.counts.reduce((a, b) => a + b, 0);
+  const last = props.list.length - 1;
+  return (
+    <div class="flow">
+      <div class="flow-strip" role="list" style={{ '--cols': props.list.length } as never}>
+        {props.list.map((st, i) => {
+          const c = props.cells[i]; const n = props.counts[i];
+          const kind = i === 0 ? 'todo' : i === last ? 'done' : 'part';
+          return (
+            <div class={`flow-col ${kind}${n ? '' : ' empty'}`} role="listitem">
+              <button type="button" class="flow-head" disabled={!n} title={n ? `${st.name} 단계 에셋 ${n}개 보기` : `${st.name} 단계에 에셋이 없습니다`} onClick={() => props.onOpen(i)}>
+                <span class="flow-name">{st.name}</span><b class="flow-n">{n}</b>
+              </button>
+              <div class="flow-subs">
+                {kind === 'part' && FLOW_SUBS.filter(([k]) => c[k] > 0).map(([k, label, status]) => (
+                  <button type="button" class={`flow-sub st-${status}`} title={`${st.name} · ${label} ${c[k]}개 보기`} onClick={() => props.onOpen(i, status)}>{label} <b>{c[k]}</b></button>
+                ))}
+                {c.stale > 0 && <span class="flow-stale" title="14일 넘게 진행 중인 에셋">14일+ <b>{c.stale}</b></span>}
+              </div>
+              <span class="flow-week" title="이번 주(월요일부터) 이 단계에 들어온 · 이 단계를 끝낸 에셋 수">
+                {c.weekIn || c.weekOut ? <>이번 주 {c.weekIn ? <b class="in">+{c.weekIn}</b> : null}{c.weekIn && c.weekOut ? ' ' : ''}{c.weekOut ? <b class="out">−{c.weekOut}</b> : null}</> : <span class="faint">이번 주 —</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <span class="flow-bar" role="img" aria-label={`전체 ${total}개: ${props.list.map((st, i) => `${st.name} ${props.counts[i]}`).join(', ')}`}>
+        {props.counts.map((c, i) => c > 0 && <span class={`stg stg-${i === 0 ? 'todo' : i === last ? 'done' : `p${Math.min(4, i)}`}`} style={{ flexGrow: c }} title={`${props.list[i].name} ${c}개`} />)}
+      </span>
+    </div>
+  );
+}
 const TAB_KEY = 'arp.dash.todoTab';
 
 /** 추이: 누적 완료 공수(실제) 대 계획선. 오늘 · 목표일 · 완료 예정 표시, 주마다 가로 위치에 따라 값 보기 */
@@ -258,7 +296,7 @@ export function DashboardPage(props: {
 
       <div class="dash-row">
         <section class="card dash-stages">
-          <div class="card-head"><div><h2>제작 단계 분포</h2><p class="small muted" style="margin-top: 2px">{stageBy === 'pipeline' ? '파이프라인마다 그 단계 순서로 에셋이 어느 단계에 있는지입니다(∥ 는 병렬 단계를 한 칸으로).' : '항목마다 에셋이 어느 단계에 있는지입니다(앞에서부터 아직 끝나지 않은 첫 파트).'}</p></div>
+          <div class="card-head"><div><h2>제작 단계 흐름</h2><p class="small muted" style="margin-top: 2px">{stageBy === 'pipeline' ? '파이프라인마다 그 단계 순서로 봅니다(∥ 는 병렬 단계를 한 칸으로).' : '에셋이 지금 어느 단계에 있고 어떤 상태인지(아직 끝나지 않은 첫 파트 기준). 단계나 상태를 누르면 그 에셋을 봅니다.'}</p></div>
             <div class="inline" style="gap: 6px">
               {v.stages && (
                 <div class="segmented wide" role="radiogroup" aria-label="단계 분포 묶음">
@@ -269,34 +307,34 @@ export function DashboardPage(props: {
               <button type="button" class="btn sm" onClick={() => props.onGo('assets')}>보드에서 보기</button>
             </div></div>
           <div class="card-body" style="padding-top: 4px">
-            {!v.stages ? <p class="small faint">에셋을 등록하면 단계 분포를 보여 줍니다.</p> : stageBy === 'pipeline' ? (
-              <div class="stage-bars pipe-stages">
+            {!v.stages ? <p class="small faint">에셋을 등록하면 단계 흐름을 보여 줍니다.</p> : stageBy === 'pipeline' ? (
+              <div class="flow-pipes">
                 {v.pipelineStages.map(ps => (
-                  <div class="pipe-stage">
-                    <div class="stage-legend small"><b class="pipe-stage-name">{ps.name}<span class="faint"> {ps.total}</span></b>
-                      {ps.list.map((st, i) => <span><i class={`stg stg-${i === 0 ? 'todo' : i === ps.list.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} />{st.name} {ps.counts[i]}</span>)}</div>
-                    <span class="stage-bar" aria-label={`${ps.name} 단계 분포`}>
-                      {ps.counts.map((c, i) => c > 0 && (
-                        <span class={`stg stg-${i === 0 ? 'todo' : i === ps.counts.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} style={{ flexGrow: c }} title={`${ps.list[i].name} ${c}개`}>{c / ps.total >= 0.08 ? c : ''}</span>
-                      ))}
-                    </span>
+                  <div class="flow-pipe">
+                    <h3 class="flow-pipe-h">{ps.name} <span class="small faint">{ps.total}개</span></h3>
+                    <StageFlow list={ps.list} counts={ps.counts} cells={ps.cells}
+                      onOpen={(i, status) => { const parts = ps.colParts?.[i] ?? [ps.list[i].id]; const part = parts.length === 1 && parts[0] !== 'TODO' && parts[0] !== 'DONE' ? parts[0] : undefined;
+                        openAssets({ updateId: v.updateId!, stage: parts.join(','), pipe: ps.pipelineId ?? 'base', partId: status ? part : undefined, status }); }} />
                   </div>
                 ))}
               </div>
             ) : (
               <>
-                <div class="stage-legend small">{v.stages.list.map((st, i) => <span><i class={`stg stg-${i === 0 ? 'todo' : i === v.stages!.list.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} />{st.name} <b class="num">{v.stages!.groups.reduce((a, g) => a + (g.counts[i] ?? 0), 0)}</b></span>)}</div>
-                <div class="stage-bars">
-                  {v.stages.groups.map(g => (
-                    <div class="stage-row">
-                      <span class="stage-name">{g.name}<span class="small faint"> {g.total}</span></span>
-                      <span class="stage-bar">
-                        {g.counts.map((c, i) => c > 0 && (
-                          <span class={`stg stg-${i === 0 ? 'todo' : i === g.counts.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} style={{ flexGrow: c }} title={`${v.stages!.list[i].name} ${c}개`}>{c / g.total >= 0.08 ? c : ''}</span>
-                        ))}
-                      </span>
-                    </div>
-                  ))}
+                <StageFlow list={v.stages.list} counts={v.stages.list.map((_, i) => v.stages!.groups.reduce((a, g) => a + (g.counts[i] ?? 0), 0))} cells={v.stages.cells}
+                  onOpen={(i, status) => { const id = v.stages!.list[i].id; openAssets({ updateId: v.updateId!, stage: id, partId: status && id !== 'TODO' && id !== 'DONE' ? id : undefined, status }); }} />
+                <div class="table-wrap ref-wrap flow-table-wrap">
+                  <table class="grid ref flow-table">
+                    <thead><tr><th>항목</th>{v.stages.list.map(st => <th class="c">{st.name}</th>)}<th class="n" title={`${MODE_LABEL[props.planMode]}에 드는 등록 에셋 / ${MODE_LABEL[props.planMode]} 계획 물량`}>등록 / 계획</th></tr></thead>
+                    <tbody>
+                      {v.stages.groups.map(g => (
+                        <tr class="row">
+                          <td><b>{g.name}</b> <span class="small faint">{g.total}</span></td>
+                          {g.counts.map(c => <td class="c num flow-cell" style={c ? { background: `color-mix(in srgb, var(--accent) ${Math.round(8 + 40 * (c / Math.max(1, g.total)))}%, var(--surface))` } : undefined}>{c || <span class="faint">·</span>}</td>)}
+                          <td class={`n num${g.planned != null && g.included < g.planned ? ' warn-num' : ''}`}>{g.included} / {g.planned ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </>
             )}

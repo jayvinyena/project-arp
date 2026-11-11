@@ -19,7 +19,7 @@ const SCAN = `(() => {
   };
   // 1. 단추 · 알약 · 탭 · 칩
   for (const el of document.querySelectorAll('button, .btn, .pill, .tag, .label-chip, [role=tab], [role=radio], .sum-item')) {
-    if (!shown(el) || el.matches('.hm-cell, .heat-btn, .tl-item, .thumb-btn, .link, .link-btn, .hist-toggle, .kb-card, .nav-item, .lever, .toast-undo') || el.closest('.cw-feed, svg')) continue;
+    if (!shown(el) || el.matches('.hm-cell, .heat-btn, .tl-item, .thumb-btn, .link, .link-btn, .hist-toggle, .kb-card, .nav-item, .lever, .toast-undo, .flow-head') || el.closest('.cw-feed, svg')) continue;
     const t = (el.textContent || '').replace(/\\s+/g, ' ').trim(); if (!t) continue;
     const r = el.getBoundingClientRect(); const rs = textRects(el); if (!rs.length) continue;
     const L = Math.min(...rs.map(x => x.left)), R = Math.max(...rs.map(x => x.right)), T = Math.min(...rs.map(x => x.top)), B = Math.max(...rs.map(x => x.bottom));
