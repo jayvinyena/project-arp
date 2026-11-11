@@ -1,4 +1,5 @@
 // 가져오기 보고서: 무엇을 얼마나 가져왔고, 무엇을 바꾸거나 건너뛰었는지
+import { Dialog } from './Dialog.tsx';
 import { useState } from 'preact/hooks';
 import type { ImportReport as Report } from '../../../core/import-legacy.ts';
 import type { Finding } from '../../../core/pipeline.ts';
@@ -16,8 +17,7 @@ export function ImportReport(props: { report: Report; findings: Finding[]; onSav
   const errors = props.findings.filter(f => f.level === 'ERROR').length;
   const warns = props.findings.filter(f => f.level === 'WARN').length;
   return (
-    <div class="overlay">
-      <div class="card dialog wide" role="dialog" aria-label="가져오기 보고서">
+    <Dialog label="가져오기 보고서" onClose={() => props.onClose()} backdrop={false} class="wide">
         <div class="dialog-head">
           <div><h2>엑셀에서 가져왔습니다</h2><p class="small muted" style="margin-top: 2px">계획 기간 {r.horizon?.start} ~ {r.horizon?.end} · 아직 저장하지 않았습니다</p></div>
           <button type="button" class="btn ghost icon-btn" aria-label="닫기" onClick={props.onClose}><IconX /></button>
@@ -55,7 +55,6 @@ export function ImportReport(props: { report: Report; findings: Finding[]; onSav
           <button type="button" class="btn ghost" onClick={props.onClose}>나중에 저장</button>
           <button type="button" class="btn primary" onClick={props.onSave}><IconSave />저장 위치 고르기</button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

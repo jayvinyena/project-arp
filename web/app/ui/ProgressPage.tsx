@@ -4,11 +4,11 @@ import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { ProgressView, ProgressRow } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
-import { fmtInt, fmtPct, fmtDate } from '../lib/format.ts';
+import { fmtInt, fmtPct, fmtDate, localToday } from '../lib/format.ts';
 import { IconCheck, IconDownload } from './icons.tsx';
 import { afterCommit } from './commit.ts';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localToday(); // 지역 시간(UTC면 한국 0 ~ 9시에 어제가 됨)
 
 function DoneInput(props: { value: number | null; label: string; flag: string | null; disabled: boolean; onCommit: (v: number | null) => unknown }) {
   const [text, setText] = useState(props.value == null ? '' : String(props.value));
@@ -123,7 +123,7 @@ export function ProgressPage(props: {
               <button type="button" role="radio" aria-checked={field === 'spent'} class={field === 'spent' ? 'on' : ''} onClick={() => setField('spent')}>실투입 인·일</button>
             </div>
             <button type="button" class="btn sm" title="여럿이 나눠 입력할 진척 엑셀 양식을 받습니다" onClick={() => void props.onTemplate()}><IconDownload />양식 받기</button>
-            {!props.readOnly && <button type="button" class="btn sm" onClick={() => void props.onImport()}>엑셀로 넣기</button>}
+            {!props.readOnly && <button type="button" class="btn sm" onClick={() => void props.onImport()}>엑셀에서 가져오기</button>}
           </div>
         </div>
         <div class="card-body" style="padding-top: 8px">

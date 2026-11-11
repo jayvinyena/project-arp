@@ -1,5 +1,6 @@
 // 화면 안내: 주메뉴마다 "이 화면 안내" 버튼 → 오른쪽 패널(무엇을 하는 곳 · 사용 방법 · 알아 둘 것 · 용어 · 관련 화면)
 // 버튼은 어느 화면에서든 'arp:help' 이벤트로 열고, 앱이 패널을 그린다. 키보드 "?"로도 연다.
+import { Dialog } from './Dialog.tsx';
 import { useEffect } from 'preact/hooks';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { IconX, IconHelp } from './icons.tsx';
@@ -132,7 +133,7 @@ export function helpDoc(page: HelpPage): HelpDoc {
         '리스트에서는 단계 · 세부 상태 · 담당 · 배치 · 마감을 칸에서 바로 바꿉니다. 묶기(항목 · 세부 분류 · 배치 · 단계)로 줄을 나눕니다.',
         '보드에서는 카드를 다른 열로 끌어 단계를 바꿉니다. 체크한 카드는 함께 옮겨지고, 같은 열 안에서 끌면 순서가 바뀝니다. "원화 상태"처럼 파트별 열로도 볼 수 있습니다.',
         '카드를 누르면 에셋 카드 창이 열립니다. 썸네일(끌어놓기 · 붙여넣기), 설명, 속성, 파트 체크리스트, 세부 분류 · 리소스명, 마감일, 링크(Jira 포함), 댓글을 넣습니다.',
-        '팀 제작 리스트(구글 시트)는 "파일 → 다운로드 → Microsoft Excel"로 받아 "엑셀 넣기"에 그대로 넣습니다. 가져오기 창에서 마일스톤 → 업데이트, 시트 · 분류 → 리소스 종류를 고릅니다.',
+        '팀 제작 리스트(구글 시트)는 "파일 → 다운로드 → Microsoft Excel"로 받아 "엑셀에서 가져오기"로 그대로 가져옵니다. 가져오기 창에서 마일스톤 → 업데이트, 시트 · 분류 → 리소스 종류를 고릅니다.',
         '"배치" 탭에서 납품 묶음과 마감일을, "물량 대조" 탭에서 계획 물량과 등록 에셋 수를 맞춥니다.',
       ],
       tips: [
@@ -244,10 +245,10 @@ export function helpDoc(page: HelpPage): HelpDoc {
         '공정 순서 · 파이프라인: 단계를 순서대로 더해 공정을 만듭니다(예: 캐릭터, 배경). 단계 사이 % 는 겹침률입니다. 칩의 ∥ 를 누르면 앞 단계와 병렬(같은 묶음)이 됩니다.',
         '리소스: 분류 · 이름 · 파이프라인과 파트마다 기본 / AI 공수(인·일/개)를 입력합니다. 기본을 비우면 그 파트를 거치지 않습니다.',
         '작업 기록이 있는 공수를 다른 파트로 넘기려면 칸의 → (또는 칸 비우기)로 옮기기 창을 엽니다. 작업 진척 · 에셋 상태가 함께 옮겨집니다.',
-        '새 파트 · 리소스는 각 표 아래 입력 줄에서 추가합니다.',
+        '새 파트 · 리소스는 각 표 아래 입력 줄에서 더합니다.',
       ],
       tips: [
-        '사용하는 곳이 있는 파트 · 리소스는 삭제할 수 없습니다. "사용" 체크를 끄면 계산에서 빠집니다.',
+        '리소스의 X는 함께 지워질 것(물량 · 템플릿 · 작업 진척 · 에셋)을 먼저 보여 줍니다. 기록을 남기려면 "사용" 체크를 끄십시오(계산에서만 빠짐). 리소스가 거치는 파트는 지울 수 없습니다.',
         '계산에 쓰는 공수 = 기본 × (1 − AI 활용) + AI 공수 × AI 활용.',
         '달마다 다른 인원은 "인력" 화면에서 수정합니다.',
       ],
@@ -270,13 +271,13 @@ export function helpDoc(page: HelpPage): HelpDoc {
       short: '업데이트 유형마다 기본 물량을 정해 둡니다',
       what: '업데이트 유형(시즌 · 미니 등)마다 기본 물량을 정해 두는 곳입니다. 새 업데이트를 만들 때 이 물량이 복사됩니다.',
       steps: [
-        '위 유형 탭에서 유형을 선택합니다. 없으면 오른쪽 끝에서 새 유형을 추가합니다.',
+        '위 유형 탭에서 유형을 선택합니다. 없으면 오른쪽 끝에서 새 유형을 더합니다.',
         `리소스마다 ${T()} 수량을 입력합니다.`,
         '"리소스 더하기"로 이 유형에 넣을 리소스를 늘립니다.',
       ],
       tips: [
         '템플릿을 수정해도 이미 만든 업데이트는 변경되지 않습니다.',
-        '이 유형을 사용하는 업데이트가 있으면 유형을 삭제할 수 없습니다.',
+        '이 유형을 사용하는 업데이트가 있으면 유형을 지울 수 없습니다.',
       ],
       related: [
         { page: 'plan', why: '이 유형으로 업데이트를 만들 때' },
@@ -367,14 +368,9 @@ export function PageEyebrow(props: { page: HelpPage }) {
 
 export function HelpPanel(props: { page: HelpPage; onClose: () => void; onGo: (p: HelpPage) => void }) {
   const d = helpDoc(props.page);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') props.onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [props.onClose]);
+  // Esc 닫기는 공용 창(Dialog)이 한다
   return (
-    <div class="overlay" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <aside class="drawer card help-panel" role="dialog" aria-label={`${d.name} 안내`}>
+    <Dialog label={`${d.name} 안내`} onClose={() => props.onClose()} as="aside" class="drawer card help-panel">
         <div class="dialog-head">
           <div><div class="eyebrow" style="margin-bottom: 2px">화면 안내</div><h2 style="font-size: 18px">{d.name}</h2></div>
           <button type="button" class="btn ghost icon-btn" aria-label="안내 닫기" onClick={props.onClose}><IconX /></button>
@@ -407,7 +403,6 @@ export function HelpPanel(props: { page: HelpPage; onClose: () => void; onGo: (p
           </section>
           <p class="small faint">어느 화면에서든 키보드 <kbd>?</kbd>로 이 안내를 열 수 있습니다.</p>
         </div>
-      </aside>
-    </div>
+      </Dialog>
   );
 }

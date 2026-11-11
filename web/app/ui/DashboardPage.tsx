@@ -1,5 +1,6 @@
 // 제작 현황판(docs/20-asset-management.md 18절): 업데이트(마일스톤) 하나의 제작 상황을 한 화면에.
 // 요약 4칸 · 추이(누적 완료 공수 대 계획선, 완료 예정) · 처리할 것 · 항목 × 파트 진행 · 단계 분포 · 배치.
+import { UPDATE_STATUS } from '../lib/terms.ts';
 import { BatchPill, batchWhen } from './BatchPill.tsx';
 import type { BatchRow } from '../../../core/plan.ts';
 import { useState, useEffect, useRef } from 'preact/hooks';
@@ -8,14 +9,11 @@ import { ModeSwitch } from './PlanPage.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { DashboardView, DashTodo } from '../../../core/dashboard.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
-import { fmtPct, fmtDate, fmtInt } from '../lib/format.ts';
+import { fmtPct, fmtDate, fmtInt, fmtShortDate } from '../lib/format.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
 
 type View = DashboardView & { forecast: { completion: string | null; status: string; batches: BatchRow[] } | null };
-const VERDICT: Record<UpdateStatus, { text: string; tone: string }> = {
-  ON_TRACK: { text: '목표 안', tone: 'ok' }, TIGHT: { text: '빠듯', tone: 'warn' }, LATE: { text: '늦음', tone: 'bad' },
-  UNFINISHED: { text: '기간 안에 못 끝남', tone: 'bad' }, NO_RELEASE_DATE: { text: '출시일 없음', tone: '' },
-};
+const VERDICT = UPDATE_STATUS;
 const openAsset = (updateId: string, assetId: string) => window.dispatchEvent(new CustomEvent('arp:assets', { detail: { updateId, assetId } }));
 
 /** 추이: 누적 완료 공수(실제) 대 계획선. 오늘 · 목표일 · 완료 예정 표시, 주마다 가로 위치에 따라 값 보기 */
@@ -83,7 +81,7 @@ function BurnUp(props: { v: View }) {
       </svg>
       {hp && (
         <div class="chart-tip" style={{ left: `${Math.min(w - 170, Math.max(0, x(hp.date) + 10))}px` }}>
-          <b>{hp.date.slice(5).replace('-', '/')} 주</b>
+          <b>{fmtShortDate(hp.date)} 주</b>
           <span><i class="key-actual" />실제 {hp.actual == null ? '—' : fmtPct(hp.actual / trend.total)}</span>
           <span><i class="key-ideal" />계획선 {hp.ideal == null ? '—' : fmtPct(hp.ideal / trend.total)}</span>
         </div>
@@ -102,7 +100,7 @@ function TodoList(props: { updateId: string; items: DashTodo[]; empty: string; s
         <li><button type="button" class="todo-item" onClick={() => openAsset(props.updateId, t.assetId)}>
           <span class="todo-name">{t.name}</span>
           <span class="small faint">{t.resource}{t.part ? ` · ${t.part}` : ''}{t.who ? ` · ${t.who}` : ''}</span>
-          {t.since && <span class="small todo-since">{props.sinceLabel} {t.since.slice(5).replace('-', '/')}</span>}
+          {t.since && <span class="small todo-since">{props.sinceLabel} {fmtShortDate(t.since)}</span>}
         </button></li>
       ))}
       {props.items.length > 7 && !more && <li><button type="button" class="btn sm ghost" onClick={() => setMore(true)}>{props.items.length - 7}개 더 보기</button></li>}
@@ -176,7 +174,7 @@ export function DashboardPage(props: {
           <span class="stat-label">다음 배치 마감</span>
           {next ? <>
             <b class={`stat-num${next.daysLeft! < 0 ? ' bad-num' : next.daysLeft! <= 14 ? ' warn-num' : ''}`}>{next.daysLeft! < 0 ? `${-next.daysLeft!}일 지남` : `D-${next.daysLeft}`}</b>
-            <span class="small faint">{next.name} · {next.due} · 진행 {fmtPct(next.progress)}</span>
+            <span class="small faint">{next.name} · {fmtShortDate(next.due)} · 진행 {fmtPct(next.progress)}</span>
           </> : <><b class="stat-num">—</b><span class="small faint">마감일이 있는 배치가 없습니다</span></>}
         </div>
       </div>
@@ -294,7 +292,7 @@ export function DashboardPage(props: {
                     {v.batches.map(b => (
                       <tr class="row">
                         <td><b>{b.name}</b>{(() => { const f = v.forecast?.batches.find(x => x.batchId === b.batchId); return <div class="batch-when small">{f ? <><span class="num">{batchWhen(f)}</span><BatchPill b={f} /></> : <span class="faint">{b.done >= b.count ? '모두 완료' : '완료 예정 없음'}</span>}</div>; })()}</td>
-                        <td class="small">{b.due ? <>{b.due.slice(5).replace('-', '/')} <span class={`pill plain ${b.daysLeft! < 0 && b.done < b.count ? 'bad' : b.daysLeft! <= 14 ? 'warn' : ''}`}>{b.daysLeft! < 0 ? `${-b.daysLeft!}일 지남` : `D-${b.daysLeft}`}</span></> : '—'}</td>
+                        <td class="small">{b.due ? <>{fmtShortDate(b.due)} <span class={`pill plain ${b.daysLeft! < 0 && b.done < b.count ? 'bad' : b.daysLeft! <= 14 ? 'warn' : ''}`}>{b.daysLeft! < 0 ? `${-b.daysLeft!}일 지남` : `D-${b.daysLeft}`}</span></> : '—'}</td>
                         <td class="n num">{b.done} / {b.count}</td>
                         <td><span class="share"><span class="num small">{fmtPct(b.progress)}</span><span class="bar"><span class={`fill${b.progress >= 1 ? ' done' : ''}`} style={{ width: `${b.progress * 100}%` }} /></span></span></td>
                       </tr>

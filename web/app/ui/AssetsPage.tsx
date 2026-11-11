@@ -1,6 +1,7 @@
 // 에셋 제작 현황(docs/20-asset-management.md 16절): 에셋 리스트 + 트렐로식 보드(칸반) + 에셋 카드 창.
 // 보드 열 = 제작 단계(대기 · 원화 · 모델링 · … · 완료) 또는 파트별 상태. 카드를 끌면 파트 상태가 바뀌고 작업 진척에 자동 집계된다.
 // 보조 탭: 배치 · 물량 대조.
+import { Dialog } from './Dialog.tsx';
 import { BatchPill, batchWhen } from './BatchPill.tsx';
 import type { BatchRow } from '../../../core/plan.ts';
 import { useState, useEffect, useRef } from 'preact/hooks';
@@ -9,7 +10,7 @@ import { Field } from './SetupPage.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { AssetsView, AssetItem, AssetStatus, Tier, Stage, AssetDetail } from '../../../core/assets.ts';
 import type { Edit } from '../../../core/edits.ts';
-import { fmtPct, fmtDate } from '../lib/format.ts';
+import { fmtPct, fmtDate, fmtShortDate } from '../lib/format.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
 import { IconPlus, IconX, IconDownload, IconFolder, IconImage, IconGrid, IconList } from './icons.tsx';
 import { useReorder, Grip } from './reorder.tsx';
@@ -147,7 +148,7 @@ function DueCell(props: { own: string | null; batchDue: string | null; done: boo
   return (
     <button type="button" class={`due-btn${late ? ' overdue' : ''}${props.own ? '' : ' inherited'}`} aria-label={props.label} disabled={props.disabled}
       title={props.own ? '에셋 마감일(눌러서 변경)' : due ? '배치 마감일을 따릅니다(눌러서 에셋 마감일 지정)' : '눌러서 마감일 지정'} onClick={() => setEdit(true)}>
-      {due ? (props.own ? due : `배치 ${due.slice(5).replace('-', '/')}`) : '—'}
+      {due ? (props.own ? fmtShortDate(due) : `배치 ${fmtShortDate(due)}`) : '—'}
     </button>
   );
 }
@@ -179,11 +180,10 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
     try { const t = await makeThumb(file); await apply({ kind: 'assetThumb', assetId: a.assetId, data: t.data, mime: t.mime, width: t.width, height: t.height }); } finally { setBusy(false); }
   };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(e.target as HTMLElement).closest?.('input, textarea, select')) props.onClose(); };
+    // Esc 닫기는 공용 창(Dialog)이 한다(입력 칸 안의 Esc는 칸 편집 취소)
     const onPaste = (e: ClipboardEvent) => { const f = [...(e.clipboardData?.files ?? [])].find(x => x.type.startsWith('image/')); if (f) { e.preventDefault(); void putThumb(f); } };
-    window.addEventListener('keydown', onKey);
     window.addEventListener('paste', onPaste);
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('paste', onPaste); };
+    return () => { window.removeEventListener('paste', onPaste); };
   }, [a.assetId]);
   const pick = () => {
     const input = document.createElement('input');
@@ -203,8 +203,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
     ...(showActivity ? (d?.activity ?? []).map(x => ({ kind: 'a' as const, at: x.at, who: x.editor, text: x.text, id: '' })) : []),
   ].sort((x, y) => (x.at < y.at ? 1 : -1));
   return (
-    <div class="overlay" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <div class="card dialog asset-card-window" role="dialog" aria-label="에셋 카드">
+    <Dialog label="에셋 카드" onClose={() => props.onClose()} class="asset-card-window">
         <div class={`cw-cover${drag ? ' drag' : ''}`} onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
           onDrop={e => { e.preventDefault(); setDrag(false); const f = [...(e.dataTransfer?.files ?? [])].find(x => x.type.startsWith('image/')); if (f) void putThumb(f); }}>
           <Thumb asset={a} size="big" />
@@ -222,7 +221,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
               <span class={`label-chip st-${a.sub}`}>{LABEL[a.sub]}</span>
               <span class="label-chip">{batch ? batch.name : '미배정'}</span>
               <span class="label-chip">{MODE_LABEL[a.tier]}</span>
-              {due && <span class={`label-chip${overdue ? ' overdue' : ''}`}>마감 {due}{a.dueDate ? '' : '(배치)'}</span>}
+              {due && <span class={`label-chip${overdue ? ' overdue' : ''}`}>마감 {fmtShortDate(due)}{a.dueDate ? '' : '(배치)'}</span>}
               {a.jiraKey && (href ? <a class="label-chip link" href={href} target="_blank" rel="noreferrer">{a.jiraKey} ↗</a> : <span class="label-chip">{a.jiraKey}</span>)}
             </div>
 
@@ -336,7 +335,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
             <span class="cw-side-h">배치</span>
             <select class="field" aria-label="배치" value={a.batchId ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'batch_id', value: (e.target as HTMLSelectElement).value || null })}>
               <option value="">미배정</option>
-              {view.batches.map(b => <option value={b.batchId}>{b.name}{b.dueDate ? ` · ${b.dueDate}` : ''}</option>)}
+              {view.batches.map(b => <option value={b.batchId}>{b.name}{b.dueDate ? ` · 마감 ${fmtShortDate(b.dueDate)}` : ''}</option>)}
             </select>
             <span class="cw-side-h">마감일</span>
             <input class="field" type="date" aria-label="에셋 마감일" value={a.dueDate ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'due_date', value: (e.target as HTMLInputElement).value || null })} />
@@ -349,18 +348,17 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
             <Field value={a.jiraKey ?? ''} label="에셋 Jira 키" placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'jira_key', value: t })} />
             <span class="cw-side-h">세부 분류</span>
             <Field value={a.category ?? ''} label="세부 분류" placeholder="예: 코스튬 · 상의" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'category', value: t })} />
-            <span class="cw-side-h">리소스명</span>
-            <Field value={a.code ?? ''} label="리소스명" placeholder="예: CH_0123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'code', value: t })} />
+            <span class="cw-side-h">에셋 코드</span>
+            <Field value={a.code ?? ''} label="에셋 코드" placeholder="제작 리스트의 리소스명(예: CH_0123)" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'code', value: t })} />
             <div class="viewer-slot small faint">에셋 뷰어(큰 이미지 · 3D)는 다음 단계에서 이 자리에</div>
             {!ro && (confirmDelete
-              ? <div class="cw-danger"><span class="small">삭제하시겠습니까? 썸네일은 돌아오지 않습니다.</span>
+              ? <div class="cw-danger"><span class="small">지우시겠습니까? 썸네일은 돌아오지 않습니다.</span>
                 <button type="button" class="btn sm danger" onClick={async () => { if (await apply({ kind: 'deleteAssets', assetIds: [a.assetId] })) props.onClose(); }}>지우기</button>
                 <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></div>
               : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>이 에셋 지우기</button>)}
           </aside>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -580,15 +578,15 @@ export function AssetsPage(props: {
       {tab === 'assets' && (
         <section class="card asset-board-card">
           <div class="asset-bar">
-            <input class="field" type="search" aria-label="에셋 찾기" placeholder="이름 · 리소스명 · 분류 · 속성 · Jira" value={q} onInput={e => setQ((e.target as HTMLInputElement).value)} />
+            <input class="field" type="search" aria-label="에셋 찾기" placeholder="이름 · 코드 · 분류 · 속성 · Jira" value={q} onInput={e => setQ((e.target as HTMLInputElement).value)} />
             <span style="flex: 1" />
             <div class="segmented wide" role="radiogroup" aria-label="보기">
               <button type="button" role="radio" aria-checked={view === 'list'} class={view === 'list' ? 'on' : ''} onClick={() => setView('list')}><IconList />리스트</button>
               <button type="button" role="radio" aria-checked={view === 'board'} class={view === 'board' ? 'on' : ''} onClick={() => setView('board')}><IconGrid />보드</button>
             </div>
             {!ro && <button type="button" class={`btn sm${adding ? ' on' : ''}`} aria-expanded={adding} onClick={() => setAdding(x => !x)}><IconPlus />에셋 더하기</button>}
-            <button type="button" class="btn sm" onClick={() => void props.onExport(v.updateId)}><IconDownload />엑셀 받기</button>
-            {!ro && <button type="button" class="btn sm" onClick={() => void props.onImport()}><IconFolder />엑셀 넣기</button>}
+            <button type="button" class="btn sm" onClick={() => void props.onExport(v.updateId)}><IconDownload />엑셀로 내보내기</button>
+            {!ro && <button type="button" class="btn sm" title="에셋 엑셀 · 팀 제작 리스트(구글 시트를 엑셀로 받은 것)를 가져옵니다" onClick={() => void props.onImport()}><IconFolder />엑셀에서 가져오기</button>}
           </div>
           {/* 거르기 줄: 늘 같은 자리(고르기 전후로 화면이 움직이지 않게) */}
           <div class="filter-bar" role="group" aria-label="거르기">
@@ -606,8 +604,8 @@ export function AssetsPage(props: {
               {v.batches.map(b => <option value={b.batchId}>{b.name}</option>)}
             </select>
             <select class={`field${team !== 'all' ? ' on' : ''}`} aria-label="팀 거르기" title="그 파트 일이 있는(해당 없음이 아닌) 에셋만. 담당 · 상태도 그 파트 기준으로 거릅니다" value={team} onChange={e => { setTeam((e.target as HTMLSelectElement).value); setWho('all'); }}>
-              <option value="all">모든 팀</option>
-              {v.parts.map(p => <option value={p.partId}>{p.name}팀</option>)}
+              <option value="all">모든 파트</option>
+              {v.parts.map(p => <option value={p.partId}>{p.name}</option>)}
             </select>
             <select class={`field${who !== 'all' ? ' on' : ''}`} aria-label="담당 거르기" value={who} onChange={e => setWho((e.target as HTMLSelectElement).value)}>
               <option value="all">{team !== 'all' ? `모든 ${v.parts.find(p => p.partId === team)?.name ?? ''} 담당` : '모든 담당'}</option>
@@ -666,7 +664,7 @@ export function AssetsPage(props: {
           {shown.length === 0 && (
             <div class="empty-assets">
               <p class="muted">{v.assets.length ? '조건에 맞는 에셋이 없습니다.' : '아직 등록된 에셋이 없습니다.'}</p>
-              <p class="small faint">"에셋 더하기"나 "엑셀 넣기"로 등록하거나, "물량 대조" 탭의 "빈 에셋 만들기"로 물량만큼 한 번에 만듭니다.</p>
+              <p class="small faint">"에셋 더하기"나 "엑셀에서 가져오기"(팀 제작 리스트도 그대로)로 등록하거나, "물량 대조" 탭의 "빈 에셋 만들기"로 물량만큼 한 번에 만듭니다.</p>
             </div>
           )}
 
@@ -774,7 +772,7 @@ export function AssetsPage(props: {
                                     {!partBoard && a.stage !== 'TODO' && a.stage !== 'DONE'
                                       ? <StatusSelect value={a.sub} label={`${a.name} 세부 상태`} disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
                                       : null}
-                                    {due && <span class={`label-chip${late ? ' overdue' : ''}`}>{due.slice(5).replace('-', '/')}</span>}
+                                    {due && <span class={`label-chip${late ? ' overdue' : ''}`}>{fmtShortDate(due)}</span>}
                                     {a.assignee && <span class="label-chip">{a.assignee}</span>}
                                     {a.jiraKey && <span class="label-chip">{a.jiraKey}</span>}
                                     {a.comments > 0 && <span class="label-chip" title="댓글">💬 {a.comments}</span>}
@@ -873,16 +871,14 @@ export function AssetsPage(props: {
       )}
 
       {confirm && (
-        <div class="overlay" onClick={e => { if (e.target === e.currentTarget) setConfirm(null); }}>
-          <div class="card dialog confirm-dialog" role="dialog" aria-label="단계 되돌리기 확인">
+        <Dialog label="단계 되돌리기 확인" onClose={() => setConfirm(null)} class="confirm-dialog">
             <h2 style="font-size: 16px">단계를 되돌리시겠습니까?</h2>
             <p class="small muted" style="margin: 8px 0 14px">{confirm.text} 변경 이력에서 되돌릴 수 있습니다.</p>
             <div class="inline" style="justify-content: flex-end">
               <button type="button" class="btn sm ghost" onClick={() => setConfirm(null)}>그만두기</button>
               <button type="button" class="btn sm primary" onClick={() => { const c = confirm; setConfirm(null); void apply({ kind: 'moveStage', assetIds: c.ids, stage: c.stage }); }}>되돌리기</button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {open && <CardWindow view={v} asset={open} stages={stages} readOnly={ro} version={props.version} apply={apply} move={move} onClose={() => setOpenId(null)} />}

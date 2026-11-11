@@ -1,6 +1,7 @@
 // 작업자 명단(docs/24-people.md): 팀별로 묶어 보기 · 찾기 · 팀 거르기 · 한 번에 더하기 · 참여 스위치.
 // 소속팀은 목록(파트 + 지원 팀)에서만 고른다. 지원 팀은 "팀" 단추로 더하고, 파트는 기준 정보에서 더한다.
 // 칸은 눌러서 바로 고치고(벗어나면 저장), 모든 고치기는 변경 이력에서 되돌린다.
+import { Dialog } from './Dialog.tsx';
 import { useState } from 'preact/hooks';
 import type { AssigneeCandidate, Person, TeamOption } from '../../../core/people.ts';
 import { AssigneeFinder, PeoplePaste } from './PeopleImport.tsx';
@@ -121,7 +122,7 @@ export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandid
               ))}
               <input class="field" aria-label="새 지원 팀 이름" placeholder="새 팀 이름(예: PM · 기획)" maxLength={30} value={newTeam}
                 onInput={e => setNewTeam((e.target as HTMLInputElement).value)} onKeyDown={e => { if (e.key === 'Enter') void addTeam(); }} />
-              <button type="button" class="btn sm" disabled={!newTeam.trim()} onClick={() => void addTeam()}>팀 추가</button>
+              <button type="button" class="btn sm" disabled={!newTeam.trim()} onClick={() => void addTeam()}>팀 더하기</button>
             </div>
           </div>
         )}
@@ -170,8 +171,7 @@ export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandid
       </div>
 
       {rename && (
-        <div class="overlay" onClick={e => { if (e.target === e.currentTarget) setRename(null); }}>
-          <div class="card dialog confirm-dialog" role="dialog" aria-label="작업자 이름 바꾸기">
+        <Dialog label="작업자 이름 바꾸기" onClose={() => setRename(null)} class="confirm-dialog">
             <h2 style="font-size: 16px">에셋 담당 이름도 바꿀까요?</h2>
             <p class="small muted" style="margin: 8px 0 14px">"{rename.person.name}"이(가) 에셋 담당 <b>{rename.person.assigned}칸</b>에 적혀 있습니다. 함께 "{rename.to}"(으)로 바꾸면 담당 이름과 명단이 계속 맞습니다. 변경 이력에서 한 번에 되돌릴 수 있습니다.</p>
             <div class="inline" style="justify-content: flex-end">
@@ -179,8 +179,7 @@ export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandid
               <button type="button" class="btn sm" onClick={() => doRename(false)}>명단만 바꾸기</button>
               <button type="button" class="btn sm primary" onClick={() => doRename(true)}>담당도 바꾸기</button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
     </section>
   );

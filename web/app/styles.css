@@ -12,7 +12,7 @@
 
   --text: #17171a;
   --text-2: #55555d;
-  --text-3: #9b9ba5;
+  --text-3: #74747f;
 
   --accent: #5b5bd6;
   --accent-ink: #4040b8;
@@ -45,7 +45,7 @@
     --line-strong: #34343b;
     --text: #ededf0;
     --text-2: #a7a7b1;
-    --text-3: #6b6b76;
+    --text-3: #8a8a95;
     --accent: #8d8df2;
     --accent-ink: #b4b4ff;
     --accent-soft: rgb(141 141 242 / 14%);
@@ -63,7 +63,7 @@
 }
 :root[data-theme='dark'] {
   --bg: #0c0c0e; --surface: #141417; --surface-2: #18181c; --hover: #1e1e23; --line: #26262c; --line-strong: #34343b;
-  --text: #ededf0; --text-2: #a7a7b1; --text-3: #6b6b76; --accent: #8d8df2; --accent-ink: #b4b4ff; --accent-soft: rgb(141 141 242 / 14%);
+  --text: #ededf0; --text-2: #a7a7b1; --text-3: #8a8a95; --accent: #8d8df2; --accent-ink: #b4b4ff; --accent-soft: rgb(141 141 242 / 14%);
   --ok: #4cc47a; --ok-soft: rgb(76 196 122 / 13%); --warn: #f0a53c; --warn-soft: rgb(240 165 60 / 13%); --bad: #f2645c; --bad-soft: rgb(242 100 92 / 13%);
   --bar-other: #34343c; --shadow: none; --ring: 0 0 0 3px rgb(141 141 242 / 30%); color-scheme: dark;
 }
@@ -1490,3 +1490,15 @@ table.grid.dash-batch-table { table-layout: fixed; }
 
 /* 리소스 지우기 확인 창: 함께 지워질 것 */
 .del-list { margin: 0; padding-left: 18px; display: grid; gap: 2px; color: var(--text); }
+
+/* ───────── 1단계 공통 기반(docs/34 T6 · T10) ───────── */
+/* 한국어는 낱말 단위로 줄바꿈(아주 긴 영문 · 주소만 아무 데서나) */
+body { word-break: keep-all; overflow-wrap: anywhere; }
+/* 꺼진 단추: 켜진 것과 확실히 다르게(흐림 + 금지 커서). 꺼진 주 단추는 회색 */
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary:disabled { background: var(--line-strong); border-color: var(--line-strong); color: var(--text-2); opacity: 1; }
+.btn.ghost.icon-btn:disabled { opacity: .3; }
+/* 입력 칸 옆 단추는 칸과 같은 높이(34) */
+.inline:has(> .field) > .btn.sm, .inline:has(> input) > .btn.sm, .people-head-tools > .btn.sm, .people-team-pick > .btn.sm { height: 34px; }
+/* 읽기 전용 고르기: 펼침 화살표 없이 글자처럼(고칠 수 있어 보이지 않게) */
+select.field:disabled, select:disabled.field { appearance: none; -webkit-appearance: none; background-image: none; border-color: transparent; background-color: transparent; color: var(--text-2); opacity: 1; cursor: default; }

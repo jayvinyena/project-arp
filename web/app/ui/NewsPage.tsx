@@ -1,14 +1,15 @@
 // 소식(docs/26-viewer.md 4절): 편집자 소식 + 지난번 본 뒤 자동 요약 + 알리기 문구 복사. 보기 모드의 첫 화면.
+import { UPDATE_STATUS } from '../lib/terms.ts';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { NewsItem, NewsSummary } from '../../../core/news.ts';
 import type { Edit } from '../../../core/edits.ts';
-import { fmtDate } from '../lib/format.ts';
+import { fmtDate, fmtDateTime } from '../lib/format.ts';
 import { IconPlus, IconX, IconCopy } from './icons.tsx';
 
-const STATUS: Record<string, string> = { ON_TRACK: '목표 안', TIGHT: '빠듯함', LATE: '늦음', UNFINISHED: '기간 안에 못 끝남', NO_RELEASE_DATE: '출시일 없음' };
-const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const STATUS: Record<string, string> = Object.fromEntries(Object.entries(UPDATE_STATUS).map(([k, v]) => [k, v.text]));
+const when = (iso: string) => fmtDateTime(iso);
 
 function forecastLines(s: NewsSummary) {
   return s.forecasts.map(f => `· ${f.name}: 완료 예정 ${f.completion ? fmtDate(f.completion) : '—'} (${STATUS[f.status] ?? f.status})`);

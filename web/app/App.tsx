@@ -23,7 +23,7 @@ import type { Notice, Seen } from '../../core/notice.ts';
 import { idb, rememberRecent, ensurePermission } from './lib/idb.ts';
 import type { Recovery, RecentFile } from './lib/idb.ts';
 import { LATEST_SCHEMA } from '../../core/migrate.ts';
-import { fmtShortDate } from './lib/format.ts';
+import { fmtShortDate, localToday, fmtDateTime } from './lib/format.ts';
 import type { ImportReport as ImportReportData } from '../../core/import-legacy.ts';
 import type { OpenedFile } from './lib/files.ts';
 import type { LaunchEdit } from '../../core/launch.ts';
@@ -492,7 +492,7 @@ export function App() {
     try {
       const { bytes } = await rpc.exportXlsx(planMode);
       const base = (view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_');
-      download(bytes, `${base} ${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      download(bytes, `${base} ${localToday()}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } catch (error) {
       showToast(`내보내지 못했습니다: ${(error as Error).message}`);
     }
@@ -502,7 +502,7 @@ export function App() {
     try {
       const { bytes } = await rpc.exportTemplate();
       const base = (view?.snapshot.projectName ?? 'ARP').replace(/[\\/:*?"<>|]/g, '_');
-      download(bytes, `${base} 편집용 ${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      download(bytes, `${base} 편집용 ${localToday()}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       showToast('편집용 엑셀을 내려받았습니다. 다시 가져오면 새 프로젝트 파일이 되고, 파이프라인 · 에셋 · 작업자 · 소식 · 이력은 빠집니다(엑셀 "안내" 시트 참고).');
     } catch (error) {
       showToast(`내보내지 못했습니다: ${(error as Error).message}`);
@@ -744,7 +744,7 @@ export function App() {
               <IconAlert />
               <div style="flex: 1">
                 <b>저장하지 않은 작업이 있습니다</b>
-                <p class="small muted">{recovery.projectName} · {new Date(recovery.at).toLocaleString('ko-KR')}</p>
+                <p class="small muted">{recovery.projectName} · {fmtDateTime(recovery.at)}</p>
                 <div class="inline" style="margin-top: 8px">
                   <button class="btn sm primary" onClick={() => void restore(recovery)}>되살리기</button>
                   <button class="btn sm ghost" onClick={() => { void idb.del('recovery'); setRecovery(null); }}>버리기</button>
@@ -758,7 +758,7 @@ export function App() {
               {recent.map(r => (
                 <div class="recent-row">
                   <button type="button" class="recent-item" onClick={() => void openRecent(r)}>
-                    <IconFolder /><span>{r.name}</span><span class="small faint">{new Date(r.at).toLocaleDateString('ko-KR')}</span>
+                    <IconFolder /><span>{r.name}</span><span class="small faint">{fmtDateTime(r.at)}</span>
                   </button>
                   <button type="button" class="btn sm" aria-label={`${r.name} 보기로 열기`} title="고치지 않고 보기만(파일에 쓰지 않음)" onClick={() => void openRecent(r, true)}><IconEye />보기</button>
                 </div>
@@ -773,7 +773,7 @@ export function App() {
             <button class="btn primary lg" disabled={busy} onClick={async () => { const f = await pickFile(); if (f) await open(f, false); }}><IconFolder />프로젝트 파일 열기</button>
             <button class="btn lg" disabled={busy} title="고치지 않고 보기만 합니다. 파일에 아무것도 쓰지 않아 편집하는 사람을 막지 않습니다" onClick={async () => { const f = await pickFile(); if (f) await open(f, false, { view: true }); }}><IconEye />보기로 열기</button>
             <button class="btn lg" disabled={busy} onClick={() => setCreating(true)}>새 프로젝트 만들기</button>
-            <button class="btn lg" disabled={busy} onClick={() => setImporting(true)}>엑셀로 가져오기</button>
+            <button class="btn lg" disabled={busy} onClick={() => setImporting(true)}>엑셀에서 가져오기</button>
             <button class="btn ghost lg" disabled={busy} onClick={async () => open(await fetchSample('normal'), true)}>예시 프로젝트로 둘러보기</button>
           </div>
           {importing && (
@@ -887,7 +887,7 @@ export function App() {
         {file.viewer && (
           <div class="page" style="margin-bottom: 16px">
             <div class="banner viewer-banner" role="status"><IconEye /><div style="flex: 1"><b>보기 모드</b>
-              <p class="small muted">마지막 저장 {new Date(file.lastModified).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{view.meta.lock_holder && Date.now() - Date.parse(view.meta.lock_heartbeat_at ?? '') < LOCK_FRESH_MS ? ` · 지금 ${view.meta.lock_holder}님이 편집 중` : ''}{file.handle ? ' · 저장되면 1분 안에 최신으로 바뀝니다' : ''}</p></div>
+              <p class="small muted">마지막 저장 {fmtDateTime(file.lastModified)}{view.meta.lock_holder && Date.now() - Date.parse(view.meta.lock_heartbeat_at ?? '') < LOCK_FRESH_MS ? ` · 지금 ${view.meta.lock_holder}님이 편집 중` : ''}{file.handle ? ' · 저장되면 1분 안에 최신으로 바뀝니다' : ''}</p></div>
               {file.handle && canSaveInPlace && <button type="button" class="btn sm" onClick={() => void editInstead()}>편집으로 열기</button>}
             </div>
           </div>
@@ -902,7 +902,7 @@ export function App() {
             <div class="banner notice" role="status">
               <IconAlert />
               <div style="flex: 1">
-                <b>지난번({new Date(notice.since).toLocaleDateString('ko-KR')})에 본 뒤 바뀐 것</b>
+                <b>지난번({fmtDateTime(notice.since)})에 본 뒤 바뀐 것</b>
                 <ul class="small">
                   {notice.changed.slice(0, 5).map(c => (
                     <li>{c.name}: 완료 예정 {c.before ? fmtShortDate(c.before) : '기간 밖'} → {c.after ? fmtShortDate(c.after) : '기간 밖'}{c.deltaDays ? ` (${c.deltaDays > 0 ? '+' : '−'}${Math.abs(c.deltaDays)}일)` : ''}</li>

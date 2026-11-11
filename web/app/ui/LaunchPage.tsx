@@ -1,30 +1,26 @@
 // 런칭 물량 설계 화면: 날짜 · 구간 비교 · 파트 부하 · 역산 · 물량 표
+import { UPDATE_STATUS } from '../lib/terms.ts';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import type { View } from '../lib/rpc.ts';
 import { rpc } from '../lib/rpc.ts';
 import type { LaunchEdit, MaxScaleResult, HeadcountResult, ModeOutcome } from '../../../core/launch.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
-import { fmtDate, fmtShortDate, fmtDays, fmtPct, fmtHeads, fmtInt } from '../lib/format.ts';
+import { fmtDate, fmtShortDate, fmtDays, fmtPct, fmtHeads, fmtInt, fmtWorkdays } from '../lib/format.ts';
 import { VolumeTable } from './VolumeTable.tsx';
 import type { Edit } from '../../../core/edits.ts';
 import { IconAlert, IconSpark, IconUsers } from './icons.tsx';
 
 import { MODE_LABEL } from '../lib/modes.ts';
 export { MODE_LABEL };
-const STATUS: Record<UpdateStatus, { text: string; tone: string }> = {
-  ON_TRACK: { text: '목표 안', tone: 'ok' },
-  TIGHT: { text: '빠듯', tone: 'warn' },
-  LATE: { text: '늦음', tone: 'bad' },
-  UNFINISHED: { text: '기간 안에 못 끝남', tone: 'bad' },
-  NO_RELEASE_DATE: { text: '출시일 없음', tone: '' },
-};
+// 판정 이름은 한 곳(lib/terms.ts)에서
+const STATUS = UPDATE_STATUS;
 
 function slackText(m: ModeOutcome): { text: string; tone: string } {
   if (m.slackWorkdays == null) return { text: '판단 불가', tone: '' };
-  if (m.slackWorkdays < 0) return { text: `${-m.slackWorkdays}영업일 여유`, tone: 'ok' };
+  if (m.slackWorkdays < 0) return { text: `여유 ${fmtWorkdays(-m.slackWorkdays, false)}`, tone: 'ok' };
   if (m.slackWorkdays === 0) return { text: '여유 없음', tone: 'warn' };
-  return { text: `${m.slackWorkdays}영업일 늦음`, tone: 'bad' };
+  return { text: `늦음 ${fmtWorkdays(m.slackWorkdays)}`, tone: 'bad' };
 }
 
 /** 'LAUNCH|PROP' 같은 키를 '런칭 · 프랍'처럼 이름으로 */
@@ -96,7 +92,7 @@ function PartLoad(props: { mode: ModeOutcome }) {
                   <span class={`fill${launchRate > 1 ? ' over' : ''}`} style={{ width: `${(launchRate / scaleMax) * 100}%` }} />
                   {scaleMax > 1.02 && <span class="cap" style={{ left: `${100 / scaleMax}%` }} title="작업 가능량 100%" />}
                 </div>
-                {p.maxWait > 0 && <div class="small faint" style="margin-top: 4px">인력 대기 최대 {p.maxWait}영업일</div>}
+                {p.maxWait > 0 && <div class="small faint" style="margin-top: 4px">앞 공정 · 인력을 기다린 날 최대 {fmtWorkdays(p.maxWait, false)}</div>}
               </div>
               <div class="part-num"><b>{fmtPct(launchRate)}</b><span>{fmtInt(p.launchDays)} / {fmtInt(p.windowCapacity)}</span></div>
             </div>

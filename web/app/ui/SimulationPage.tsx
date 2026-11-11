@@ -1,17 +1,18 @@
 // 시뮬레이션: ① 시나리오 고르기 · ② 바꿀 것(넣은 변경 · 결과 미리보기 · 변경 추가 · 복제·지우기·원본에 반영) · ③ 결과 비교 · ④ 업데이트 자세히 보기
+import { UPDATE_STATUS } from '../lib/terms.ts';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { ScenarioSummary, SimMeta, CompareView, ScenarioAction, ScenarioOp, Sensitivity } from '../../../core/scenarios.ts';
 import type { MaxScaleResult, HeadcountResult } from '../../../core/launch.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
-import { fmtShortDate, fmtPct, fmtHeads, fmtDate, fmtDays } from '../lib/format.ts';
+import { fmtShortDate, fmtPct, fmtHeads, fmtDate, fmtDays, fmtWorkdays } from '../lib/format.ts';
 import { ModeSwitch } from './PlanPage.tsx';
 import { MODE_LABEL } from './LaunchPage.tsx';
 import { IconPlus, IconX, IconAlert, IconSpark, IconUsers, IconPencil } from './icons.tsx';
 
-const TONE: Record<UpdateStatus, string> = { ON_TRACK: 'ok', TIGHT: 'warn', LATE: 'bad', UNFINISHED: 'bad', NO_RELEASE_DATE: '' };
-const STATUS_TEXT: Record<UpdateStatus, string> = { ON_TRACK: '목표 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '못 끝냄', NO_RELEASE_DATE: '출시일 없음' };
+const TONE = Object.fromEntries(Object.entries(UPDATE_STATUS).map(([k, v]) => [k, v.tone])) as Record<UpdateStatus, string>;
+const STATUS_TEXT = Object.fromEntries(Object.entries(UPDATE_STATUS).map(([k, v]) => [k, v.text])) as Record<UpdateStatus, string>;
 
 type ActionKind = ScenarioAction['kind'];
 /** 바꿀 수 있는 것 전부. 무리마다 묶어 한눈에 보이게(목록 상자에 숨기지 않는다) */
@@ -19,8 +20,8 @@ const KINDS: Record<ActionKind, { label: string; hint: string }> = {
   headcount: { label: '인원', hint: '파트의 정규 인원을 기간 동안 더하거나 뺍니다.' },
   utilization: { label: '가동률', hint: '기간 동안 파트 인원이 실제 작업에 쓰는 시간 비율을 변경합니다(회의 · 휴가 등을 뺀 몫).' },
   productivity: { label: '생산성', hint: '기간 동안 파트의 작업 속도 배율을 변경합니다(1 = 기준, 1.2 = 20% 빠름).' },
-  outsource: { label: '외주', hint: '파트에 달마다 외주 인·일을 추가합니다.' },
-  support: { label: '임시 지원', hint: '다른 팀에서 지원받는 인·일을 달마다 추가합니다.' },
+  outsource: { label: '외주', hint: '파트에 달마다 외주 인·일을 더합니다.' },
+  support: { label: '임시 지원', hint: '다른 팀에서 지원받는 인·일을 달마다 더합니다.' },
   aiShare: { label: 'AI 비율', hint: '파트 작업 중 AI를 사용해 진행하는 몫을 변경합니다. 그 몫은 "AI 사용 시" 공수로 계산합니다.' },
   aiEffort: { label: 'AI 공수 절감', hint: 'AI를 사용할 때 공수가 기본보다 얼마나 줄어드는지 변경합니다. AI 비율이 0%이면 효과가 없습니다.' },
   rework: { label: '재작업률', hint: '파트에서 다시 작업하는 비율을 변경합니다. 공수에 그만큼 더해집니다.' },
@@ -43,8 +44,8 @@ const GROUPS: { name: string; kinds: ActionKind[] }[] = [
 const pct = (x: number | null | undefined) => (x == null ? '' : String(Math.round(x * 1000) / 10));
 
 function Delta(props: { d: number | null }) {
-  if (props.d == null || props.d === 0) return props.d === 0 ? <span class="delta zero">±0</span> : null;
-  return <span class={`delta ${props.d < 0 ? 'good' : 'bad'}`}>{props.d > 0 ? `+${props.d}` : `−${-props.d}`}일</span>;
+  if (props.d == null || props.d === 0) return props.d === 0 ? <span class="delta zero">±0영업일</span> : null;
+  return <span class={`delta ${props.d < 0 ? 'good' : 'bad'}`}>{fmtWorkdays(props.d)}</span>;
 }
 
 function StepTitle(props: { n: number; title: string; sub?: string }) {
@@ -225,7 +226,7 @@ function ActionForm(props: { meta: SimMeta; planMode: PlanMode; updateId: string
 
   return (
     <div class="action-form">
-      <div class="action-form-head"><b>변경 추가</b><span class="small faint">바꿀 것을 고르고 값을 입력한 뒤 더합니다</span></div>
+      <div class="action-form-head"><b>변경 더하기</b><span class="small faint">바꿀 것을 고르고 값을 입력한 뒤 더합니다</span></div>
       <div class="kind-groups" role="radiogroup" aria-label="바꿀 것">
         {GROUPS.map(g => (
           <div class="kind-group">
@@ -452,7 +453,7 @@ export function SimulationPage(props: {
             </div>
             <div class="card-body sim-edit">
               <div class="action-list chips-list">
-                {cur.actions.length === 0 && <p class="small muted">아직 넣은 변경이 없습니다. 아래 "변경 추가"에서 더하십시오.</p>}
+                {cur.actions.length === 0 && <p class="small muted">아직 넣은 변경이 없습니다. 아래 "변경 더하기"에서 더하십시오.</p>}
                 {cur.actions.map(a => (
                   <div class="action-item">
                     <span>{a.label}</span>
@@ -466,7 +467,7 @@ export function SimulationPage(props: {
                 <div class="danger-zone">
                   <button type="button" class="btn sm" onClick={async () => { const r = await props.onScenario({ kind: 'create', name: `${cur.name} 복제`, copyFrom: cur.scenarioId }); if (r.createdId) setSelected(r.createdId); }}>복제</button>
                   {confirmDelete
-                    ? <><span class="small">"{cur.name}"을 삭제하시겠습니까?</span><button type="button" class="btn sm danger" onClick={() => void props.onScenario({ kind: 'delete', scenarioId: cur.scenarioId })}>지우기</button><button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
+                    ? <><span class="small">"{cur.name}" 시나리오를 지우시겠습니까?</span><button type="button" class="btn sm danger" onClick={() => void props.onScenario({ kind: 'delete', scenarioId: cur.scenarioId })}>지우기</button><button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
                     : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>지우기</button>}
                   <span style="flex: 1" />
                   {!cur.appliedAt && cur.actions.length > 0 && (confirmApply

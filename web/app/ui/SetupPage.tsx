@@ -1,5 +1,6 @@
 // 프로젝트·파트·리소스: 새 프로젝트 마법사에서 입력한 것(기본 정보·파트·인원·가동률·리소스·공수)을 만든 뒤에 고친다.
 // AI: 리소스 × 파트마다 "기본(AI 없이)"과 "AI 사용 시" 공수, 파트마다 AI 활용 비율 → 공수 = 기본 × (1 − 비율) + AI × 비율
+import { Dialog } from './Dialog.tsx';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { PipelineSection } from './PipelineSection.tsx';
@@ -276,8 +277,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         ].filter(Boolean);
         const records = u.progress > 0 || u.assets > 0;
         return (
-          <div class="overlay" onClick={e => { if (e.target === e.currentTarget) setDelRes(null); }}>
-            <div class="card dialog confirm-dialog" role="dialog" aria-label="리소스 지우기">
+          <Dialog label="리소스 지우기" onClose={() => setDelRes(null)} class="confirm-dialog">
               <h2 style="font-size: 16px">"{delRes.name}" 리소스를 지울까요?</h2>
               <p class="small muted" style="margin: 8px 0 6px">이 리소스를 지우면 다음도 함께 지워집니다.</p>
               <ul class="del-list small">{lines.map(l => <li>{l}</li>)}</ul>
@@ -287,8 +287,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                 {delRes.active && <button type="button" class="btn sm" onClick={() => { const r = delRes; setDelRes(null); void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: false }); }}>사용 안 함으로 두기</button>}
                 <button type="button" class="btn sm danger" onClick={() => { const r = delRes; setDelRes(null); void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId, cascade: true }); }}>모두 지우기</button>
               </div>
-            </div>
-          </div>
+            </Dialog>
         );
       })()}
       {moveReq && <MoveDialog v={v} req={moveReq} apply={apply} onClose={() => setMoveReq(null)} />}

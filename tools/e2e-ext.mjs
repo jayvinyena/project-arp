@@ -80,7 +80,7 @@ await withBrowser(async (cdp, base) => {
       this.dispatchEvent(new Event('change'));
     };
   })()`);
-  await clickText(cdp, '엑셀로 넣기');
+  await clickText(cdp, '엑셀에서 가져오기');
   await cdp.waitUntil("document.querySelector('.toast')?.textContent.includes('작업 진척을 입력했습니다')", 8000);
   const t = await toast(cdp);
   check('엑셀로 넣기: 2칸 바뀜 · 건너뛴 행 1개', t.includes('2칸 바뀜') && t.includes('건너뛴 행 1개'), t.slice(0, 60));

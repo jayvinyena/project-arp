@@ -569,7 +569,7 @@ export interface AssetDetail {
 }
 
 const ACT_FIELD: Record<string, string> = {
-  name: '이름', code: '리소스명', category: '세부 분류', tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', note: '설명', due_date: '마감일', sort_order: '순서',
+  name: '이름', code: '에셋 코드', category: '세부 분류', tier: '포함 템플릿', batch_id: '배치', jira_key: 'Jira', note: '설명', due_date: '마감일', sort_order: '순서',
   status: '상태', done_at: '완료일', started_at: '시작일', retakes: '리테이크', assignee: '담당',
 };
 

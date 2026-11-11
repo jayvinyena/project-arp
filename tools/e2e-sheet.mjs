@@ -37,7 +37,7 @@ await withBrowser(async (cdp, base) => {
       });
     };
   })()`);
-  await cdp.eval("[...document.querySelectorAll('.asset-bar button')].find(b => b.textContent.includes('엑셀 넣기')).click()");
+  await cdp.eval("[...document.querySelectorAll('.asset-bar button')].find(b => b.textContent.includes('엑셀에서 가져오기')).click()");
   await cdp.waitUntil("document.querySelector('.dialog.sheet-import')", 10000);
   const d = await cdp.eval(`(() => {
     const dlg = document.querySelector('.dialog.sheet-import');
@@ -95,7 +95,7 @@ await withBrowser(async (cdp, base) => {
       attrs: [...w.querySelectorAll('.cw-attr')].map(a => a.querySelector('.cw-attr-name').textContent + '=' + a.querySelector('input').value).join(','),
       links: [...w.querySelectorAll('.cw-links li')].map(l => l.textContent).join(','),
       jiraHref: w.querySelector('.cw-links a')?.getAttribute('href'),
-      cat: w.querySelector('input[aria-label="세부 분류"]').value, code: w.querySelector('input[aria-label="리소스명"]').value,
+      cat: w.querySelector('input[aria-label="세부 분류"]').value, code: w.querySelector('input[aria-label="에셋 코드"]').value,
       anim: w.querySelector('select[aria-label="애니메이션 상태"]').value, fx: w.querySelector('select[aria-label="FX 상태"]').value,
     };
   })()`);
@@ -180,7 +180,7 @@ await withBrowser(async (cdp, base) => {
   const okFilter = await shot(cdp, 'assets-filter-390', 390);
 
   // 시트 분류대로 새 리소스 종류 만들기(docs/20-asset-management.md 21절): 다시 넣고 한 줄을 새 종류로
-  await cdp.eval("[...document.querySelectorAll('.asset-bar button')].find(b => b.textContent.includes('엑셀 넣기')).click()");
+  await cdp.eval("[...document.querySelectorAll('.asset-bar button')].find(b => b.textContent.includes('엑셀에서 가져오기')).click()");
   await cdp.waitUntil("document.querySelector('.dialog.sheet-import')", 10000);
   await select(cdp, '코스튬 신규 · 캐릭터 리소스 종류', '+new');
   await sleep(200);

@@ -1,4 +1,5 @@
 // 공수 옮기기 · 지우기 창(docs/27 4.1): 기록(작업 진척 · 에셋 상태)이 있는 칸을 비울 때, 칸의 → 단추, 파이프라인을 바꿀 때.
+import { Dialog } from './Dialog.tsx';
 import { useState } from 'preact/hooks';
 import type { SetupView } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
@@ -51,8 +52,7 @@ function CellMove(props: Props<MoveRequest>) {
       if (ok) props.onClose();
     };
     return (
-      <div class="overlay" onClick={ev => { if (ev.target === ev.currentTarget) props.onClose(); }}>
-        <div class="card dialog move-dialog" role="dialog" aria-label="공수 옮기기 · 지우기">
+      <Dialog label="공수 옮기기 · 지우기" onClose={() => props.onClose()} class="move-dialog">
           <div class="dialog-head"><div><h2>{r.name} · {name(req.partId)}</h2>
             <p class="small muted" style="margin-top: 2px">공수 {e?.base ?? '—'}{e?.done ? ` · 작업 진척 완료 ${e.done}개` : ''}{e?.assets ? ` · 에셋 상태 ${e.assets}개` : ''}</p></div>
             <button type="button" class="btn ghost icon-btn" aria-label="닫기" onClick={props.onClose}><IconX /></button></div>
@@ -74,8 +74,7 @@ function CellMove(props: Props<MoveRequest>) {
           </div>
           <div class="dialog-foot"><button type="button" class="btn sm ghost" onClick={props.onClose}>그만두기</button>
             <button type="button" class="btn sm primary" disabled={mode === 'move' && !to} onClick={() => void run()}>{mode === 'move' ? '옮기기' : '지우기'}</button></div>
-        </div>
-      </div>
+        </Dialog>
     );
   }
 
@@ -100,8 +99,7 @@ function PipelineMove(props: Props<PipelineRequest>) {
     if (ok) props.onClose();
   };
   return (
-    <div class="overlay" onClick={ev => { if (ev.target === ev.currentTarget) props.onClose(); }}>
-      <div class="card dialog move-dialog" role="dialog" aria-label="파이프라인 바꾸기">
+    <Dialog label="파이프라인 바꾸기" onClose={() => props.onClose()} class="move-dialog">
         <div class="dialog-head"><div><h2>{r.name} → {pl.name} 파이프라인</h2>
           <p class="small muted" style="margin-top: 2px">새 파이프라인({steps.map(name).join(' → ')})에 없는 파트의 공수 · 작업 진척 · 에셋 상태를 어디로 옮길지 고릅니다.</p></div>
           <button type="button" class="btn ghost icon-btn" aria-label="닫기" onClick={props.onClose}><IconX /></button></div>
@@ -125,7 +123,6 @@ function PipelineMove(props: Props<PipelineRequest>) {
         </div>
         <div class="dialog-foot"><button type="button" class="btn sm ghost" onClick={props.onClose}>그만두기</button>
           <button type="button" class="btn sm primary" onClick={() => void run()}>파이프라인 바꾸기</button></div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

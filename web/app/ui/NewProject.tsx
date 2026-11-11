@@ -64,7 +64,7 @@ function Basic(props: { v: NewProjectInput; set: (p: Partial<NewProjectInput>) =
       <label class="form-row">
         <span class="form-label">여유율</span>
         <div class="inline"><input class="field narrow" inputMode="decimal" value={pct(v.bufferRate)} onInput={e => set({ bufferRate: num((e.target as HTMLInputElement).value) / 100 })} /><span class="faint">%</span></div>
-        <span class="form-help">예상 못 한 일을 위해 모든 필요 공수에 추가합니다.</span>
+        <span class="form-help">예상 못 한 일을 위해 모든 필요 공수에 더합니다.</span>
       </label>
       <div class="form-row">
         <span class="form-label">휴일</span>

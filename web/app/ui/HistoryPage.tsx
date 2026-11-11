@@ -4,9 +4,9 @@ import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { HistoryBatch } from '../../../core/history.ts';
 import { IconX } from './icons.tsx';
+import { fmtDateTime } from '../lib/format.ts';
 
-const ACTION: Record<string, string> = { UPDATE: '바꿈', INSERT: '추가', DELETE: '삭제' };
-const timeFmt = new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const ACTION: Record<string, string> = { UPDATE: '바꿈', INSERT: '더함', DELETE: '지움' };
 const show = (v: unknown) => (v === undefined ? '—' : v === null ? '빈칸' : typeof v === 'object' ? JSON.stringify(v).slice(0, 80) : String(v));
 
 export function HistoryPage(props: { version: number; readOnly: boolean; onUndo: (batchId: string, force: boolean) => Promise<{ ok: boolean; needsForce?: boolean }> }) {
@@ -32,7 +32,7 @@ export function HistoryPage(props: { version: number; readOnly: boolean; onUndo:
             <div class={`hist-item${b.undone ? ' undone' : ''}`}>
               <div class="hist-head">
                 <button type="button" class="hist-toggle" aria-expanded={open === b.batchId} onClick={() => setOpen(open === b.batchId ? null : b.batchId)}>
-                  <span class="num faint small">{b.at ? timeFmt.format(new Date(b.at)) : ''}</span>
+                  <span class="num faint small">{b.at ? fmtDateTime(b.at) : ''}</span>
                   <span class="hist-summary">{b.reason && !b.isUndo ? b.reason : b.summary}</span>
                   {b.isUndo && <span class="tag">되돌리기</span>}
                   {b.undone && <span class="tag">되돌림</span>}

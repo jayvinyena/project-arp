@@ -1,4 +1,6 @@
 // 업데이트 계획: 타임라인 · 파트 부하 지도 · 업데이트 목록 · 만들기 · 상세(고치기)
+import { UPDATE_STATUS } from '../lib/terms.ts';
+import { Dialog } from './Dialog.tsx';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
@@ -6,20 +8,15 @@ import type { PlanView, PlanRow, UpdateDetail } from '../../../core/plan.ts';
 import type { Edit } from '../../../core/edits.ts';
 import type { Finding } from '../../../core/pipeline.ts';
 import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
-import { fmtDate, fmtShortDate, fmtInt, fmtDays, fmtPct } from '../lib/format.ts';
+import { fmtDate, fmtShortDate, fmtInt, fmtDays, fmtPct, fmtWorkdays, localToday } from '../lib/format.ts';
 import { VolumeTable } from './VolumeTable.tsx';
 import { IconAlert, IconPlus, IconX } from './icons.tsx';
 import { useReorder, Grip } from './reorder.tsx';
 import { MODE_LABEL, humanKey } from './LaunchPage.tsx';
 import { BatchPill, batchWhen } from './BatchPill.tsx';
 
-const STATUS: Record<UpdateStatus, { text: string; tone: string }> = {
-  ON_TRACK: { text: '목표 안', tone: 'ok' },
-  TIGHT: { text: '빠듯', tone: 'warn' },
-  LATE: { text: '늦음', tone: 'bad' },
-  UNFINISHED: { text: '기간 안에 못 끝남', tone: 'bad' },
-  NO_RELEASE_DATE: { text: '출시일 없음', tone: '' },
-};
+// 판정 이름은 한 곳(lib/terms.ts)에서
+const STATUS = UPDATE_STATUS;
 const LIFE: Record<string, string> = { PLANNED: '계획', IN_PROGRESS: '진행 중', DONE: '완료', CANCELLED: '취소' };
 
 // 날짜 → 타임라인 위치(0~1)
@@ -45,7 +42,7 @@ function Timeline(props: { view: PlanView; onOpen: (id: string) => void }) {
   if (!months.length) return null;
   const x = scaleOf(months);
   const live = props.view.rows.filter(r => r.live);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const showToday = today >= `${months[0]}-01` && today.slice(0, 7) <= months[months.length - 1];
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
   return (
@@ -160,7 +157,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
           {r.range && r.result && <div class="small faint">{r.range.min ? fmtShortDate(r.range.min) : '기간 밖'} ~ {r.range.stretch ? fmtShortDate(r.range.stretch) : '기간 밖'}</div>}
         </td>
         <td>
-          {st && <span class={`pill ${st.tone}`}>{st.text}{r.result?.lateWorkdays ? ` +${r.result.lateWorkdays}` : ''}</span>}
+          {st && <span class={`pill ${st.tone}`}>{st.text}{r.result?.lateWorkdays ? ` ${fmtWorkdays(r.result.lateWorkdays)}` : ''}</span>}
           {r.result?.reason && r.result.status !== 'ON_TRACK' && (
             <div class="small faint" style="margin-top: 4px">{r.result.reason.partName} · {r.result.reason.resourceName}</div>
           )}
@@ -215,12 +212,11 @@ function CreateUpdate(props: { view: PlanView; onClose: () => void; onCreate: (e
   };
   const t = types.find(x => x.typeId === f.typeId);
   return (
-    <div class="overlay" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <div class="card dialog" role="dialog" aria-label="업데이트 만들기">
+    <Dialog label="업데이트 만들기" onClose={() => props.onClose()}>
         <div class="dialog-head"><h2>업데이트 만들기</h2><button type="button" class="btn ghost icon-btn" aria-label="닫기" onClick={props.onClose}><IconX /></button></div>
         <div class="form" style="padding: 20px">
           {error && <div class="banner bad"><IconAlert /><div>{error}</div></div>}
-          <label class="form-row"><span class="form-label">이름</span><input class="field" aria-label="업데이트 이름" value={f.name} placeholder="예: 시즌 3" onInput={e => setF({ ...f, name: (e.target as HTMLInputElement).value })} /></label>
+          <label class="form-row"><span class="form-label">이름</span><input class="field" data-autofocus aria-label="업데이트 이름" value={f.name} placeholder="예: 시즌 3" onInput={e => setF({ ...f, name: (e.target as HTMLInputElement).value })} /></label>
           <label class="form-row">
             <span class="form-label">유형</span>
             <select class="field" aria-label="업데이트 유형" value={f.typeId} onChange={e => setF({ ...f, typeId: (e.target as HTMLSelectElement).value })}>
@@ -238,8 +234,7 @@ function CreateUpdate(props: { view: PlanView; onClose: () => void; onCreate: (e
           </div>
         </div>
         <div class="wizard-foot"><button type="button" class="btn ghost" onClick={props.onClose}>그만두기</button><button type="button" class="btn primary" onClick={() => void submit()}>만들기</button></div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -257,8 +252,7 @@ function UpdateDrawer(props: {
   const st = props.row?.result ? STATUS[props.row.result.status] : null;
   const errors = (data?.findings ?? []).filter(f => f.level === 'ERROR');
   return (
-    <div class="overlay" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <aside class="drawer card" role="dialog" aria-label="업데이트 상세">
+    <Dialog label="업데이트 상세" onClose={() => props.onClose()} as="aside" class="drawer card">
         {!d ? <div class="card-body muted">불러오는 중…</div> : (
           <>
             <div class="dialog-head">
@@ -309,7 +303,7 @@ function UpdateDrawer(props: {
               {!d.isLaunch && !props.readOnly && (
                 <div class="danger-zone">
                   {confirmDelete
-                    ? <><span class="small">"{d.name}"과 물량·작업 진척을 삭제하시겠습니까? 변경 이력에는 남습니다.</span>
+                    ? <><span class="small">"{d.name}"과 물량·작업 진척을 지우시겠습니까? 변경 이력에는 남습니다.</span>
                       <button type="button" class="btn sm danger" onClick={async () => { if (await props.onApply({ kind: 'deleteUpdate', updateId: d.updateId })) props.onClose(); }}>지우기</button>
                       <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></>
                     : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>이 업데이트 지우기</button>}
@@ -318,8 +312,7 @@ function UpdateDrawer(props: {
             </div>
           </>
         )}
-      </aside>
-    </div>
+      </Dialog>
   );
 }
 

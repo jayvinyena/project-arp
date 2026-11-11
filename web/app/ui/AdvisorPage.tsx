@@ -1,10 +1,11 @@
 // 마감 맞추기: 모든 업데이트가 마감을 지키도록 인원·외주·물량·우선순위를 어떻게 바꿀지 제안하고, 시나리오로 만든다
+import { UPDATE_STATUS } from '../lib/terms.ts';
 import { useState, useEffect } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { rpc } from '../lib/rpc.ts';
 import type { AdvisorResult, AdvisorOptions, Outcome } from '../../../core/advisor.ts';
 import type { PlanMode } from '../../../engine/types.ts';
-import { fmtDays, fmtInt, fmtShortDate } from '../lib/format.ts';
+import { fmtDays, fmtInt, fmtShortDate, fmtWorkdays } from '../lib/format.ts';
 import { ModeSwitch } from './PlanPage.tsx';
 import { IconAlert, IconCheck, IconSliders, IconSpark } from './icons.tsx';
 
@@ -19,10 +20,10 @@ const KIND_TEXT: Record<string, string> = { headcount: '인원', outsource: '외
 
 function Result(props: { o: Outcome; showLate: boolean }) {
   const { o } = props;
-  if (o.unfinished) return <span class="pill bad">기간 안에 못 끝남</span>;
-  if (o.late > 0) return <span class="pill bad">{fmtShortDate(o.completion)} · {fmtInt(o.late)}일 늦음</span>;
+  if (o.unfinished) return <span class="pill bad">{UPDATE_STATUS.UNFINISHED.text}</span>;
+  if (o.late > 0) return <span class="pill bad">{fmtShortDate(o.completion)} · {UPDATE_STATUS.LATE.text} {fmtWorkdays(o.late)}</span>;
   if (!o.deadline) return <span class="pill plain">{fmtShortDate(o.completion)} · 마감 없음</span>;
-  return <span class="pill ok">{fmtShortDate(o.completion)}{props.showLate ? ' · 맞춤' : ''}</span>;
+  return <span class="pill ok">{fmtShortDate(o.completion)}{props.showLate ? ` · ${UPDATE_STATUS.ON_TRACK.text}` : ''}</span>;
 }
 
 export function AdvisorPage(props: {
@@ -168,7 +169,7 @@ export function AdvisorPage(props: {
                       <span class={`tag kind-${s.kind}`}>{KIND_TEXT[s.kind]}</span>
                       <span class="advice-label">{s.label}</span>
                       <span class="small muted">{s.forUpdate}</span>
-                      <span class="delta good">{s.rescued ? `기간 안으로 ${s.rescued}개` : s.days > 0 ? `−${fmtInt(s.days)}일` : '남은 일 줄임'}</span>
+                      <span class="delta good">{s.rescued ? `기간 안으로 ${s.rescued}개` : s.days > 0 ? fmtWorkdays(-s.days) : '남은 일 줄임'}</span>
                     </li>
                   ))}
                 </ol>

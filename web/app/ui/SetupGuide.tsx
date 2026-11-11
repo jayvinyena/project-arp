@@ -8,7 +8,7 @@ const STEPS: { key: keyof SetupStatus; page: HelpPage; title: string; sub: strin
   { key: 'resources', page: 'setup', title: '파트 · 리소스 · 공수', sub: '리소스 종류와 1개당 공수(인·일)' },
   { key: 'capacity', page: 'capacity', title: '인력', sub: '파트 × 달 인원 · 가동률' },
   { key: 'volume', page: 'launch', title: '런칭 물량', sub: '계산할 업데이트의 물량' },
-  { key: 'assets', page: 'assets', title: '에셋', sub: '제작 리스트 엑셀 넣기 · 에셋 더하기', optional: true },
+  { key: 'assets', page: 'assets', title: '에셋', sub: '제작 리스트 엑셀 가져오기 · 에셋 더하기', optional: true },
 ];
 
 /** 필수 단계가 모두 끝났나 */

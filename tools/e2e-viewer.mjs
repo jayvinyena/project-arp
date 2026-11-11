@@ -49,7 +49,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil("document.querySelector('.asset-list') || document.querySelector('.kanban')", 10000);
   await sleep(300);
   const ro = await cdp.eval(`(() => ({
-    add: [...document.querySelectorAll('.asset-bar button')].some(b => b.textContent.includes('에셋 더하기') || b.textContent.includes('엑셀 넣기')),
+    add: [...document.querySelectorAll('.asset-bar button')].some(b => b.textContent.includes('에셋 더하기') || b.textContent.includes('엑셀에서 가져오기')),
     stage: [...document.querySelectorAll('select[aria-label$=" 단계"]')].every(s => s.disabled),
   }))()`);
   check('에셋: 더하기 · 엑셀 넣기 없음, 단계 칸 잠김', !ro.add && ro.stage, JSON.stringify(ro));

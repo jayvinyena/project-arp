@@ -78,7 +78,7 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("[...document.querySelectorAll('.people-team-pick button')][0].click()");
   await cdp.waitUntil("document.querySelector('.people-teams')", 3000);
   await typeIn(cdp, '새 지원 팀 이름', '원화', false);
-  await cdp.eval("[...document.querySelectorAll('.people-teams button')].find(b => b.textContent === '팀 추가').click()");
+  await cdp.eval("[...document.querySelectorAll('.people-teams button')].find(b => b.textContent === '팀 더하기').click()");
   await sleep(400);
   const dupToast = await cdp.eval("document.querySelector('.toast')?.textContent ?? ''");
   await typeIn(cdp, '새 지원 팀 이름', 'PM', false);

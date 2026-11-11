@@ -1,4 +1,5 @@
 // 엑셀로 가져오기 창: ① 양식 받기(빈 양식 · 예시 양식) ② 규격 요약 ③ 채운 파일 선택
+import { Dialog } from './Dialog.tsx';
 import { useEffect, useState } from 'preact/hooks';
 import { specSummary } from '../../../core/import-spec.ts';
 import { IconX, IconDownload, IconFolder } from './icons.tsx';
@@ -11,20 +12,15 @@ export function ImportGuide(props: {
 }) {
   const [getting, setGetting] = useState<'' | 'blank' | 'example'>('');
   const rows = specSummary();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') props.onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [props.onClose]);
+  // Esc 닫기는 공용 창(Dialog)이 한다
   const get = async (example: boolean) => {
     setGetting(example ? 'example' : 'blank');
     try { await props.onTemplate(example); } finally { setGetting(''); }
   };
   return (
-    <div class="overlay" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <div class="card dialog wide import-guide" role="dialog" aria-label="엑셀로 가져오기">
+    <Dialog label="엑셀에서 가져오기" onClose={() => props.onClose()} class="wide import-guide">
         <div class="dialog-head">
-          <div><h2 style="font-size: 17px">엑셀로 가져오기</h2><p class="small muted" style="margin-top: 2px">정해진 양식에 데이터를 채워 새 프로젝트를 만듭니다.</p></div>
+          <div><h2 style="font-size: 17px">엑셀에서 가져오기</h2><p class="small muted" style="margin-top: 2px">정해진 양식에 데이터를 채워 새 프로젝트를 만듭니다.</p></div>
           <button type="button" class="btn ghost icon-btn" aria-label="닫기" onClick={props.onClose}><IconX /></button>
         </div>
         <div class="drawer-body import-steps">
@@ -71,7 +67,6 @@ export function ImportGuide(props: {
           </div>
           <button type="button" class="btn primary" disabled={props.busy} onClick={props.onPick}><IconFolder />채운 파일 선택</button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

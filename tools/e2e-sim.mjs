@@ -54,7 +54,7 @@ await withBrowser(async (cdp, base) => {
   await sleep(600);
   const cells = await cdp.eval(launchCells);
   const delta = cells[cells.length - 1];
-  check('인원을 더하면 런칭 완료가 당겨진다(− 차이)', /−\d+일/.test(delta), delta);
+  check('인원을 더하면 런칭 완료가 당겨진다(− 차이)', /−\d+영업일/.test(delta), delta);
 
   // 두 번째: 물량 150%
   await typeIn(cdp, 'input[aria-label="새 시나리오 이름"]', '확장 물량');
@@ -68,7 +68,7 @@ await withBrowser(async (cdp, base) => {
   const h3 = await cdp.eval(headers);
   check('원본 + 시나리오 3개를 나란히', h3.length === 5 && h3.includes('확장 물량'), h3.join(' | '));
   const c3 = await cdp.eval(launchCells);
-  check('물량을 늘리면 런칭이 늦어진다(+ 차이)', /\+\d+일/.test(c3[c3.length - 1]), c3[c3.length - 1]);
+  check('물량을 늘리면 런칭이 늦어진다(+ 차이)', /\+\d+영업일/.test(c3[c3.length - 1]), c3[c3.length - 1]);
 
   // 바꿀 것: 네 무리(인력·효율·물량·일정)에 모든 종류가 보인다 · 가동률 · AI 공수 절감 · 리소스 수량 · 결과 미리보기
   const groups = await cdp.eval("[...document.querySelectorAll('.kind-group')].map(g => g.querySelector('.kind-group-name').textContent + ':' + g.querySelectorAll('.kind-chip').length).join(' ')");

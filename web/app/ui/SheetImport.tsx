@@ -1,5 +1,6 @@
 // 팀 제작 리스트 가져오기 창(docs/20-asset-management.md 19절).
 // 엑셀 넣기에 ARP 에셋 양식이 아닌 파일을 넣으면 열린다: ① 읽은 시트 ② 마일스톤 → 업데이트 ③ 분류 → 리소스 종류 ④ 모르는 상태 말 ⑤ 넣는 방법.
+import { Dialog } from './Dialog.tsx';
 import { useState, useMemo } from 'preact/hooks';
 import type { SheetScan, SheetPlan } from '../../../core/sheet-import.ts';
 import type { AssetStatus } from '../../../core/assets.ts';
@@ -50,8 +51,7 @@ export function SheetImportDialog(props: { fileName: string; scan: SheetScan; bu
   );
 
   return (
-    <div class="overlay">
-      <div class="card dialog import-guide sheet-import" role="dialog" aria-label="제작 리스트 가져오기">
+    <Dialog label="제작 리스트 가져오기" onClose={() => props.onClose()} backdrop={false} class="import-guide sheet-import">
         <div class="dialog-head">
           <div><h2>제작 리스트 가져오기</h2>
             <p class="small muted" style="margin-top: 2px">{props.fileName} · 시트 {sheetsIn.length}개에서 에셋 {fmtInt(s.rows)}행을 읽었습니다. 무엇을 어디에 넣을지 고릅니다.</p></div>
@@ -172,7 +172,6 @@ export function SheetImportDialog(props: { fileName: string; scan: SheetScan; bu
           <button type="button" class="btn primary" disabled={props.busy || rows === 0 || !dateOk || !namesOk}
             onClick={() => props.onImport({ milestones: ms, resources: rt, create: Object.fromEntries(s.keys.filter(k => rt[k.key] === NEW).map(k => [k.key, { group: create[k.key].group.trim(), name: create[k.key].name.trim() }])), words, doneDate, addVolumes })}><IconFolder />{props.busy ? '넣는 중…' : '가져오기'}</button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

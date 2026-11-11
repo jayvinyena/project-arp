@@ -7,7 +7,8 @@ import { planView, capacityView } from './plan.ts';
 import { historyView } from './history.ts';
 import type { Cell } from './xlsx-write.ts';
 
-const STATUS: Record<string, string> = { ON_TRACK: '목표 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '기간 안에 못 끝냄', NO_RELEASE_DATE: '출시일 없음' };
+// 판정 이름: 화면(web/app/lib/terms.ts)과 같은 말
+const STATUS: Record<string, string> = { ON_TRACK: '목표 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '못 끝냄', NO_RELEASE_DATE: '출시일 없음' };
 const LIFE: Record<string, string> = { PLANNED: '계획', IN_PROGRESS: '진행 중', DONE: '완료', CANCELLED: '취소' };
 const r1 = (x: number | null | undefined) => (x == null ? null : Math.round(x * 10) / 10);
 
@@ -40,7 +41,7 @@ export function exportSheets(db: SqlDb, session: ProjectSession, planMode: PlanM
   ];
 
   // 배치 완료 예정(docs/33)
-  const BATCH: Record<string, string> = { ON_TRACK: '마감 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '기간 안에 못 끝냄', NO_DUE: '마감 없음' };
+  const BATCH: Record<string, string> = { ON_TRACK: '마감 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '못 끝냄', NO_DUE: '마감 없음' };
   const batchList = v.rows.flatMap(r => r.batches.map(b => ({ u: r.name, b })));
   if (batchList.length) {
     sheets['배치 전망'] = [
