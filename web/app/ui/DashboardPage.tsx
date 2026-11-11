@@ -301,7 +301,7 @@ export function DashboardPage(props: {
                     {v.batches.map(b => (
                       <tr class="row">
                         <td><b>{b.name}</b>{(() => { const f = v.forecast?.batches.find(x => x.batchId === b.batchId); return <div class="batch-when small">{f ? <><span class="num">{batchWhen(f)}</span><BatchPill b={f} /></> : <span class="faint">{b.done >= b.count ? '모두 완료' : '완료 예정 없음'}</span>}</div>; })()}</td>
-                        <td class="small">{b.due ? <>{fmtShortDate(b.due)} <span class={`pill plain ${b.daysLeft! < 0 && b.done < b.count ? 'bad' : b.daysLeft! <= 14 ? 'warn' : ''}`}>{b.daysLeft! < 0 ? `${-b.daysLeft!}일 지남` : `D-${b.daysLeft}`}</span></> : '—'}</td>
+                        <td class="small due-cell">{b.due ? <>{fmtShortDate(b.due)} <span class={`pill plain ${b.daysLeft! < 0 && b.done < b.count ? 'bad' : b.daysLeft! <= 14 ? 'warn' : ''}`}>{b.daysLeft! < 0 ? `${-b.daysLeft!}일 지남` : `D-${b.daysLeft}`}</span></> : '—'}</td>
                         <td class="n num">{b.done} / {b.count}</td>
                         <td><span class="share"><span class="num small">{fmtPct(b.progress)}</span><span class="bar"><span class={`fill${b.progress >= 1 ? ' done' : ''}`} style={{ width: `${b.progress * 100}%` }} /></span></span></td>
                       </tr>

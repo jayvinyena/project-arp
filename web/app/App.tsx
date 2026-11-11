@@ -110,6 +110,23 @@ export function App() {
   const [toast, setToast] = useState<{ text: string; bad?: boolean; undo?: string } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   // 화면 폭: 기본(가운데 1240px) · 넓게(창 폭 전부). 모든 화면에 적용, 이 브라우저에 기억
+  // 좁은 화면: 저장 · 닫기 · 내보내기를 "파일" 메뉴로 접는다(docs/34 A-01)
+  const [footOpen, setFootOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const footRef = useRef<HTMLDivElement>(null);
+  // 가로 메뉴(좁은 화면)에서 지금 화면 항목을 가운데로(docs/34 A-02)
+  useEffect(() => {
+    const nav = navRef.current; const el = nav?.querySelector<HTMLElement>('.nav-item.active');
+    if (!nav || !el || nav.scrollWidth <= nav.clientWidth + 1) return;
+    const nr = nav.getBoundingClientRect(); const er = el.getBoundingClientRect();
+    nav.scrollLeft += (er.left - nr.left) - (nr.width - er.width) / 2;
+  }, [page, view != null]);
+  useEffect(() => {
+    if (!footOpen) return;
+    const off = (e: Event) => { if (e instanceof KeyboardEvent ? e.key === 'Escape' : !footRef.current?.contains(e.target as Node)) setFootOpen(false); };
+    document.addEventListener('pointerdown', off); document.addEventListener('keydown', off);
+    return () => { document.removeEventListener('pointerdown', off); document.removeEventListener('keydown', off); };
+  }, [footOpen]);
   const [wide, setWide] = useState(() => { try { return localStorage.getItem('arp.width') === 'wide'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('arp.width', wide ? 'wide' : 'normal'); } catch { /* 없어도 된다 */ } }, [wide]);
   const [busy, setBusy] = useState(false);
@@ -869,7 +886,7 @@ export function App() {
           <div class="name" title={file.name}>{view.snapshot.projectName}</div>
           <div class="small faint" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{file.name}</div>
         </div>
-        <nav class="nav" aria-label="메뉴">
+        <nav class="nav" aria-label="메뉴" ref={navRef}>
           {file.viewer ? (
             <>
               <div class="nav-label">보기</div>
@@ -903,10 +920,12 @@ export function App() {
           {navItem('history', <IconHistory />)}
           </>)}
         </nav>
-        <div class="sidebar-foot">
+        <div class={`sidebar-foot${footOpen ? ' open' : ''}`} ref={footRef}>
           {file.viewer
             ? <div class="save-state"><span class="dot accent" />보기 모드</div>
             : <div class="save-state" title={save.message ?? ''}><span class={`dot ${sl.dot}`} />{sl.text}</div>}
+          <button type="button" class="btn sm foot-toggle" aria-expanded={footOpen} aria-haspopup="true" onClick={() => setFootOpen(o => !o)}><IconFolder />파일</button>
+          <div class="foot-menu" onClick={e => { if ((e.target as HTMLElement).closest('button')) setFootOpen(false); }}>
           {!file.handle && !file.viewer && <div class="small faint editor">수정한 내용을 남기려면 다른 이름으로 저장하십시오</div>}
           <div style="display: flex; gap: 6px">
             {!file.viewer && <button class="btn sm" disabled={file.readOnly || save.state === 'saving'} onClick={() => void writeNow()} title="저장 (Ctrl+S)"><IconSave />{file.handle ? '저장' : '다른 이름으로 저장'}</button>}
@@ -916,6 +935,7 @@ export function App() {
           <button class="btn sm ghost" style="justify-content: flex-start" title="업데이트 전망 · 파트 부하 등 보고용 표(다시 가져올 수 없음)" onClick={() => void exportXlsx()}><IconDownload />보고용 엑셀 내보내기</button>
           {!file.viewer && <button class="btn sm ghost" style="justify-content: flex-start" title={`가져오기 양식 형식. 엑셀에서 수정한 뒤 다시 가져오면 새 프로젝트 파일이 됩니다. ${TEMPLATE_LEAVES_OUT}`} onClick={() => void exportTemplate()}><IconDownload />편집용 엑셀 내보내기</button>}
           <div class="small faint editor">{file.viewer ? `보는 사람 ${me}` : `편집자 ${me}`}</div>
+          </div>
         </div>
       </aside>
       <main class="main">

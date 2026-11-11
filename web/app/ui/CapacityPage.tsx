@@ -63,7 +63,7 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
             ? '채용·충원·외주를 달마다 입력합니다. 바꾸면 모든 화면의 계산이 바로 변경됩니다.'
             : '함께 일하는 사람의 이름 · 소속팀 · 연락처 · 특이사항을 적어 둡니다.'}</p>
         </div>
-        {tab === 'capacity' && <div class="horizon-box">
+        {<div class={`horizon-box${tab === 'capacity' ? '' : ' reserve'}`} aria-hidden={tab === 'capacity' ? undefined : 'true'}>
           <span class="form-label">계획 기간</span>
           <div class="inline">
             <input class="field" type="month" aria-label="계획 시작 달" value={horizon.start} disabled={props.readOnly} onInput={e => setHorizon({ ...horizon, start: (e.target as HTMLInputElement).value })} />
@@ -82,10 +82,6 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
       </nav>
 
       {tab === 'people' && <PeopleCard people={view.people} candidates={view.candidates} teams={view.teams} readOnly={props.readOnly} apply={apply} />}
-      {props.onNext && !props.readOnly && tab !== 'people' && (
-        <div class="next-step" role="note"><span class="small muted">인원을 넣었으면, 다음은 런칭과 업데이트의 물량입니다.</span>
-          <button type="button" class="btn sm" onClick={props.onNext}>다음: 런칭 물량 설계 →</button></div>
-      )}
 
       {tab === 'capacity' && <section class="card">
         <div class="card-head">
@@ -137,6 +133,10 @@ export function CapacityPage(props: { version: number; readOnly: boolean; onAppl
           )}
         </div>
       </section>}
+      {props.onNext && !props.readOnly && tab !== 'people' && (
+        <div class="next-step" role="note"><span class="small muted">인원을 넣었으면, 다음은 런칭과 업데이트의 물량입니다.</span>
+          <button type="button" class="btn sm" onClick={props.onNext}>다음: 런칭 물량 설계 →</button></div>
+      )}
     </div>
   );
 }

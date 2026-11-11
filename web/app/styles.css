@@ -1544,3 +1544,140 @@ table.grid.hist-table td.hist-val { font-variant-numeric: tabular-nums; max-widt
 
 /* 다음 단계 띠(docs/34 A-11) */
 .next-step { display: flex; align-items: center; gap: 12px; justify-content: flex-end; flex-wrap: wrap; padding: 12px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; }
+
+/* ───────── 3단계: 모바일 390 · 터치(docs/34 T5 · T7) ───────── */
+.foot-toggle { display: none; }
+.foot-menu { display: contents; }
+.horizon-box.reserve { visibility: hidden; }
+.hint-touch { display: none; }
+table.grid.list td.n.num { white-space: nowrap; }
+.cw-band-text { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); }
+.cw-cover.band { height: 56px; }
+.cw-cover.band .cw-cover-actions { top: 50%; bottom: auto; right: 52px; transform: translateY(-50%); }
+.cw-cover.band .cw-close { top: 50%; transform: translateY(-50%); }
+.kb-card.no-cover .kb-body { padding-left: 34px; }
+.kb-card.no-cover .kb-check { top: 10px; left: 10px; }
+
+@media (max-width: 860px) {
+  /* A-01: 머리는 내용만큼, 본문이 바로 아래 */
+  .app { grid-template-rows: auto 1fr; align-content: start; }
+  .sidebar { align-content: flex-start; padding: 10px 16px 0; gap: 8px 12px; }
+  .sidebar-foot { position: relative; flex-wrap: nowrap; gap: 10px; }
+  .foot-toggle { display: inline-flex; }
+  .foot-menu { display: none; }
+  .sidebar-foot.open .foot-menu {
+    display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+    width: 252px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / 16%);
+  }
+  .sidebar-foot.open .foot-menu .editor { display: block; }
+  .sidebar-foot.open .foot-menu > div { flex-wrap: wrap; }
+  /* A-02: 가로 메뉴 끝을 흐리게, 스크롤 막대 숨김 */
+  .nav { margin: 0 -16px; padding: 2px 16px 8px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
+  .nav::-webkit-scrollbar { display: none; }
+  /* 보드: 열마다 화면 안에서 스크롤 */
+  .kb-col { max-height: 72vh; }
+}
+
+/* 표가 옆으로 넘칠 때 오른쪽 끝을 흐리게(끝까지 밀면 사라짐) */
+@property --tw-fade { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes tw-fade { from { --tw-fade: 28px; } 96% { --tw-fade: 28px; } to { --tw-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  @media (max-width: 860px) {
+    .table-wrap { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--tw-fade)), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - var(--tw-fade)), transparent); animation: tw-fade linear both; animation-timeline: scroll(self inline); }
+  }
+}
+
+/* B-10 · B-11: 좁은 카드 창은 제목 → 단계 · 배치 · 마감 → 체크리스트 순서 */
+@media (max-width: 760px) {
+  .cw-body { gap: 12px; padding: 14px 16px 20px; }
+  .cw-main { display: contents; }
+  .cw-main > .cw-section { order: 2; }
+  .cw-side { order: 1; display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 6px 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+  .cw-side .cw-side-h { margin: 0; }
+  .cw-side > .small.faint { grid-column: 2; }
+  .cw-side .viewer-slot { display: none; }
+  .cw-side > .btn, .cw-side > .cw-danger { grid-column: 1 / -1; justify-self: start; }
+  .cw-band-text { display: none; }
+}
+
+@media (max-width: 640px) {
+  /* C-09: 업데이트 계획 표는 줄마다 카드(이름 · 판정 · 완료 예정 먼저) */
+  table.grid.plan-list { min-width: 0; }
+  table.grid.plan-list colgroup, table.grid.plan-list thead { display: none; }
+  table.grid.plan-list, table.grid.plan-list tbody { display: block; }
+  table.grid.plan-list tr.row { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  table.grid.plan-list tr.row td { display: block; padding: 0; border: 0; text-align: left; background: transparent; }
+  table.grid.plan-list tr.row td:nth-child(1) { position: absolute; left: 0; top: 10px; }
+  table.grid.plan-list tr.row td:nth-child(2) { grid-column: 1 / -1; padding-left: 56px; min-height: 26px; }
+  table.grid.plan-list tr.row td.c-verdict { grid-column: 1 / -1; grid-row: 2; }
+  table.grid.plan-list tr.row td.c-when { grid-column: 1 / span 2; grid-row: 3; white-space: normal; }
+  table.grid.plan-list tr.row td.c-qty, table.grid.plan-list tr.row td.c-due { grid-column: 3; grid-row: 3; }
+  table.grid.plan-list tr.row td.c-start { grid-column: 1; grid-row: 4; }
+  table.grid.plan-list tr.row td.c-freeze { grid-column: 2; grid-row: 4; }
+  table.grid.plan-list tr.row td.c-release { grid-column: 3; grid-row: 4; }
+  table.grid.plan-list tr.row td.c-empty { display: none; }
+  table.grid.plan-list td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+  table.grid.plan-list tr.batch-line { margin: 0 0 6px 16px; padding: 10px 12px; border-radius: 10px; border-bottom: 0; background: var(--surface-2); }
+  table.grid.plan-list tr.batch-line td:nth-child(2) { padding-left: 0; }
+  table.grid.plan-list tr.batch-line td.c-due { white-space: normal; }
+  table.grid.plan-list .batch-line-name { padding-left: 0; }
+
+  /* C-08: 시뮬레이션 비교는 업데이트마다 원본 · 시나리오를 나란히 */
+  table.grid.cmp-cards { min-width: 0; }
+  table.grid.cmp-cards thead { display: none; }
+  table.grid.cmp-cards, table.grid.cmp-cards tbody, table.grid.cmp-cards tr.group, table.grid.cmp-cards tr.group td { display: block; }
+  table.grid.cmp-cards tr.group td { border-radius: 8px; margin-top: 10px; }
+  table.grid.cmp-cards tr.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  table.grid.cmp-cards tr.row td { display: block; padding: 0; border: 0; text-align: left; background: transparent; }
+  table.grid.cmp-cards tr.row td:first-child { grid-column: 1 / -1; }
+  table.grid.cmp-cards td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.grid.cmp-cards .cmp-cell { justify-content: flex-start; flex-wrap: wrap; row-gap: 2px; }
+
+  /* D-03: 카드 창 파트 체크리스트는 파트마다 줄 카드 */
+  .ref-wrap:has(> table.asset-parts-table) { border: 0; overflow: visible; }
+  table.grid.asset-parts-table { min-width: 0; }
+  table.grid.asset-parts-table colgroup, table.grid.asset-parts-table thead { display: none; }
+  table.grid.asset-parts-table, table.grid.asset-parts-table tbody { display: block; }
+  table.grid.asset-parts-table tr.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; padding: 10px 12px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 10px; }
+  table.grid.asset-parts-table tr.row td { display: block; padding: 0; border: 0; background: transparent; text-align: left; }
+  table.grid.asset-parts-table tr.row td:nth-child(n+3)::before { display: block; font-size: 11px; font-weight: 600; color: var(--text-3); margin-bottom: 2px; }
+  table.grid.asset-parts-table tr.row td:nth-child(3)::before { content: '완료일'; }
+  table.grid.asset-parts-table tr.row td:nth-child(4)::before { content: '담당'; }
+  table.grid.asset-parts-table tr.row td:nth-child(5)::before { content: 'Jira'; }
+  table.grid.asset-parts-table tr.row td:nth-child(6)::before { content: '리테이크'; }
+  table.grid.asset-parts-table tr.row td:nth-child(1) { align-self: center; }
+  table.grid.asset-parts-table .st-select, table.grid.asset-parts-table .field { width: 100%; }
+  table.grid.asset-parts-table tr.row.current { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+
+  /* C-26 · A-18: 카드형 물량 · 템플릿 표에서도 빼기 단추가 보이게 */
+  table.grid.vol tr.row { position: relative; }
+  table.grid.vol tr.row td:first-child { padding-right: 40px; }
+  table.grid.vol tr.row td.act { display: block; position: absolute; top: 4px; right: 0; }
+  table.grid.vol tr.row td.act .row-actions { opacity: 1; }
+}
+
+/* 터치: 올려야 보이던 단추를 늘 보이게, 누를 자리를 40px로(docs/34 A-17 · T7) */
+@media (hover: none) {
+  .row-actions, .people-del { opacity: 1; }
+  .eff-move { opacity: .7; }
+  .hint-mouse { display: none; }
+  .hint-touch { display: inline; }
+}
+@media (pointer: coarse) {
+  .btn, .nav-item, .sub-tabs button, .segmented button { min-height: 40px; }
+  .btn.icon-btn { min-width: 36px; min-height: 36px; }
+}
+
+/* 휴대폰: 카드 창은 화면 전체(docs/34 B-10) */
+@media (max-width: 640px) {
+  .overlay:has(> .asset-card-window) { padding: 0; align-items: stretch; }
+  .asset-card-window { width: 100%; max-width: none; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
+}
+
+/* 휴대폰: 파트 표 이름 칸이 잘리지 않게 */
+@media (max-width: 640px) { table.grid.setup-parts { min-width: 820px; } }
+
+/* 현황판 배치 표: D-day는 날짜 아래 줄, 완료 예정과 판정은 접힘(docs/34 3단계) */
+.dash-batch-table .due-cell .pill { display: table; margin-top: 3px; }
+.dash-batch-table .batch-when { flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+@media (max-width: 640px) { table.grid.dash-batch-table .share .bar { width: 36px; } }

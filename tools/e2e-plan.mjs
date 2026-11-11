@@ -38,6 +38,21 @@ await withBrowser(async (cdp, base) => {
   await shot(cdp, 'plan-1440');
   await shot(cdp, 'plan-1440-dark', { dark: true });
   await shot(cdp, 'plan-390', { width: 390 });
+  // 휴대폰(docs/34 3단계): 머리는 내용만큼, 파일 메뉴는 접혀 있다가 열림 · Esc로 닫힘, 계획 표는 줄 카드
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 900, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  const top = await cdp.eval("Math.round(document.querySelector('.main').getBoundingClientRect().top)");
+  check('휴대폰: 머리 높이가 내용만큼(본문 시작 160px 안)', top < 160, `${top}px`);
+  const menuShut = await cdp.eval("getComputedStyle(document.querySelector('.foot-menu')).display");
+  await cdp.eval("document.querySelector('.foot-toggle').click()"); await sleep(200);
+  const menuOpen = await cdp.eval("getComputedStyle(document.querySelector('.foot-menu')).display");
+  await cdp.eval("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))"); await sleep(200);
+  const menuAgain = await cdp.eval("getComputedStyle(document.querySelector('.foot-menu')).display");
+  check('휴대폰: 파일 메뉴 접힘 → 열림 → Esc로 닫힘', menuShut === 'none' && menuOpen === 'flex' && menuAgain === 'none', `${menuShut} → ${menuOpen} → ${menuAgain}`);
+  const card = await cdp.eval("getComputedStyle(document.querySelector('table.plan-list tr.row')).display");
+  check('휴대폰: 업데이트 표가 줄 카드', card === 'grid', card);
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(200);
 
   // 업데이트 만들기
   await clickText(cdp, '업데이트 만들기');

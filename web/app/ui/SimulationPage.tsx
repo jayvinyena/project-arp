@@ -48,10 +48,10 @@ function Delta(props: { d: number | null }) {
   return <span class={`delta ${props.d < 0 ? 'good' : 'bad'}`}>{fmtWorkdays(props.d)}</span>;
 }
 
-function StepTitle(props: { n: number; title: string; sub?: string }) {
+function StepTitle(props: { n?: number; title: string; sub?: string }) {
   return (
     <div class="step-title">
-      <span class="step-badge">{props.n}</span>
+      {props.n != null && <span class="step-badge">{props.n}</span>}
       <div><h2>{props.title}</h2>{props.sub && <p class="small muted" style="margin-top: 2px">{props.sub}</p>}</div>
     </div>
   );
@@ -82,14 +82,14 @@ function Compare(props: { view: CompareView | null; scenarios: ScenarioSummary[]
               <div class="banner bad" style="margin-bottom: 12px"><IconAlert /><div>{v.columns.filter(c => c.blocked).map(c => <div><b>{c.name}</b>: 계산할 수 없습니다 — {c.errors.slice(0, 2).map(e => `${e.title}(${e.key})`).join(', ')}</div>)}</div></div>
             )}
             <div class="table-wrap">
-              <table class="grid compare">
+              <table class="grid compare cmp-cards">
                 <thead><tr><th>업데이트</th>{v.columns.map((c, i) => <th class={`n${i === 0 ? ' base-col' : ''}`}>{c.name}</th>)}</tr></thead>
                 <tbody>
                   {v.rows.map(r => (
                     <tr class="row">
                       <td><b>{r.name}</b>{r.virtual && <span class="tag" style="margin-left: 6px">가상</span>}</td>
                       {r.cells.map((c, i) => (
-                        <td class={`n${i === 0 ? ' base-col' : ''}`}>
+                        <td class={`n${i === 0 ? ' base-col' : ''}`} data-label={v.columns[i]?.name}>
                           {c.excluded ? <span class="faint">빠짐</span>
                             : c.status == null ? <span class="faint">—</span>
                               : (
@@ -111,7 +111,7 @@ function Compare(props: { view: CompareView | null; scenarios: ScenarioSummary[]
                         const base = p.loads[0];
                         const diff = l != null && base != null ? l - base : null;
                         return (
-                          <td class={`n num${i === 0 ? ' base-col' : ''}`}>
+                          <td class={`n num${i === 0 ? ' base-col' : ''}`} data-label={v.columns[i]?.name}>
                             {l == null ? '—' : fmtPct(l)}
                             {i > 0 && diff != null && Math.abs(diff) >= 0.005 && <span class={`delta ${diff < 0 ? 'good' : 'bad'}`}>{diff > 0 ? '+' : '−'}{Math.abs(Math.round(diff * 100))}%p</span>}
                           </td>
@@ -311,7 +311,7 @@ function Analysis(props: { meta: SimMeta; scenario: ScenarioSummary | null; plan
   return (
     <section class="card">
       <div class="card-head">
-        <StepTitle n={4} title="업데이트 자세히 보기" sub={`업데이트 하나를 골라, 파트마다 1명을 더하면 며칠 당겨지는지와 물량 · 인원을 얼마나 바꿔야 하는지 계산합니다(${basis}).`} />
+        <StepTitle title="업데이트 자세히 보기" sub={`업데이트 하나를 골라, 파트마다 1명을 더하면 며칠 당겨지는지와 물량 · 인원을 얼마나 바꿔야 하는지 계산합니다(${basis}).`} />
         <select class="field" aria-label="분석할 업데이트" value={upd} onChange={e => { const id = (e.target as HTMLSelectElement).value; setUpd(id); props.onUpdate(id); }}>{live.map(u => <option value={u.updateId}>{u.name}</option>)}</select>
       </div>
       <div class="card-body">
@@ -479,7 +479,7 @@ export function SimulationPage(props: {
         <Compare view={compare} scenarios={data.scenarios} picked={picked} onToggle={toggle} />
         {cur && !props.readOnly && cur.actions.length > 0 && (
           <section class="card apply-step">
-            <div class="card-head"><div><h2>④ 원본에 반영</h2><p class="small muted" style="margin-top: 2px">비교해 보고 이 시나리오대로 하기로 했으면 원본(계획)에 넣습니다. 변경 이력에 남아 되돌릴 수 있습니다.</p></div></div>
+            <div class="card-head"><StepTitle n={4} title="원본에 반영" sub="비교해 보고 이 시나리오대로 하기로 했으면 원본(계획)에 넣습니다. 변경 이력에 남아 되돌릴 수 있습니다." /></div>
             <div class="card-body inline" style="padding-top: 4px">
               {cur.appliedAt
                 ? <><span class="pill ok">원본에 반영됨 · {fmtDate(cur.appliedAt.slice(0, 10))}</span>{props.onGoPlan && <button type="button" class="btn sm" onClick={props.onGoPlan}>업데이트 계획에서 보기 →</button>}</>

@@ -154,15 +154,15 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
           <span class="tag" style="margin-left: 6px">{r.typeName}</span>
           {!r.live && <span class="tag" style="margin-left: 4px">{LIFE[r.status]}</span>}
         </td>
-        <td class="n num">{fmtShortDate(r.startDate)}</td>
-        <td class="n num">{fmtShortDate(r.freezeDate)}</td>
-        <td class="n num">{fmtShortDate(r.releaseDate)}</td>
-        <td class="n num">{fmtInt(r.totals.target)}<span class="faint small"> ({r.resourceCount}종)</span></td>
-        <td class="n num">
+        <td class="n num c-start" data-label="시작">{fmtShortDate(r.startDate)}</td>
+        <td class="n num c-freeze" data-label="제작 완료 목표">{fmtShortDate(r.freezeDate)}</td>
+        <td class="n num c-release" data-label="출시">{fmtShortDate(r.releaseDate)}</td>
+        <td class="n num c-qty" data-label={`${MODE_LABEL.TARGET} 물량`}>{fmtInt(r.totals.target)}<span class="faint small"> ({r.resourceCount}종)</span></td>
+        <td class="n num c-when" data-label="완료 예정 · 범위">
           {r.result ? (r.result.completion ? fmtShortDate(r.result.completion) : '기간 밖') : '—'}
           {r.range && r.result && <div class="small faint">{r.range.min ? fmtShortDate(r.range.min) : '기간 밖'} ~ {r.range.stretch ? fmtShortDate(r.range.stretch) : '기간 밖'}</div>}
         </td>
-        <td>
+        <td class="c-verdict">
           {st && <span class={`pill ${st.tone}`}>{st.text}{r.result?.lateWorkdays ? ` ${fmtWorkdays(r.result.lateWorkdays)}` : ''}</span>}
           {r.result?.reason && r.result.status !== 'ON_TRACK' && <Reason reason={r.result.reason} />}
           {props.onFix && (r.result?.status === 'LATE' || r.result?.status === 'UNFINISHED' || r.batches.some(b => b.status === 'LATE' || b.status === 'UNFINISHED')) && (
@@ -175,13 +175,13 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
   // 배치 줄(docs/33): 업데이트 줄 바로 아래, 배치 순서대로. 끌기 대상이 아니다(배치 순서는 에셋 › 배치에서)
   const batchLines = (r: PlanRow) => r.batches.map(b => (
     <tr class="row batch-line">
-      <td />
+      <td class="c-empty" />
       <td><span class="batch-line-name"><span class="faint" aria-hidden="true">└</span> 배치 <b>{b.name}</b></span></td>
-      <td /><td />
-      <td class="n num small">{b.dueDate ? <>마감 {fmtShortDate(b.dueDate)}</> : <span class="faint">마감 없음</span>}</td>
-      <td />
-      <td class="n num">{batchWhen(b)}</td>
-      <td><BatchPill b={b} />{b.reason && b.status !== 'ON_TRACK' && b.status !== 'NO_DUE' && <Reason reason={b.reason} />}</td>
+      <td class="c-empty" /><td class="c-empty" />
+      <td class="n num small c-due">{b.dueDate ? <>마감 {fmtShortDate(b.dueDate)}</> : <span class="faint">마감 없음</span>}</td>
+      <td class="c-empty" />
+      <td class="n num c-when" data-label="완료 예정">{batchWhen(b)}</td>
+      <td class="c-verdict"><BatchPill b={b} />{b.reason && b.status !== 'ON_TRACK' && b.status !== 'NO_DUE' && <Reason reason={b.reason} />}</td>
     </tr>
   ));
   return (
@@ -189,7 +189,7 @@ function UpdateList(props: { view: PlanView; onOpen: (id: string) => void; onApp
       <div class="card-head"><div><h2>업데이트</h2><p class="small muted" style="margin-top: 2px">우선순위가 높은 업데이트가 인력을 먼저 사용합니다. 왼쪽 손잡이(⠿)나 줄을 길게 눌러 끌면 순서가 바뀝니다.{live.some(r => r.batches.length) && <> 배치가 있는 업데이트는 그 안에서 <b>배치 순서대로</b> 작업한다고 보고 계산하며, 업데이트 아래 줄에 배치별 완료 예정을 보입니다(배치 순서는 에셋 제작 현황 › 배치에서).</>}</p></div></div>
       <div class="card-body" style="padding-top: 8px">
         <div class="table-wrap">
-          <table class="grid list">
+          <table class="grid list plan-list">
             <thead><tr>
               <th class="n" style="width: 96px">순위</th><th>업데이트</th><th class="n">시작</th><th class="n">제작 완료 목표</th><th class="n">출시</th>
               <th class="n">{MODE_LABEL.TARGET} 물량</th><th class="n">완료 예정 · 범위</th><th>판정 · 근거</th>

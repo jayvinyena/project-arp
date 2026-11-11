@@ -204,9 +204,9 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
   ].sort((x, y) => (x.at < y.at ? 1 : -1));
   return (
     <Dialog label="에셋 카드" onClose={() => props.onClose()} class="asset-card-window">
-        <div class={`cw-cover${drag ? ' drag' : ''}`} onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+        <div class={`cw-cover${drag ? ' drag' : ''}${a.thumbAt ? '' : ' band'}`} onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
           onDrop={e => { e.preventDefault(); setDrag(false); const f = [...(e.dataTransfer?.files ?? [])].find(x => x.type.startsWith('image/')); if (f) void putThumb(f); }}>
-          <Thumb asset={a} size="big" />
+          {a.thumbAt ? <Thumb asset={a} size="big" /> : <span class="small faint cw-band-text">썸네일이 없습니다{ro ? '' : ' · 이미지를 여기로 끌어 놓아도 됩니다'}</span>}
           <button type="button" class="btn ghost icon-btn cw-close" aria-label="닫기" onClick={props.onClose}><IconX /></button>
           {!ro && <span class="cw-cover-actions">
             <button type="button" class="btn sm" disabled={busy} onClick={pick}><IconImage />{busy ? '줄이는 중…' : a.thumbAt ? '썸네일 바꾸기' : '썸네일 넣기'}</button>
@@ -224,32 +224,6 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
               {due && <span class={`label-chip${overdue ? ' overdue' : ''}`}>마감 {fmtShortDate(due)}{a.dueDate ? '' : '(배치)'}</span>}
               {a.jiraKey && (href ? <a class="label-chip link" href={href} target="_blank" rel="noreferrer">{a.jiraKey} ↗</a> : <span class="label-chip">{a.jiraKey}</span>)}
             </div>
-
-            <section class="cw-section">
-              <h3 class="sub-h">설명</h3>
-              <TextArea value={a.note ?? ''} label="설명" placeholder="요청 사항 · 참고 · 특이 사항을 적습니다" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'note', value: t })} />
-            </section>
-
-            <section class="cw-section">
-              <h3 class="sub-h">속성 <span class="small faint">제작 리스트의 추가 칸(속성 · 지역 · 무기 …)</span></h3>
-              <div class="cw-attrs">
-                {a.attrs.length === 0 && <p class="small faint">아직 속성이 없습니다.</p>}
-                {a.attrs.map(x => (
-                  <div class="cw-attr">
-                    <span class="cw-attr-name">{x.name}</span>
-                    <Field value={x.value} label={`속성 ${x.name}`} disabled={ro} onCommit={t => apply({ kind: 'assetAttr', assetIds: [a.assetId], name: x.name, value: t })} />
-                    {!ro && <button type="button" class="btn ghost icon-btn" aria-label={`속성 ${x.name} 지우기`} onClick={() => void apply({ kind: 'assetAttr', assetIds: [a.assetId], name: x.name, value: null })}><IconX /></button>}
-                  </div>
-                ))}
-              </div>
-              {!ro && (
-                <div class="inline cw-link-add">
-                  <input class="field" aria-label="속성 이름" placeholder="이름(예: 속성)" value={attr.name} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, name: t })); }} />
-                  <input class="field" aria-label="속성 값" placeholder="값(예: 바람)" value={attr.value} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, value: t })); }} />
-                  <button type="button" class="btn sm" disabled={!attr.name.trim() || !attr.value.trim()} onClick={async () => { if (await apply({ kind: 'assetAttr', assetIds: [a.assetId], name: attr.name, value: attr.value })) setAttr({ name: '', value: '' }); }}><IconPlus />속성 더하기</button>
-                </div>
-              )}
-            </section>
 
             <section class="cw-section">
               <h3 class="sub-h">파트 체크리스트 <span class="small faint">완료 {view.parts.filter(p => a.parts[p.partId]?.status === 'DONE').length} / {view.parts.filter(p => a.parts[p.partId] && a.parts[p.partId].status !== 'OMIT').length}</span></h3>
@@ -280,6 +254,32 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                   </tbody>
                 </table>
               </div>
+            </section>
+
+            <section class="cw-section">
+              <h3 class="sub-h">설명</h3>
+              <TextArea value={a.note ?? ''} label="설명" placeholder="요청 사항 · 참고 · 특이 사항을 적습니다" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'note', value: t })} />
+            </section>
+
+            <section class="cw-section">
+              <h3 class="sub-h">속성 <span class="small faint">제작 리스트의 추가 칸(속성 · 지역 · 무기 …)</span></h3>
+              <div class="cw-attrs">
+                {a.attrs.length === 0 && <p class="small faint">아직 속성이 없습니다.</p>}
+                {a.attrs.map(x => (
+                  <div class="cw-attr">
+                    <span class="cw-attr-name">{x.name}</span>
+                    <Field value={x.value} label={`속성 ${x.name}`} disabled={ro} onCommit={t => apply({ kind: 'assetAttr', assetIds: [a.assetId], name: x.name, value: t })} />
+                    {!ro && <button type="button" class="btn ghost icon-btn" aria-label={`속성 ${x.name} 지우기`} onClick={() => void apply({ kind: 'assetAttr', assetIds: [a.assetId], name: x.name, value: null })}><IconX /></button>}
+                  </div>
+                ))}
+              </div>
+              {!ro && (
+                <div class="inline cw-link-add">
+                  <input class="field" aria-label="속성 이름" placeholder="이름(예: 속성)" value={attr.name} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, name: t })); }} />
+                  <input class="field" aria-label="속성 값" placeholder="값(예: 바람)" value={attr.value} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, value: t })); }} />
+                  <button type="button" class="btn sm" disabled={!attr.name.trim() || !attr.value.trim()} onClick={async () => { if (await apply({ kind: 'assetAttr', assetIds: [a.assetId], name: attr.name, value: attr.value })) setAttr({ name: '', value: '' }); }}><IconPlus />속성 더하기</button>
+                </div>
+              )}
             </section>
 
             <section class="cw-section">
@@ -650,7 +650,7 @@ export function AssetsPage(props: {
           {/* 고른 에셋 한 번에 고치기: 자리를 늘 확보(고르기 전후로 화면이 움직이지 않게) */}
           <div class={`bulk-bar${selIds.length ? ' on' : ''}`} aria-live="polite">
             {selIds.length === 0
-              ? <span class="small faint">{view === 'board' ? '카드를 끌어 단계를 바꿉니다. 체크한 카드는 함께 옮겨집니다.' : '체크로 여러 에셋을 고르면 단계 · 배치 · 파트 상태(해당 없음 ↔ 대기 등)를 한 번에 바꿉니다.'}</span>
+              ? <span class="small faint">{view === 'board' ? <><span class="hint-mouse">카드를 끌어 단계를 바꿉니다. 체크한 카드는 함께 옮겨집니다.</span><span class="hint-touch">카드를 눌러 열고 단계를 고릅니다. 여러 장은 체크한 뒤 위 일괄 고치기로 옮깁니다.</span></> : '체크로 여러 에셋을 고르면 단계 · 배치 · 파트 상태(해당 없음 ↔ 대기 등)를 한 번에 바꿉니다.'}</span>
               : <>
                 <b class="small">{selIds.length}개 선택</b>
                 {!ro && <>
@@ -769,11 +769,11 @@ export function AssetsPage(props: {
                           return (
                             <>
                               {over?.col === col.id && over.index === i && <div class="kb-drop-line" />}
-                              <div class={`kb-card${sel.has(a.assetId) ? ' picked' : ''}${dragIds.includes(a.assetId) ? ' dragging' : ''}`} draggable={!ro} data-id={a.assetId}
+                              <div class={`kb-card${a.thumbAt ? '' : ' no-cover'}${sel.has(a.assetId) ? ' picked' : ''}${dragIds.includes(a.assetId) ? ' dragging' : ''}`} draggable={!ro} data-id={a.assetId}
                                 onDragStart={e => { const ids = sel.has(a.assetId) ? selIds : [a.assetId]; setDragIds(ids); e.dataTransfer?.setData('text/plain', ids.join(',')); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}
                                 onDragEnd={() => { setDragIds([]); setOver(null); }}
                                 onClick={e => { if ((e.target as HTMLElement).closest('input, select, a, button')) return; if (e.shiftKey) toggle(a.assetId); else setOpenId(a.assetId); }}>
-                                <Thumb asset={a} size="cover" />
+                                {a.thumbAt && <Thumb asset={a} size="cover" />}
                                 <input type="checkbox" class="kb-check" aria-label={`${a.name} 고르기`} checked={sel.has(a.assetId)} onChange={() => toggle(a.assetId)} />
                                 <div class="kb-body">
                                   <span class="kb-name">{a.name}</span>
