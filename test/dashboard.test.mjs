@@ -89,3 +89,48 @@ test('에셋이 없는 프로젝트도 현황판이 나온다(단계 분포 · �
   assert.ok(d.trend.points.length > 0);
   t.raw.close();
 });
+
+test('담당별(docs/32 7): 상태별 수 · 명단에 없는 이름 · 담당 없음 · 파트 인원 비교', () => {
+  const t = open('assets');
+  let k = 0;
+  const apply = e => applyEdit(t.db, t.session, e, { editor: '검사', batchId: `dp${(k += 1)}` });
+  const d = dashboardView(t.db, 'LAUNCH', 'TARGET', TODAY);
+  const row = name => d.people.rows.find(r => r.name === name);
+  // 예시: 김원화 4칸 · 이원화 3칸 · 박모델 2칸(명단에 있음)
+  for (const [name, n] of [['김원화', 4], ['이원화', 3], ['박모델', 2]]) {
+    const r = row(name);
+    assert.ok(r && r.inRoster, name);
+    assert.equal(r.todo + r.wip + r.review + r.retake + r.hold + r.done, n, name);
+  }
+  assert.equal(row('김원화').team, '원화');
+  // 담당 없음 줄은 맨 뒤
+  assert.equal(d.people.rows.at(-1).name, null);
+  // 명단에 없는 이름(공백이 달라도 같은 사람은 한 줄)
+  const a = String(t.db.get("SELECT asset_id FROM assets WHERE update_id = 'LAUNCH' AND resource_type_id = 'CHAR_NEW' LIMIT 1").asset_id);
+  apply({ kind: 'assetPart', assetIds: [a], partId: 'FX', assignee: '정이펙트' });
+  const d2 = dashboardView(t.db, 'LAUNCH', 'TARGET', TODAY);
+  const j = d2.people.rows.find(r => r.name === '정이펙트');
+  assert.deepEqual([j.inRoster, j.team, j.todo], [false, null, 1]);
+  assert.ok(d2.people.rows.indexOf(j) > d2.people.rows.findIndex(r => r.name === '박모델'), '명단에 없는 이름은 명단 사람 뒤');
+  // 파트 인원: 이번 달(2026-11) 명단(참여 중, 소속팀 = 파트) vs 인력 표
+  assert.equal(d2.people.headcount.month, '2026-11');
+  const concept = d2.people.headcount.parts.find(p => p.name === '원화');
+  assert.equal(concept.roster, 2);
+  assert.equal(typeof concept.capacity, 'number');
+});
+
+test('파이프라인별 단계 분포(docs/32 8): 열 = 그 파이프라인 묶음(병렬은 한 칸), 합계 = 에셋 수', () => {
+  const t = open('assets');
+  let k = 0;
+  const apply = e => applyEdit(t.db, t.session, e, { editor: '검사', batchId: `dq${(k += 1)}` });
+  const pid = String(t.db.get("SELECT pipeline_id FROM resource_types WHERE resource_type_id = 'CHAR_NEW'").pipeline_id);
+  apply({ kind: 'stepParallel', pipelineId: pid, partId: 'FX', withPrev: true });
+  const d = dashboardView(t.db, 'LAUNCH', 'TARGET', TODAY);
+  const ps = d.pipelineStages.find(p => p.pipelineId === pid);
+  assert.deepEqual(ps.list.map(x => x.name), ['대기', '원화', '모델링', '애니메이션 ∥ FX', '완료']);
+  const totalAssets = d.pipelineStages.reduce((s, p) => s + p.total, 0);
+  assert.equal(totalAssets, d.summary.assets, '빠짐없이 센다');
+  assert.equal(ps.counts.reduce((x, y) => x + y, 0), ps.total);
+  // 항목별 분포와 합이 같다
+  assert.equal(d.stages.groups.reduce((s, g) => s + g.total, 0), totalAssets);
+});

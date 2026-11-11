@@ -1462,3 +1462,28 @@ table.grid.people-import-table td .field.ghost-field { width: 100%; }
 .batch-when { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 table.grid tr.batch-line td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); padding-top: 6px; padding-bottom: 6px; }
 .batch-line-name { padding-left: 14px; display: inline-flex; gap: 6px; align-items: baseline; }
+
+/* 현황판 담당별 · 파트 인원 · 파이프라인별 단계 분포(docs/32 7 · 8) */
+.dash-people { margin-top: 16px; }
+.people-miss { margin-left: 6px; }
+table.grid.dash-people-table td.bad-text { color: var(--bad); font-weight: 650; }
+table.grid.dash-people-table td.warn-text { color: var(--warn); font-weight: 650; }
+.headcount { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 10px; }
+.headcount-chip { display: inline-flex; gap: 4px; align-items: center; height: 24px; padding: 0 8px; border-radius: 12px; background: var(--hover); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.headcount-chip.off { background: var(--warn-soft); color: var(--warn); }
+.pipe-stages { gap: 12px; }
+.pipe-stage .stage-legend { margin-bottom: 6px; }
+.pipe-stage-name { color: var(--text); font-size: 13px; margin-right: 4px; }
+
+/* 현황판 손질: 머리 단추가 꺾이지 않게, 담당별 표는 내용 폭(넘치면 표 안에서 옆으로) */
+.dash-stages .card-head { flex-wrap: wrap; row-gap: 8px; }
+.dash-stages .segmented button { white-space: nowrap; }
+table.grid.dash-people-table { table-layout: fixed; min-width: 900px; }
+table.grid.dash-people-table td:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-batch-table .batch-when { margin-top: 4px; }
+.dash-stages .card-head > .inline { flex-shrink: 0; }
+.dash-batch-table .batch-when { display: flex; }
+/* 현황판 배치 표: 카드 폭 안에(마감 · D-day는 두 줄로 접힘) */
+table.grid.dash-batch-table { table-layout: fixed; }
+.dash-batch-table td { white-space: normal; }
+.dash-batch-table .share { min-width: 0; }

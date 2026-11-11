@@ -942,7 +942,7 @@ export function App() {
         {page === 'plan' && <PlanPage version={version} planMode={planMode} setPlanMode={setPlanMode} readOnly={file.readOnly} names={names} onApply={onApply} />}
         {page === 'news' && <NewsPage version={version} readOnly={file.readOnly} project={view.snapshot.projectName} seenAt={newsSeen}
           onSeen={() => { const at = new Date().toISOString(); writeNewsSeen(file.name, at); setNewsSeen(at); }} onApply={onApply} onToast={showToast} />}
-        {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} updateId={curUpdate} onUpdate={setCurUpdate} />}
+        {page === 'dashboard' && <DashboardPage version={version} planMode={planMode} setPlanMode={setPlanMode} onGo={p => setPage(p)} viewer={!!file.viewer} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'assets' && <AssetsPage version={version} readOnly={file.readOnly} onApply={onApply} onExport={onExportAssets} onImport={onImportAssets} focus={assetFocus} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'progress' && <ProgressPage version={version} readOnly={file.readOnly} onApply={onApply} onTemplate={onTemplate} onImport={onImportProgress} updateId={curUpdate} onUpdate={setCurUpdate} />}
         {page === 'calibration' && <CalibrationPage version={version} readOnly={file.readOnly} onCalibrate={onCalibrate} onGoProgress={() => setPage('progress')} />}

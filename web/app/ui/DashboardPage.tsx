@@ -111,13 +111,18 @@ function TodoList(props: { updateId: string; items: DashTodo[]; empty: string; s
 }
 
 export function DashboardPage(props: {
-  version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; onGo: (page: 'assets' | 'progress') => void;
+  version: number; planMode: PlanMode; setPlanMode: (m: PlanMode) => void; onGo: (page: 'assets' | 'progress' | 'capacity') => void;
+  /** 보기 모드: 인력 화면(작업자 명단)으로 가는 단추를 감춘다 */
+  viewer?: boolean;
   /** 지금 업데이트(모든 화면이 함께 쓴다) */
   updateId: string | null; onUpdate: (id: string) => void;
 }) {
   const [updateId, setUpdateId] = useState<string | null>(props.updateId);
   const [v, setV] = useState<View | null>(null);
   const [tab, setTab] = useState<keyof DashboardView['todo']>('review');
+  // 단계 분포 묶음: 항목별 · 파이프라인별(docs/32 8). 고른 것은 이 브라우저에 남긴다
+  const [stageBy, setStageBy] = useState<'group' | 'pipeline'>(() => { try { return localStorage.getItem('arp.dash.stageBy') === 'pipeline' ? 'pipeline' : 'group'; } catch { return 'group'; } });
+  const pickStageBy = (x: 'group' | 'pipeline') => { setStageBy(x); try { localStorage.setItem('arp.dash.stageBy', x); } catch { /* 저장소 없음 */ } };
   useEffect(() => { void rpc.dashboard(updateId, props.planMode).then(x => { setV(x); if (!updateId) setUpdateId(x.updateId); if (x.updateId && x.updateId !== props.updateId) props.onUpdate(x.updateId); }); }, [props.version, updateId, props.planMode]);
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const s = v.summary;
@@ -233,10 +238,32 @@ export function DashboardPage(props: {
 
       <div class="dash-row">
         <section class="card dash-stages">
-          <div class="card-head"><div><h2>제작 단계 분포</h2><p class="small muted" style="margin-top: 2px">항목마다 에셋이 어느 단계에 있는지입니다(앞에서부터 아직 끝나지 않은 첫 파트).</p></div>
-            <button type="button" class="btn sm" onClick={() => props.onGo('assets')}>보드에서 보기</button></div>
+          <div class="card-head"><div><h2>제작 단계 분포</h2><p class="small muted" style="margin-top: 2px">{stageBy === 'pipeline' ? '파이프라인마다 그 단계 순서로 에셋이 어느 단계에 있는지입니다(∥ 는 병렬 단계를 한 칸으로).' : '항목마다 에셋이 어느 단계에 있는지입니다(앞에서부터 아직 끝나지 않은 첫 파트).'}</p></div>
+            <div class="inline" style="gap: 6px">
+              {v.stages && (
+                <div class="segmented wide" role="radiogroup" aria-label="단계 분포 묶음">
+                  <button type="button" role="radio" aria-checked={stageBy === 'group'} class={stageBy === 'group' ? 'on' : ''} onClick={() => pickStageBy('group')}>항목별</button>
+                  <button type="button" role="radio" aria-checked={stageBy === 'pipeline'} class={stageBy === 'pipeline' ? 'on' : ''} onClick={() => pickStageBy('pipeline')}>파이프라인별</button>
+                </div>
+              )}
+              <button type="button" class="btn sm" onClick={() => props.onGo('assets')}>보드에서 보기</button>
+            </div></div>
           <div class="card-body" style="padding-top: 4px">
-            {!v.stages ? <p class="small faint">에셋을 등록하면 단계 분포를 보여 줍니다.</p> : (
+            {!v.stages ? <p class="small faint">에셋을 등록하면 단계 분포를 보여 줍니다.</p> : stageBy === 'pipeline' ? (
+              <div class="stage-bars pipe-stages">
+                {v.pipelineStages.map(ps => (
+                  <div class="pipe-stage">
+                    <div class="stage-legend small"><b class="pipe-stage-name">{ps.name}<span class="faint"> {ps.total}</span></b>
+                      {ps.list.map((st, i) => <span><i class={`stg stg-${i === 0 ? 'todo' : i === ps.list.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} />{st.name} {ps.counts[i]}</span>)}</div>
+                    <span class="stage-bar" aria-label={`${ps.name} 단계 분포`}>
+                      {ps.counts.map((c, i) => c > 0 && (
+                        <span class={`stg stg-${i === 0 ? 'todo' : i === ps.counts.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} style={{ flexGrow: c }} title={`${ps.list[i].name} ${c}개`}>{c / ps.total >= 0.08 ? c : ''}</span>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
               <>
                 <div class="stage-legend small">{v.stages.list.map((st, i) => <span><i class={`stg stg-${i === 0 ? 'todo' : i === v.stages!.list.length - 1 ? 'done' : `p${Math.min(4, i)}`}`} />{st.name}</span>)}</div>
                 <div class="stage-bars">
@@ -261,16 +288,15 @@ export function DashboardPage(props: {
             {!v.batches.length ? <p class="small faint">배치가 없습니다. 에셋 제작 현황의 "배치" 탭에서 더합니다.</p> : (
               <div class="table-wrap ref-wrap">
                 <table class="grid ref dash-batch-table">
-                  <colgroup><col /><col style="width: 120px" /><col style="width: 72px" /><col style="width: 130px" /><col style="width: 190px" /></colgroup>
-                  <thead><tr><th>배치</th><th>마감</th><th class="n">완료</th><th>진행</th><th>완료 예정</th></tr></thead>
+                  <colgroup><col /><col style="width: 92px" /><col style="width: 58px" /><col style="width: 86px" /></colgroup>
+                  <thead><tr><th>배치</th><th>마감</th><th class="n">완료</th><th>진행</th></tr></thead>
                   <tbody>
                     {v.batches.map(b => (
                       <tr class="row">
-                        <td><b>{b.name}</b></td>
+                        <td><b>{b.name}</b>{(() => { const f = v.forecast?.batches.find(x => x.batchId === b.batchId); return <div class="batch-when small">{f ? <><span class="num">{batchWhen(f)}</span><BatchPill b={f} /></> : <span class="faint">{b.done >= b.count ? '모두 완료' : '완료 예정 없음'}</span>}</div>; })()}</td>
                         <td class="small">{b.due ? <>{b.due.slice(5).replace('-', '/')} <span class={`pill plain ${b.daysLeft! < 0 && b.done < b.count ? 'bad' : b.daysLeft! <= 14 ? 'warn' : ''}`}>{b.daysLeft! < 0 ? `${-b.daysLeft!}일 지남` : `D-${b.daysLeft}`}</span></> : '—'}</td>
                         <td class="n num">{b.done} / {b.count}</td>
                         <td><span class="share"><span class="num small">{fmtPct(b.progress)}</span><span class="bar"><span class={`fill${b.progress >= 1 ? ' done' : ''}`} style={{ width: `${b.progress * 100}%` }} /></span></span></td>
-                        <td>{(() => { const f = v.forecast?.batches.find(x => x.batchId === b.batchId); return f ? <span class="batch-when"><span class="num small">{batchWhen(f)}</span><BatchPill b={f} /></span> : <span class="small faint">{b.done >= b.count ? '모두 완료' : '—'}</span>; })()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -280,6 +306,41 @@ export function DashboardPage(props: {
           </div>
         </section>
       </div>
+
+      <section class="card dash-people">
+        <div class="card-head"><div><h2>담당별</h2><p class="small muted" style="margin-top: 2px">에셋 파트 작업을 담당(에셋 담당 칸) 이름마다 상태별로 센 것입니다. 마감 지남 = 마감이 지났는데 끝나지 않은 에셋에서 지금 단계를 맡은 수.</p></div>
+          {!props.viewer && <button type="button" class="btn sm" onClick={() => props.onGo('capacity')}>작업자 명단</button>}</div>
+        <div class="card-body" style="padding-top: 4px">
+          {!v.people.rows.some(r => r.name) ? <p class="small faint">에셋 담당 칸에 이름을 넣으면 담당별로 보여 줍니다.</p> : (
+            <div class="table-wrap ref-wrap">
+              <table class="grid ref dash-people-table">
+                <colgroup><col style="width: 220px" /><col style="width: 130px" /><col style="width: 80px" /><col style="width: 80px" /><col style="width: 88px" /><col style="width: 80px" /><col style="width: 80px" /><col style="width: 88px" /><col style="width: 80px" /></colgroup>
+                <thead><tr><th>담당</th><th>소속팀</th><th class="n">대기</th><th class="n">진행</th><th class="n">검수 요청</th><th class="n">수정</th><th class="n">보류</th><th class="n">마감 지남</th><th class="n">완료</th></tr></thead>
+                <tbody>
+                  {v.people.rows.map(r => (
+                    <tr class={`row${r.name ? '' : ' muted-row'}`}>
+                      <td>{r.name ? <b>{r.name}</b> : <span class="faint">담당 없음</span>}{r.name && !r.inRoster && <span class="pill plain warn people-miss" title="작업자 명단에 없는 이름입니다. 인력 › 작업자 › 담당에서 찾기로 더할 수 있습니다">명단에 없음</span>}</td>
+                      <td class="small">{r.team ?? <span class="faint">—</span>}</td>
+                      {([r.todo, r.wip, r.review, r.retake, r.hold] as number[]).map((n, i) => <td class={`n num${n === 0 ? ' faint' : i === 3 && n ? ' bad-text' : i === 2 && n ? ' warn-text' : ''}`}>{n}</td>)}
+                      <td class={`n num${r.overdue ? ' bad-text' : ' faint'}`}>{r.overdue}</td>
+                      <td class={`n num${r.done ? '' : ' faint'}`}>{r.done}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {v.people.headcount.month && (
+            <div class="headcount small" role="group" aria-label="파트 인원 비교">
+              <span class="faint">파트 인원({v.people.headcount.month.replace('-', '년 ')}월) 명단 · 인력 표</span>
+              {v.people.headcount.parts.map(p => {
+                const off = p.capacity != null && p.roster !== Math.round(p.capacity);
+                return <span class={`headcount-chip${off ? ' off' : ''}`} title={off ? `작업자 명단(참여 중, 소속팀 ${p.name}) ${p.roster}명과 인력 표 인원 ${p.capacity}명이 다릅니다. 계산은 인력 표 숫자를 씁니다` : undefined}>{p.name} <b>{p.roster}</b> · {p.capacity ?? '—'}</span>;
+              })}
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

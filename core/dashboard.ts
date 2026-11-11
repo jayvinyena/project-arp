@@ -4,7 +4,21 @@ import type { SqlDb } from './db.ts';
 import type { PlanMode } from '../engine/types.ts';
 import type { AssetStatus, Stage } from './assets.ts';
 import { stageOf, pipeline, defaultStatus } from './assets.ts';
-import { partOrderFor } from './pipelines.ts';
+import { partOrderFor, pipelinesList } from './pipelines.ts';
+import { nameKey } from './people-paste.ts';
+
+/** 담당별 현황(docs/32 7): 이 업데이트 에셋의 파트 작업을 담당 이름마다 상태별로 센다 */
+export interface DashPersonRow {
+  /** 담당 이름(명단 표기가 있으면 명단 표기). null = 담당 없음 */
+  name: string | null; team: string | null; inRoster: boolean;
+  todo: number; wip: number; review: number; retake: number; hold: number; done: number;
+  /** 마감 지남: 마감(에셋 · 배치)이 지났는데 끝나지 않은 에셋에서 지금 단계 파트를 맡음 */
+  overdue: number;
+}
+/** 파트 인원 비교: 명단(참여 중, 소속팀 = 파트) vs 인력 표(그 달 인원) */
+export interface DashHeadcount { month: string | null; parts: { partId: string; name: string; roster: number; capacity: number | null }[] }
+/** 파이프라인별 단계 분포(docs/32 8): 열 = 대기 · 묶음(병렬은 한 칸) · 완료 */
+export interface DashPipelineStages { pipelineId: string | null; name: string; list: { id: string; name: string }[]; counts: number[]; total: number }
 
 export interface DashTodo { assetId: string; name: string; resource: string; part: string | null; since: string | null; who: string | null }
 export interface DashboardView {
@@ -29,6 +43,10 @@ export interface DashboardView {
   trend: { points: { date: string; actual: number | null; ideal: number | null }[]; total: number; today: string };
   todo: { review: DashTodo[]; retake: DashTodo[]; hold: DashTodo[]; overdue: DashTodo[]; stale: DashTodo[] };
   batches: { batchId: string; name: string; due: string | null; daysLeft: number | null; count: number; done: number; progress: number }[];
+  /** 담당별 현황 · 파트 인원 비교(docs/32 7) */
+  people: { rows: DashPersonRow[]; headcount: DashHeadcount };
+  /** 파이프라인별 단계 분포(docs/32 8). 에셋이 없으면 빈 목록 */
+  pipelineStages: DashPipelineStages[];
 }
 
 const DAY = 86400000;
@@ -48,6 +66,7 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
     summary: { doneDays: 0, totalDays: 0, rate: 0, weekDone: 0, lastWeekDone: 0, idealRate: null, aheadWorkdays: null, assets: 0 },
     matrix: [], partTotals: parts.map(() => ({ doneDays: 0, totalDays: 0, rate: 0 })), stages: null,
     trend: { points: [], total: 0, today }, todo: { review: [], retake: [], hold: [], overdue: [], stale: [] }, batches: [],
+    people: { rows: [], headcount: { month: null, parts: [] } }, pipelineStages: [],
   };
   if (!updateId) return empty;
   const u = db.get('SELECT * FROM updates WHERE update_id = ?', [updateId])!;
@@ -150,6 +169,22 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
   const stageGroups = new Map<string, number[]>();
   const todo: DashboardView['todo'] = { review: [], retake: [], hold: [], overdue: [], stale: [] };
   const staleBefore = iso(parse(today) - 14 * DAY);
+  // 담당별(명단 이름과 공백 · 대소문자 무시로 맞춤)
+  const roster = db.all('SELECT name, team, active FROM people ORDER BY sort_order, person_id');
+  const rosterBy = new Map(roster.map(r => [nameKey(String(r.name)), r]));
+  const personRows = new Map<string, DashPersonRow>();
+  const personOf = (raw: string | null): DashPersonRow => {
+    const k = raw ? nameKey(raw) : '';
+    if (!personRows.has(k)) {
+      const r = k ? rosterBy.get(k) : undefined;
+      personRows.set(k, { name: k ? String(r?.name ?? raw!.trim()) : null, team: r ? ((r.team as string) ?? null) : null, inRoster: !!r, todo: 0, wip: 0, review: 0, retake: 0, hold: 0, done: 0, overdue: 0 });
+    }
+    return personRows.get(k)!;
+  };
+  // 파이프라인별 단계 분포: 리소스 파이프라인마다 묶음 열
+  const pipeOfRt = new Map(db.all('SELECT resource_type_id, pipeline_id FROM resource_types').map(r => [String(r.resource_type_id), (r.pipeline_id as string) ?? null]));
+  const pipeInfo = new Map(pipelinesList(db).map(p => [p.pipelineId, p]));
+  const pipeStages = new Map<string, DashPipelineStages & { groups: string[][] }>();
   for (const a of assets) {
     const id = String(a.asset_id);
     const st = orderFor(String(a.resource_type_id));
@@ -159,6 +194,41 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
     const g = String(a.gname);
     if (!stageGroups.has(g)) stageGroups.set(g, stageList.map(() => 0));
     stageGroups.get(g)![stageList.findIndex(x => x.id === stage)] += 1;
+    {
+      // 파이프라인별: 이 에셋 리소스의 묶음(병렬은 한 칸). 파이프라인이 같으면 열도 같다
+      const pid = pipeOfRt.get(String(a.resource_type_id)) ?? null;
+      const info = pid ? pipeInfo.get(pid) : undefined;
+      const key = info ? info.pipelineId : '';
+      if (!pipeStages.has(key)) {
+        // 열 = 그 파이프라인의 묶음(병렬은 한 칸). 파이프라인이 없으면 파트 표 순서로 파트마다
+        const groups = info ? info.groups : parts.map(x => [x.partId]);
+        const list = [{ id: 'TODO', name: '대기' }, ...groups.map(gp => ({ id: gp[0], name: gp.map(x => partName.get(x) ?? x).join(' ∥ ') })), { id: 'DONE', name: '완료' }];
+        pipeStages.set(key, { pipelineId: key || null, name: info ? info.name : '파이프라인 고르지 않음', list, counts: list.map(() => 0), total: 0, groups });
+      }
+      const ps = pipeStages.get(key)!;
+      let col = stage === 'TODO' ? 0 : stage === 'DONE' ? ps.list.length - 1 : ps.list.findIndex(x => ps.groups.find(gp => gp.includes(stage))?.[0] === x.id);
+      if (col < 0) {
+        // 파이프라인 밖 파트에 머문 에셋(옛 기록): 완료 앞에 그 파트 열을 덧붙여 빠짐없이 센다
+        const at = ps.list.length - 1;
+        ps.list.splice(at, 0, { id: stage, name: `${partName.get(stage) ?? stage}(파이프라인 밖)` });
+        ps.counts.splice(at, 0, 0);
+        ps.groups.push([stage]);
+        col = at;
+      }
+      ps.counts[col] += 1; ps.total += 1;
+    }
+    for (const p of st) {
+      const status = statusOf(p);
+      if (status === 'OMIT') continue;
+      const who = (s.get(p)?.assignee as string) ?? null;
+      const row = personOf(who);
+      if (status === 'TODO') row.todo += 1;
+      else if (status === 'WIP') row.wip += 1;
+      else if (status === 'REVIEW') row.review += 1;
+      else if (status === 'RETAKE') row.retake += 1;
+      else if (status === 'HOLD') row.hold += 1;
+      else if (status === 'DONE') row.done += 1;
+    }
     const item = (part: string | null, since: string | null): DashTodo => ({
       assetId: id, name: String(a.name), resource: String(a.rname), part: part ? partName.get(part) ?? part : null, since,
       who: part ? ((s.get(part)?.assignee as string) ?? null) : null,
@@ -172,7 +242,10 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
       if (status === 'WIP' && r?.started_at && String(r.started_at) < staleBefore) todo.stale.push(item(p, String(r.started_at)));
     }
     const due = (a.due_date as string) ?? (a.batch_id ? batchDue.get(String(a.batch_id)) ?? null : null);
-    if (due && due < today && stage !== 'DONE') todo.overdue.push(item(stage === 'TODO' || stage === 'DONE' ? null : stage, due));
+    if (due && due < today && stage !== 'DONE') {
+      todo.overdue.push(item(stage === 'TODO' || stage === 'DONE' ? null : stage, due));
+      if (stage !== 'TODO') personOf((s.get(stage)?.assignee as string) ?? null).overdue += 1;
+    }
   }
   todo.overdue.sort((x, y) => String(x.since).localeCompare(String(y.since)));
   todo.stale.sort((x, y) => String(x.since).localeCompare(String(y.since)));
@@ -197,7 +270,23 @@ export function dashboardView(db: SqlDb, wanted: string | null, planMode: PlanMo
     };
   });
 
+  // 담당별: 명단 순(파트 공정 순 소속팀 → 나머지) → 명단에 없는 이름(가나다) → 담당 없음. 아무 일도 없는 담당 없음 줄은 뺀다
+  const teamRank = new Map(parts.map((p, i) => [p.name, i]));
+  const people = [...personRows.values()].filter(r => r.name !== null || r.todo + r.wip + r.review + r.retake + r.hold + r.done > 0);
+  people.sort((x, y) => (x.name === null ? 1 : 0) - (y.name === null ? 1 : 0) || (x.inRoster ? 0 : 1) - (y.inRoster ? 0 : 1)
+    || (teamRank.get(x.team ?? '') ?? 99) - (teamRank.get(y.team ?? '') ?? 99) || String(x.name).localeCompare(String(y.name), 'ko'));
+  // 파트 인원 비교: 이번 달(계획 기간 안이면) 인력 표 인원 vs 명단(참여 중, 소속팀 = 파트 이름)
+  const month = today.slice(0, 7);
+  const capRows = new Map(db.all('SELECT part_id, headcount FROM capacity WHERE month = ?', [month]).map(r => [String(r.part_id), Number(r.headcount)]));
+  const headcount: DashHeadcount = {
+    month: capRows.size ? month : null,
+    parts: parts.map(p => ({ partId: p.partId, name: p.name, roster: roster.filter(r => Number(r.active) === 1 && r.team === p.name).length, capacity: capRows.get(p.partId) ?? null })),
+  };
+  const pipelineStages = assets.length ? [...pipeStages.values()].map(({ groups: _g, ...rest }) => rest)
+    .sort((x, y) => (x.pipelineId ? 0 : 1) - (y.pipelineId ? 0 : 1) || y.total - x.total) : [];
+
   return {
+    people: { rows: people, headcount }, pipelineStages,
     updates, updateId, parts, planMode, window: { start, target, targetLabel },
     summary: { doneDays, totalDays, rate, weekDone, lastWeekDone, idealRate, aheadWorkdays, assets: assets.length },
     matrix: [...groupMap.values()], partTotals,

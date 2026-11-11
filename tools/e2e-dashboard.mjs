@@ -52,6 +52,18 @@ await withBrowser(async (cdp, base) => {
   // 배치 카드: 완료 예정 칸(docs/33)
   const dfc = await cdp.eval("[...document.querySelectorAll('table.dash-batch-table tbody tr')].map(r => r.querySelector('.batch-when')?.textContent.trim() ?? '—').join(' | ')");
   check('배치 카드: 배치마다 완료 예정 · 판정', dfc.split(' | ').length === 2 && dfc.split(' | ').every(t => /(마감 안|빠듯|늦음|못 끝냄|마감 없음)/.test(t)), dfc);
+  // 담당별 카드 · 파트 인원 비교(docs/32 7)
+  const ppl = await cdp.eval("[...document.querySelectorAll('table.dash-people-table tbody tr')].map(r => r.querySelector('td').textContent.trim()).join(',')");
+  const hc = await cdp.eval("[...document.querySelectorAll('.headcount-chip')].map(c => c.textContent.trim()).join(',')");
+  check('담당별: 명단 사람 · 담당 없음(맨 뒤) · 파트 인원 비교', /^김원화,이원화,박모델/.test(ppl) && ppl.endsWith('담당 없음') && /원화 2 · \d/.test(hc), `${ppl} / ${hc}`);
+  // 단계 분포: 파이프라인별로 바꾸면 파이프라인 줄, 다시 항목별
+  await cdp.eval("[...document.querySelectorAll('[aria-label=\"단계 분포 묶음\"] button')].find(b => b.textContent === '파이프라인별').click()");
+  await sleep(200);
+  const pipeRows = await cdp.eval("[...document.querySelectorAll('.pipe-stage .pipe-stage-name')].map(b => b.textContent).join(',')");
+  check('단계 분포: 파이프라인별(파이프라인 이름 · 합계)', /기본 \d+/.test(pipeRows), pipeRows);
+  await shot(cdp, 'dashboard-pipeline-1440');
+  await cdp.eval("[...document.querySelectorAll('[aria-label=\"단계 분포 묶음\"] button')].find(b => b.textContent === '항목별').click()");
+  await sleep(150);
   const okDash = await shot(cdp, 'dashboard-1440');
   const okDash390 = await shot(cdp, 'dashboard-390', 390);
 
