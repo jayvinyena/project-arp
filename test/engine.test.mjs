@@ -332,3 +332,67 @@ test('작업 세션: 고친 뒤·시나리오 계산 결과가 매번 전부 읽
   same(session.calculate(), calculate(db)); // 시나리오 뒤 원본 캐시는 그대로
   db.close();
 });
+
+// ───────── 배치 예측(docs/33) ─────────
+/** docs/33 4절: 원화 · 모델링 각 1명, 원화 2일/개 · 모델링 3일/개, 겹침 0%. X(1차 2 · 2차 2) · Y(1차 2) */
+function batchData(withBatches = true) {
+  const d = tinyData(0);
+  d.efforts = ['X', 'Y'].flatMap(rt => [{ resource_type_id: rt, part_id: 'A', profile_id: 'BASE', days: 2 }, { resource_type_id: rt, part_id: 'B', profile_id: 'BASE', days: 3 }]);
+  d.resource_types = [{ resource_type_id: 'X', group_id: null, name: 'X', sort_order: 1, active: 1 }, { resource_type_id: 'Y', group_id: null, name: 'Y', sort_order: 2, active: 1 }];
+  d.resource_parts = ['X', 'Y'].flatMap(rt => ['A', 'B'].map(p => ({ resource_type_id: rt, part_id: p, rework_rate: 0 })));
+  const vol = (rt, q) => ({ update_id: 'U', resource_type_id: rt, min_qty: q, target_qty: q, stretch_qty: q, required: 1, priority: 1, difficulty: 1, reuse_rate: 0, outsource_qty: 0 });
+  d.volumes = [vol('X', 4), vol('Y', 2)];
+  if (withBatches) {
+    d.batches = [{ batch_id: 'B1', update_id: 'U', name: '1차', due_date: '2027-03-31', sort_order: 1 }, { batch_id: 'B2', update_id: 'U', name: '2차', due_date: '2027-03-26', sort_order: 2 }];
+    const w = (rt, b, p, rem) => ({ update_id: 'U', resource_type_id: rt, part_id: p, batch_id: b, tier: 'TARGET', remaining_qty: rem, done_qty: 0 });
+    d.batch_work = [w('X', 'B1', 'A', 2), w('X', 'B1', 'B', 2), w('X', 'B2', 'A', 2), w('X', 'B2', 'B', 2), w('Y', 'B1', 'A', 2), w('Y', 'B1', 'B', 2)];
+  }
+  return d;
+}
+
+test('손 계산(배치, docs/33 4절): 배치 순서로 배정 → 1차 16일째 · 2차 22일째, 배치가 없으면 업데이트 26일째', () => {
+  const r = runPlan(batchData(true));
+  const days = r.daily.dates;
+  const by = Object.fromEntries(r.batches.map(b => [b.batchId, b]));
+  assert.equal(by.B1.expectedCompletionDate, days[15], '1차: Y 1차 모델링 11 ~ 16일');
+  assert.equal(by.B2.expectedCompletionDate, days[21], '2차: X 2차 모델링 17 ~ 22일');
+  assert.equal(r.updates[0].expectedCompletionDate, days[21]);
+  // 원화 순서: X 1차(1 ~ 4) → Y 1차(5 ~ 8) → X 2차(9 ~ 12)
+  const st = (rt, b, p) => r.stages.find(s => s.resourceTypeId === rt && s.batchId === b && s.partId === p);
+  assert.deepEqual([st('X', 'B1', 'A').startDate, st('Y', 'B1', 'A').startDate, st('X', 'B2', 'A').startDate], [days[0], days[4], days[8]]);
+  assert.equal(st('X', 'B2', 'B').predecessorPartId, 'A', '배치마다 따로 이어진다');
+  // 판정: 1차 3/22 완료 · 마감 3/31 → 여유 7영업일 < 늦음 경고 10 → 빠듯, 2차 마감 3/26인데 3/30 완료 → 늦음 2영업일
+  assert.deepEqual([by.B1.status, by.B1.slackWorkdays], ['TIGHT', 7]);
+  const later = batchData(true); later.batches[0].due_date = '2027-04-09';
+  const b1 = runPlan(later).batches.find(b => b.batchId === 'B1');
+  assert.deepEqual([b1.status, b1.slackWorkdays], ['ON_TRACK', 14], '마감 4/9 → 여유 14영업일');
+  assert.deepEqual([by.B2.status, by.B2.lateWorkdays], ['LATE', 2]);
+  assert.equal(by.B1.reason.resourceTypeId, 'Y');
+  // 배치가 없으면 지금처럼 리소스 순서: X(원화 1 ~ 8 · 모델링 9 ~ 20) → Y(모델링 21 ~ 26)
+  const plain = runPlan(batchData(false));
+  assert.equal(plain.updates[0].expectedCompletionDate, days[25]);
+  assert.deepEqual(plain.batches, []);
+  assert.ok(plain.stages.every(s => s.batchId === null));
+});
+
+test('배치: 물량 밖(배치 에셋이 남은 물량보다 많음) · 배치 순서를 바꾸면 앞으로 간 배치가 먼저 · 포함 템플릿 · 이미 끝낸 몫', () => {
+  // X 물량 3인데 배치 에셋 4개 → 2차는 1개만 계산, 물량 밖 1개
+  const over = batchData(true); over.volumes[0] = { ...over.volumes[0], min_qty: 3, target_qty: 3, stretch_qty: 3 };
+  const ro = runPlan(over);
+  assert.deepEqual(ro.batches.map(b => [b.batchId, b.overQty]), [['B1', 0], ['B2', 1]]);
+  // 순서를 바꾸면 2차가 먼저 끝난다
+  const swap = batchData(true); swap.batches[0].sort_order = 3;
+  const rs = runPlan(swap);
+  const at = (r, id) => r.batches.find(b => b.batchId === id).expectedCompletionDate;
+  assert.ok(at(rs, 'B2') < at(rs, 'B1'), `${at(rs, 'B2')} < ${at(rs, 'B1')}`);
+  // 최소안 계획이면 기본안(TARGET) 에셋은 배치에 들지 않는다 → 배치 결과 없음, 모두 배치 밖
+  const rm = runPlan(batchData(true), { planMode: 'MIN' });
+  assert.deepEqual(rm.batches, []);
+  // 1차 X 원화를 이미 끝냄(완료 2, 작업 진척) → X 1차 원화 남은 일 0, 모델링이 1일째부터
+  const done = batchData(true);
+  done.batch_work = done.batch_work.map(w => (w.resource_type_id === 'X' && w.batch_id === 'B1' && w.part_id === 'A' ? { ...w, remaining_qty: 0, done_qty: 2 } : w));
+  done.progress = [{ update_id: 'U', resource_type_id: 'X', part_id: 'A', completed_qty: 2, as_of: null }];
+  const rd = runPlan(done);
+  const xb1b = rd.stages.find(s => s.resourceTypeId === 'X' && s.batchId === 'B1' && s.partId === 'B');
+  assert.equal(xb1b.startDate, rd.daily.dates[0]);
+});

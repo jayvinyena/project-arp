@@ -189,5 +189,7 @@ export function undoBatch(db: SqlDb, session: ProjectSession, batchId: string, c
   }
   session.markDirty(...([...touched].filter(t => ENGINE.has(t)) as EngineTable[]));
   if (touched.has('settings')) session.markDirty('settings', 'capacity');
+  // 배치 예측 입력(docs/33): 에셋 · 에셋 상태 · 배치 · 거치는 파트가 돌아오면 다시 모은다
+  if (['assets', 'asset_parts', 'batches', 'resource_parts'].some(t => touched.has(t))) session.markDirty('batches', 'batch_work');
   return { reverted: rows.length };
 }

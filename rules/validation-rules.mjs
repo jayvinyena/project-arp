@@ -56,6 +56,7 @@ export const RULE_TABLES = {
   A01: ['progress'], A02: ['progress', 'updates', 'volumes'], A03: ['progress', 'resource_parts'],
   A04: ['progress', 'updates', 'parts', 'resource_parts', 'resource_types', 'pipeline_steps'],
   C01: ['parts', 'capacity', 'settings'], C02: ['capacity'],
+  B01: ['batches', 'updates'], B02: ['batches', 'assets', 'volumes', 'updates'],
   C03: ['parts', 'resource_parts', 'volumes', 'updates', 'capacity', 'settings'],
   T01: ['type_templates'],
   X01: ['scenario_changes', 'part_overlaps', 'pipeline_steps', 'resource_parts', 'efforts', 'effort_mix', 'updates', 'volumes', 'capacity'],
@@ -70,6 +71,7 @@ export const AREAS = {
   V: '물량',
   A: '작업 진척',
   C: '인력',
+  B: '배치',
   T: '유형 템플릿',
   X: '시나리오',
 };
@@ -314,6 +316,26 @@ export const RULES = [
       JOIN parts pa ON pa.part_id = sa.part_id AND pa.active = 1
       LEFT JOIN progress a ON a.update_id = b.update_id AND a.resource_type_id = b.resource_type_id AND a.part_id = sa.part_id
       WHERE b.completed_qty > coalesce(a.completed_qty, 0)`),
+  },
+
+  // ───────── 배치(docs/33) ─────────
+  {
+    code: 'B01', level: 'WARN', title: '배치 마감이 업데이트 출시일보다 뒤',
+    fix: '배치 마감일을 출시일 안으로 당기거나, 출시일을 확인한다.',
+    sql: q(`SELECT b.batch_id AS key, printf('%s 마감 %s > 출시 %s', b.name, b.due_date, u.release_date) AS detail
+      FROM batches b JOIN live_updates u ON u.update_id = b.update_id
+      WHERE b.due_date IS NOT NULL AND u.release_date IS NOT NULL AND b.due_date > u.release_date`),
+  },
+  {
+    code: 'B02', level: 'WARN', title: '배치 에셋이 물량보다 많다(물량 밖)',
+    fix: '물량을 늘리거나 에셋을 줄인다. 넘친 에셋은 배치 완료 예정 계산에 들어가지 않는다.',
+    sql: q(`SELECT a.update_id || '|' || a.resource_type_id AS key,
+        printf('배치 에셋 %d개 > 기본안 물량 %d개(외주 %d 제외)', count(*), coalesce(v.target_qty, 0) - coalesce(v.outsource_qty, 0), coalesce(v.outsource_qty, 0)) AS detail
+      FROM assets a JOIN batches b ON b.batch_id = a.batch_id JOIN live_updates u ON u.update_id = a.update_id
+      LEFT JOIN volumes v ON v.update_id = a.update_id AND v.resource_type_id = a.resource_type_id
+      WHERE a.tier IN ('MIN', 'TARGET')
+      GROUP BY a.update_id, a.resource_type_id
+      HAVING count(*) > coalesce(max(v.target_qty), 0) - coalesce(max(v.outsource_qty), 0)`),
   },
 
   // ───────── 인력 ─────────

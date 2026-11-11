@@ -16,6 +16,7 @@ import type { AssetsView, AssetDetail } from '../../../core/assets.ts';
 import type { AssetImportReport } from '../../../core/asset-io.ts';
 import type { SheetScan, SheetPlan, SheetImportReport } from '../../../core/sheet-import.ts';
 import type { DashboardView } from '../../../core/dashboard.ts';
+import type { BatchRow } from '../../../core/plan.ts';
 import type { SetupStatus } from '../../../core/onboarding.ts';
 import type { NewsItem, NewsSummary } from '../../../core/news.ts';
 
@@ -73,8 +74,9 @@ export const rpc = {
   types: () => call<TypeView[]>('types'),
   capacity: () => call<CapacityView>('capacity'),
   progress: (updateId: string | null) => call<ProgressView>('progress', { updateId }),
-  dashboard: (updateId: string | null, planMode: PlanMode) => call<DashboardView & { forecast: { completion: string | null; status: string } | null }>('dashboard', { updateId, planMode }),
-  assets: (updateId: string | null) => call<AssetsView>('assets', { updateId }),
+  dashboard: (updateId: string | null, planMode: PlanMode) => call<DashboardView & { forecast: { completion: string | null; status: string; batches: BatchRow[] } | null }>('dashboard', { updateId, planMode }),
+  /** forecast = 배치 완료 예정(docs/33, 계산이 막혔으면 빈 목록) */
+  assets: (updateId: string | null) => call<AssetsView & { forecast: BatchRow[] }>('assets', { updateId }),
   news: (since: string | null) => call<{ items: NewsItem[]; summary: NewsSummary }>('news', { since }),
   assetDetail: (assetId: string) => call<AssetDetail>('assetDetail', { assetId }),
   thumbs: (assetIds: string[]) => call<{ items: { assetId: string; mime: string; data: Uint8Array; updatedAt: string }[] }>('thumbs', { assetIds }),

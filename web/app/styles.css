@@ -1456,3 +1456,9 @@ table.grid.people-import-table td .field.ghost-field { width: 100%; }
 .update-banner { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   max-width: min(640px, calc(100vw - 32px)); padding: 10px 12px 10px 16px; border: 1px solid var(--accent); border-radius: 12px; background: var(--surface); box-shadow: 0 8px 28px rgba(0, 0, 0, .18); font-size: 13px; }
 .update-banner > span { flex: 1 1 240px; }
+
+/* 배치 완료 예정(docs/33) */
+.batch-pills { display: inline-flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.batch-when { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+table.grid tr.batch-line td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); padding-top: 6px; padding-bottom: 6px; }
+.batch-line-name { padding-left: 14px; display: inline-flex; gap: 6px; align-items: baseline; }

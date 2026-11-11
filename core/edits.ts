@@ -122,10 +122,11 @@ const qtyOk = (v: number | null) => v == null || (Number.isInteger(v) && v >= 0)
 /** 고치기 하나. 값이 그대로면 changed = false */
 export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: EditContext): EditResult {
   const dirty = (...t: EngineTable[]) => session.markDirty(...t);
-  if (ASSET_EDIT_KINDS.has(edit.kind)) return applyAssetEdit(db, session, edit as AssetEdit, ctx);
+  // 에셋 · 배치 · 파트 옮기기는 배치 예측(docs/33)의 입력을 바꾼다
+  if (ASSET_EDIT_KINDS.has(edit.kind)) { const r = applyAssetEdit(db, session, edit as AssetEdit, ctx); if (r.changed) dirty('batches', 'batch_work'); return r; }
   if (PEOPLE_EDIT_KINDS.has(edit.kind)) return applyPeopleEdit(db, edit as PeopleEdit, ctx);
   if (NEWS_EDIT_KINDS.has(edit.kind)) return applyNewsEdit(db, edit as NewsEdit, ctx);
-  if (PIPELINE_EDIT_KINDS.has(edit.kind)) return applyPipelineEdit(db, session, edit as PipelineEdit, ctx);
+  if (PIPELINE_EDIT_KINDS.has(edit.kind)) { const r = applyPipelineEdit(db, session, edit as PipelineEdit, ctx); if (r.changed) dirty('batches', 'batch_work'); return r; }
 
   switch (edit.kind) {
     // ───────── 업데이트 ─────────

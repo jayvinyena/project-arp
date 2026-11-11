@@ -39,6 +39,16 @@ export function exportSheets(db: SqlDb, session: ProjectSession, planMode: PlanM
     ]),
   ];
 
+  // 배치 완료 예정(docs/33)
+  const BATCH: Record<string, string> = { ON_TRACK: '마감 안', TIGHT: '빠듯', LATE: '늦음', UNFINISHED: '기간 안에 못 끝냄', NO_DUE: '마감 없음' };
+  const batchList = v.rows.flatMap(r => r.batches.map(b => ({ u: r.name, b })));
+  if (batchList.length) {
+    sheets['배치 전망'] = [
+      ['업데이트', '배치', '마감', `완료 예정(${MODE[planMode]})`, '판정', '늦음(영업일)', '여유(영업일)', '물량 밖(개)', '근거 파트', '근거 리소스'],
+      ...batchList.map(({ u, b }) => [u, b.name, b.dueDate, b.completion ?? '기간 밖', BATCH[b.status] ?? b.status, b.lateWorkdays, b.slackWorkdays, b.overQty || null, b.reason?.partName ?? null, b.reason?.resourceName ?? null] as Cell[]),
+    ];
+  }
+
   const months = v.horizon.months;
   sheets['파트 부하'] = [
     ['파트', '항목', ...months],

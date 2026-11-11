@@ -49,6 +49,9 @@ await withBrowser(async (cdp, base) => {
   check('거치지 않는 파트는 빗금 칸', await cdp.eval("document.querySelectorAll('table.dash-matrix td.heat.off').length >= 5"));
   check('제작 단계 분포 막대(캐릭터 20)', await cdp.eval("document.querySelector('.stage-row')?.textContent.includes('캐릭터')"));
   check('배치 2개 · D-day', await cdp.eval("document.querySelectorAll('table.dash-batch-table tbody tr').length === 2 && document.querySelector('table.dash-batch-table').textContent.includes('D-')"));
+  // 배치 카드: 완료 예정 칸(docs/33)
+  const dfc = await cdp.eval("[...document.querySelectorAll('table.dash-batch-table tbody tr')].map(r => r.querySelector('.batch-when')?.textContent.trim() ?? '—').join(' | ')");
+  check('배치 카드: 배치마다 완료 예정 · 판정', dfc.split(' | ').length === 2 && dfc.split(' | ').every(t => /(마감 안|빠듯|늦음|못 끝냄|마감 없음)/.test(t)), dfc);
   const okDash = await shot(cdp, 'dashboard-1440');
   const okDash390 = await shot(cdp, 'dashboard-390', 390);
 
@@ -61,6 +64,15 @@ await withBrowser(async (cdp, base) => {
   check('처리할 것을 누르면 에셋 화면에서 그 카드가 열린다', title === '닌자맛 쿠키', title);
 
   // 에셋이 없는 예시
+  // 업데이트 계획: 배치가 있는 업데이트 아래 배치 줄(docs/33)
+  await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=assets&nosw&page=plan` });
+  await cdp.waitUntil("document.querySelector('table.grid.list tbody tr.row')", 20000);
+  await sleep(400);
+  const lines = await cdp.eval("[...document.querySelectorAll('table.grid.list tr.batch-line')].map(r => r.querySelector('.batch-line-name').textContent.replace(/\\s+/g, ' ').trim() + ':' + (r.querySelector('.pill')?.textContent ?? '')).join(' | ')");
+  const note = await cdp.eval("document.querySelector('.card-head p')?.textContent ?? ''");
+  check('업데이트 계획: 런칭 아래 배치 줄 2개(배치 순서) · 판정 · 설명', /1차 납품:.+\| .*2차 납품:/.test(lines) && note.length > 0, lines);
+  check('업데이트 계획 390px 가로 넘침 없음', await shot(cdp, 'plan-batches-390', 390));
+  await shot(cdp, 'plan-batches-1440');
   await cdp.send('Page.navigate', { url: `${base}/app/index.html?sample=normal&nosw&page=dashboard` });
   await sleep(600);
   await cdp.waitUntil("document.querySelector('.dash-tiles .stat') && document.querySelector('table.dash-matrix')", 20000);

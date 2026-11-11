@@ -32,7 +32,8 @@ import { dashboardView } from '../../core/dashboard.ts';
 import { setupStatus } from '../../core/onboarding.ts';
 import { newsView } from '../../core/news.ts';
 import type { Edit } from '../../core/edits.ts';
-import { planView, typesView, capacityView, updateDetail, updateDays, progressView } from '../../core/plan.ts';
+import { planView, typesView, capacityView, updateDetail, updateDays, progressView, batchForecast } from '../../core/plan.ts';
+import type { BatchRow } from '../../core/plan.ts';
 import { applyScenarioOp, listScenarios, compareScenarios, sensitivity, applyScenarioToBase, simMeta } from '../../core/scenarios.ts';
 import type { ScenarioOp, ScenarioAction } from '../../core/scenarios.ts';
 import { adviseDeadlines, adviceToScenario } from '../../core/advisor.ts';
@@ -170,17 +171,22 @@ const handlers: Record<string, (payload: any) => unknown> = {
     const { sql: s, session: ss } = need();
     const view = dashboardView(s, p.updateId, p.planMode, localToday());
     // 완료 예정은 계산 엔진 결과(계산이 막혔으면 없음)
-    let forecast: { completion: string | null; status: string } | null = null;
+    let forecast: { completion: string | null; status: string; batches: BatchRow[] } | null = null;
     try {
       const row = planView(s, ss, p.planMode).rows.find(r => r.updateId === view.updateId);
-      if (row?.result) forecast = { completion: row.result.completion, status: row.result.status };
+      if (row?.result) forecast = { completion: row.result.completion, status: row.result.status, batches: row.batches };
     } catch { /* 계산 막힘 */ }
     return { ...view, forecast };
   },
 
   // ───────── 에셋 관리 ─────────
   assets(p: { updateId: string | null }) {
-    return assetsView(need().sql, p.updateId);
+    const { sql: s, session: ss } = need();
+    const view = assetsView(s, p.updateId);
+    // 배치 완료 예정(docs/33): 계산이 막혔으면 비어 있다
+    let forecast: BatchRow[] = [];
+    try { forecast = batchForecast(s, ss).filter(b => b.updateId === view.updateId); } catch { /* 계산 막힘 */ }
+    return { ...view, forecast };
   },
 
   /** 소식 화면: 소식 + since 뒤 자동 요약 */

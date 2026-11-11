@@ -1,5 +1,7 @@
 // 제작 현황판(docs/20-asset-management.md 18절): 업데이트(마일스톤) 하나의 제작 상황을 한 화면에.
 // 요약 4칸 · 추이(누적 완료 공수 대 계획선, 완료 예정) · 처리할 것 · 항목 × 파트 진행 · 단계 분포 · 배치.
+import { BatchPill, batchWhen } from './BatchPill.tsx';
+import type { BatchRow } from '../../../core/plan.ts';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { ModeSwitch } from './PlanPage.tsx';
@@ -9,7 +11,7 @@ import type { PlanMode, UpdateStatus } from '../../../engine/types.ts';
 import { fmtPct, fmtDate, fmtInt } from '../lib/format.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
 
-type View = DashboardView & { forecast: { completion: string | null; status: string } | null };
+type View = DashboardView & { forecast: { completion: string | null; status: string; batches: BatchRow[] } | null };
 const VERDICT: Record<UpdateStatus, { text: string; tone: string }> = {
   ON_TRACK: { text: '목표 안', tone: 'ok' }, TIGHT: { text: '빠듯', tone: 'warn' }, LATE: { text: '늦음', tone: 'bad' },
   UNFINISHED: { text: '기간 안에 못 끝남', tone: 'bad' }, NO_RELEASE_DATE: { text: '출시일 없음', tone: '' },
@@ -254,13 +256,13 @@ export function DashboardPage(props: {
           </div>
         </section>
         <section class="card dash-batches">
-          <div class="card-head"><div><h2>배치</h2><p class="small muted" style="margin-top: 2px">마감까지 남은 날과 진행(끝난 파트 작업 비율)입니다.</p></div></div>
+          <div class="card-head"><div><h2>배치</h2><p class="small muted" style="margin-top: 2px">마감까지 남은 날, 진행(끝난 파트 작업 비율), 지금 인력으로 계산한 완료 예정입니다. 업데이트 안에서는 배치 순서대로 작업한다고 보고 계산합니다.</p></div></div>
           <div class="card-body" style="padding-top: 4px">
             {!v.batches.length ? <p class="small faint">배치가 없습니다. 에셋 제작 현황의 "배치" 탭에서 더합니다.</p> : (
               <div class="table-wrap ref-wrap">
                 <table class="grid ref dash-batch-table">
-                  <colgroup><col /><col style="width: 120px" /><col style="width: 72px" /><col style="width: 130px" /></colgroup>
-                  <thead><tr><th>배치</th><th>마감</th><th class="n">완료</th><th>진행</th></tr></thead>
+                  <colgroup><col /><col style="width: 120px" /><col style="width: 72px" /><col style="width: 130px" /><col style="width: 190px" /></colgroup>
+                  <thead><tr><th>배치</th><th>마감</th><th class="n">완료</th><th>진행</th><th>완료 예정</th></tr></thead>
                   <tbody>
                     {v.batches.map(b => (
                       <tr class="row">
@@ -268,6 +270,7 @@ export function DashboardPage(props: {
                         <td class="small">{b.due ? <>{b.due.slice(5).replace('-', '/')} <span class={`pill plain ${b.daysLeft! < 0 && b.done < b.count ? 'bad' : b.daysLeft! <= 14 ? 'warn' : ''}`}>{b.daysLeft! < 0 ? `${-b.daysLeft!}일 지남` : `D-${b.daysLeft}`}</span></> : '—'}</td>
                         <td class="n num">{b.done} / {b.count}</td>
                         <td><span class="share"><span class="num small">{fmtPct(b.progress)}</span><span class="bar"><span class={`fill${b.progress >= 1 ? ' done' : ''}`} style={{ width: `${b.progress * 100}%` }} /></span></span></td>
+                        <td>{(() => { const f = v.forecast?.batches.find(x => x.batchId === b.batchId); return f ? <span class="batch-when"><span class="num small">{batchWhen(f)}</span><BatchPill b={f} /></span> : <span class="small faint">{b.done >= b.count ? '모두 완료' : '—'}</span>; })()}</td>
                       </tr>
                     ))}
                   </tbody>

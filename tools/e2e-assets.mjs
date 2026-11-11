@@ -158,6 +158,9 @@ await withBrowser(async (cdp, base) => {
   check('물량 대조 탭: 빈 에셋 만들기(10 · 15 · 20)', reg === '10·15·20', reg);
   await cdp.eval("[...document.querySelectorAll('.sub-tabs button')].find(b => b.textContent.startsWith('배치')).click()");
   await cdp.waitUntil("document.querySelector('table.batch-table')", 8000);
+  // 배치 완료 예정(docs/33): 1차 · 2차 줄에 날짜와 판정 알약
+  const fc = await cdp.eval("[...document.querySelectorAll('table.batch-table tbody tr')].slice(0, 2).map(r => r.querySelector('.batch-when')?.textContent.trim() ?? '').join(' | ')");
+  check('배치 탭: 완료 예정 · 판정(마감 안 · 빠듯 · 늦음 · 못 끝냄)', fc.split(' | ').every(t => /(\d+월 \d+일|기간 밖)/.test(t) && /(마감 안|빠듯|늦음|못 끝냄|마감 없음)/.test(t)), fc);
   await typeIn(cdp, 'input[aria-label="새 배치 이름"]', '3차 납품', false);
   await clickText(cdp, '배치 더하기');
   await cdp.waitUntil("[...document.querySelectorAll('table.batch-table tbody tr')].some(r => r.querySelector('input')?.value === '3차 납품')", 8000).catch(() => {});

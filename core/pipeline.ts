@@ -26,13 +26,30 @@ export function validate(db: SqlDb, only?: Set<string>): Finding[] {
 const ENGINE_TABLES = [
   'holidays', 'parts', 'part_overlaps', 'pipeline_steps', 'resource_types', 'resource_parts', 'efforts', 'effort_mix',
   'update_types', 'updates', 'volumes', 'progress', 'capacity',
+  // 배치 예측(docs/33): batches는 표 그대로, batch_work는 에셋 표에서 모은 값(표가 아님)
+  'batches', 'batch_work',
 ] as const;
+
+/**
+ * 배치 작업량: 배치에 든 에셋을 업데이트 × 리소스 × 파트 × 배치 × 포함 템플릿마다 센다.
+ * 파트 상태 행이 없으면 거치는 파트는 대기(= 남음). 완료 · 해당 없음 = 끝냄(작업 진척 자동 집계와 같은 기준)
+ */
+const BATCH_WORK_SQL = `SELECT a.update_id, a.resource_type_id, rp.part_id, a.batch_id, a.tier,
+    sum(CASE WHEN coalesce(ap.status, 'TODO') IN ('DONE', 'OMIT') THEN 0 ELSE 1 END) AS remaining_qty,
+    sum(CASE WHEN coalesce(ap.status, 'TODO') IN ('DONE', 'OMIT') THEN 1 ELSE 0 END) AS done_qty
+  FROM assets a JOIN batches b ON b.batch_id = a.batch_id
+  JOIN resource_parts rp ON rp.resource_type_id = a.resource_type_id
+  LEFT JOIN asset_parts ap ON ap.asset_id = a.asset_id AND ap.part_id = rp.part_id
+  GROUP BY a.update_id, a.resource_type_id, rp.part_id, a.batch_id, a.tier`;
 
 export type EngineTable = 'settings' | typeof ENGINE_TABLES[number];
 export const ALL_ENGINE_TABLES: EngineTable[] = ['settings', ...ENGINE_TABLES];
 
 function readTable(db: SqlDb, table: EngineTable): unknown {
-  return table === 'settings' ? db.get('SELECT * FROM settings WHERE id = 1') : db.all(`SELECT * FROM ${table}`);
+  if (table === 'settings') return db.get('SELECT * FROM settings WHERE id = 1');
+  if (table === 'batch_work') return db.all(BATCH_WORK_SQL).map(r => ({ ...r, remaining_qty: Number(r.remaining_qty), done_qty: Number(r.done_qty) }));
+  if (table === 'batches') return db.all('SELECT batch_id, update_id, name, due_date, sort_order FROM batches');
+  return db.all(`SELECT * FROM ${table}`);
 }
 
 /** 계산에 쓰는 표를 읽어 엔진 입력 모양으로 */

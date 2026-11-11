@@ -1,9 +1,9 @@
 // ARP 계산 엔진 입구: runPlan(데이터, 옵션) → 결과
 // 데이터는 검증 오류가 없는 상태여야 한다(오류가 있으면 앱이 계산 대신 이유를 보여준다).
 import type {
-  ProjectData, PlanOptions, PlanResult, UpdateResult, PartResult, PartMonthResult, StageResult, LoadLevel, UpdateStatus,
+  ProjectData, PlanOptions, PlanResult, UpdateResult, PartResult, PartMonthResult, StageResult, LoadLevel, UpdateStatus, BatchResult, BatchStatus, UpdateReason,
 } from './types.ts';
-import { buildCalendar, workdaysAfter } from './calendar.ts';
+import { buildCalendar, workdaysAfter, firstWorkdayOnOrAfter } from './calendar.ts';
 import { buildStages, liveUpdates, EngineInputError } from './stages.ts';
 import type { Stage } from './stages.ts';
 import { schedule } from './schedule.ts';
@@ -141,6 +141,7 @@ export function runPlan(data: ProjectData, options: PlanOptions = {}): PlanResul
     partId: st.partId,
     predecessorPartId: st.predecessors[0]?.partId ?? null,
     predecessorPartIds: st.predecessors.map(p => p.partId),
+    batchId: st.batchId,
     overlapRate: st.overlapRate,
     overlapSource: st.overlapSource,
     requiredDays: st.requiredDays,
@@ -154,8 +155,57 @@ export function runPlan(data: ProjectData, options: PlanOptions = {}): PlanResul
     predecessorProgressAtStart: st.predecessorProgressAtStart,
   }));
 
+  // ───────── 배치 결과(docs/33 5.4) ─────────
+  const reasonOf = (st: Stage | null): UpdateReason | null => (st && st.startDay !== -1 ? {
+    partId: st.partId, resourceTypeId: st.resourceTypeId, waitWorkdays: waitOf(st),
+    workWorkdays: st.startDay !== null && st.workDoneDay !== null ? st.workDoneDay - st.startDay + 1 : null,
+    remainingDays: st.requiredDays - st.done,
+  } : null);
+  const byBatch = new Map<string, Stage[]>();
+  for (const st of stages) {
+    if (!st.batchId) continue;
+    if (!byBatch.has(st.batchId)) byBatch.set(st.batchId, []);
+    byBatch.get(st.batchId)!.push(st);
+  }
+  const batchResults: BatchResult[] = (data.batches ?? [])
+    .filter(b => byBatch.has(b.batch_id))
+    .sort((a, b) => a.sort_order - b.sort_order || (a.batch_id < b.batch_id ? -1 : 1))
+    .map(b => {
+      const list = byBatch.get(b.batch_id)!;
+      const unfinished = list.filter(st => st.completionDay === null);
+      const day = unfinished.length ? null : list.reduce((m, st) => Math.max(m, st.completionDay!), -1);
+      const expected = dateOf(day);
+      let status: BatchStatus;
+      let lateWorkdays: number | null = null;
+      let slackWorkdays: number | null = null;
+      if (unfinished.length) status = 'UNFINISHED';
+      else if (!b.due_date) status = 'NO_DUE';
+      else if (expected === null || expected <= b.due_date) {
+        // 여유 = 마감일(그날이 쉬는 날이면 앞 영업일)까지 남은 영업일
+        const i = firstWorkdayOnOrAfter(cal, b.due_date);
+        const dueIdx = cal.days[i] === b.due_date ? i : i - 1;
+        slackWorkdays = expected === null ? null : Math.max(0, dueIdx - day!);
+        status = slackWorkdays !== null && slackWorkdays < s.late_warn_workdays ? 'TIGHT' : 'ON_TRACK';
+      } else {
+        status = 'LATE';
+        lateWorkdays = workdaysAfter(cal, b.due_date, day!);
+      }
+      const remain = (st: Stage) => st.requiredDays - st.done;
+      const reasonStage = unfinished.length
+        ? unfinished.reduce((a, c) => ((c.readyDay ?? Infinity) < (a.readyDay ?? Infinity) || remain(c) > remain(a) ? c : a))
+        : list.reduce((a, c) => (c.completionDay! > a.completionDay! ? c : a));
+      return {
+        batchId: b.batch_id, updateId: b.update_id, name: b.name, dueDate: b.due_date, expectedCompletionDate: expected, status, lateWorkdays, slackWorkdays,
+        overQty: list.reduce((m, st) => Math.max(m, st.overQty), 0),
+        remainingQty: list.reduce((m, st) => Math.max(m, st.remainingQty), 0),
+        remainingDays: list.reduce((sum, st) => sum + remain(st), 0),
+        reason: reasonOf(reasonStage),
+      };
+    });
+
   return {
     planMode,
+    batches: batchResults,
     horizon: { start: cal.days[0] ?? '', end: cal.days[cal.days.length - 1] ?? '', workdays: cal.days.length },
     updates,
     parts: partResults,

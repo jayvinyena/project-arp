@@ -5,7 +5,7 @@ import { peopleList, teamOptions, assigneeCandidates } from './people.ts';
 import type { AssigneeCandidate } from './people.ts';
 import { partGroupsFor, pipelinesList } from './pipelines.ts';
 import type { PipelineInfo } from './pipelines.ts';
-import type { PlanMode, PlanResult, UpdateStatus } from '../engine/types.ts';
+import type { PlanMode, PlanResult, UpdateStatus, BatchStatus } from '../engine/types.ts';
 import { runPlan } from '../engine/index.ts';
 import type { ProjectSession, Finding } from './pipeline.ts';
 import { volumeRows } from './launch.ts';
@@ -52,6 +52,33 @@ export interface PlanRow {
   } | null;
   /** 최저안·확장안 완료 예정일: 전망 범위 */
   range: { min: string | null; stretch: string | null; minUnfinished: boolean; stretchUnfinished: boolean } | null;
+  /** 배치별 완료 예정(배치 순서, docs/33). 배치가 없거나 계산이 막혔으면 빈 목록 */
+  batches: BatchRow[];
+}
+
+/** 배치 완료 예정 한 줄(화면 · 보고용 엑셀 · 현황판이 함께 쓴다) */
+export interface BatchRow {
+  batchId: string; updateId: string; name: string; dueDate: string | null;
+  completion: string | null; status: BatchStatus; lateWorkdays: number | null; slackWorkdays: number | null; overQty: number;
+  reason: { partName: string; resourceName: string; waitWorkdays: number | null; remainingDays: number } | null;
+}
+export function batchRows(db: SqlDb, result: PlanResult): BatchRow[] {
+  const rtName = new Map(db.all('SELECT resource_type_id, name FROM resource_types').map(r => [String(r.resource_type_id), String(r.name)]));
+  const partName = new Map(db.all('SELECT part_id, name FROM parts').map(r => [String(r.part_id), String(r.name)]));
+  return result.batches.map(b => ({
+    batchId: b.batchId, updateId: b.updateId, name: b.name, dueDate: b.dueDate,
+    completion: b.expectedCompletionDate, status: b.status, lateWorkdays: b.lateWorkdays, slackWorkdays: b.slackWorkdays, overQty: b.overQty,
+    reason: b.reason ? {
+      partName: partName.get(b.reason.partId) ?? b.reason.partId, resourceName: rtName.get(b.reason.resourceTypeId) ?? b.reason.resourceTypeId,
+      waitWorkdays: b.reason.waitWorkdays, remainingDays: b.reason.remainingDays,
+    } : null,
+  }));
+}
+/** 배치 완료 예정만(에셋 화면): 계산 한 번(설정의 기본 물량 구간). 계산이 막혔으면 빈 목록 */
+export function batchForecast(db: SqlDb, session: ProjectSession, planMode?: PlanMode): BatchRow[] {
+  const p = session.prepare();
+  if (p.blocked || !p.data) return [];
+  return batchRows(db, runPlan(p.data, planMode ? { planMode } : {}));
 }
 
 export interface PartLoadRow {
@@ -99,6 +126,7 @@ export function planView(db: SqlDb, session: ProjectSession, planMode: PlanMode 
     };
   }
 
+  const allBatches = results ? batchRows(db, results[planMode]) : [];
   const rows: PlanRow[] = base.map(r => {
     const id = String(r.update_id);
     const live = r.status === 'PLANNED' || r.status === 'IN_PROGRESS';
@@ -136,6 +164,7 @@ export function planView(db: SqlDb, session: ProjectSession, planMode: PlanMode 
         min: lo.expectedCompletionDate, stretch: hi.expectedCompletionDate,
         minUnfinished: lo.status === 'UNFINISHED', stretchUnfinished: hi.status === 'UNFINISHED',
       } : null,
+      batches: allBatches.filter(b => b.updateId === id),
     };
   });
 

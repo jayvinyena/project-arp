@@ -24,6 +24,13 @@ export interface ResourceType { resource_type_id: string; group_id: string | nul
 /** with_prev = 1이면 앞 단계와 같은 묶음(병렬, docs/30). 없으면 0 */
 export interface PipelineStep { pipeline_id: string; part_id: string; seq: number; overlap_rate: number | null; with_prev?: number }
 export interface ResourcePart { resource_type_id: string; part_id: string; rework_rate: number }
+/** 배치(납품 묶음, docs/33): 업데이트 안 순서(sort_order)대로 일한다 */
+export interface Batch { batch_id: string; update_id: string; name: string; due_date: string | null; sort_order: number }
+/**
+ * 배치 작업량(core가 에셋 표에서 만든다, docs/33 5.6): 업데이트 × 리소스 × 파트 × 배치 × 포함 템플릿마다
+ * 그 파트가 아직 끝나지 않은 에셋 수 · 끝낸(완료 · 해당 없음) 에셋 수
+ */
+export interface BatchWork { update_id: string; resource_type_id: string; part_id: string; batch_id: string; tier: 'MIN' | 'TARGET' | 'STRETCH'; remaining_qty: number; done_qty: number }
 export interface Effort { resource_type_id: string; part_id: string; profile_id: string; days: number }
 export interface EffortMix { part_id: string; profile_id: string; share: number }
 export interface UpdateType { update_type_id: string; name: string; is_launch: number; sort_order: number; active: number }
@@ -73,6 +80,9 @@ export interface ProjectData {
   part_overlaps: PartOverlap[];
   /** 리소스별 파이프라인 단계(없으면 모든 리소스가 파트 표 순서) */
   pipeline_steps?: PipelineStep[];
+  /** 배치 · 배치 작업량(없으면 배치 없이 지금처럼 계산, docs/33) */
+  batches?: Batch[];
+  batch_work?: BatchWork[];
   resource_types: ResourceType[];
   resource_parts: ResourcePart[];
   efforts: Effort[];
@@ -106,6 +116,8 @@ export interface StageResult {
   /** 앞 공정(여럿이면 첫째). 병렬 묶음 뒤 단계는 predecessorPartIds에 모두 */
   predecessorPartId: string | null;
   predecessorPartIds: string[];
+  /** 배치 스테이지면 그 배치(docs/33). 배치 밖 일은 null */
+  batchId: string | null;
   overlapRate: number | null;
   overlapSource: 'FIRST' | 'STEP' | 'PAIR' | 'DEFAULT';
   requiredDays: number;
@@ -170,6 +182,27 @@ export interface PartResult {
   peakMonth: string | null;
 }
 
+/** 배치 판정(docs/33 5.4): 마감 안 · 빠듯(마감 전 늦음 경고 영업일 안) · 늦음 · 못 끝냄 · 마감 없음 */
+export type BatchStatus = 'ON_TRACK' | 'TIGHT' | 'LATE' | 'UNFINISHED' | 'NO_DUE';
+export interface BatchResult {
+  batchId: string;
+  updateId: string;
+  name: string;
+  dueDate: string | null;
+  expectedCompletionDate: string | null;
+  status: BatchStatus;
+  /** 늦음이면 마감 뒤 영업일, 빠듯이면 남은 여유 영업일 */
+  lateWorkdays: number | null;
+  slackWorkdays: number | null;
+  /** 물량 밖: 배치 에셋이 남은 물량보다 많아 계산에 넣지 못한 에셋 수(파트 중 가장 많은 수) */
+  overQty: number;
+  /** 이 배치에 남은 에셋 수(파트 중 가장 많은 수) · 남은 일(인·일) */
+  remainingQty: number;
+  remainingDays: number;
+  /** 가장 늦게 끝나는(또는 못 끝낸) 스테이지 */
+  reason: UpdateReason | null;
+}
+
 export interface PlanResult {
   planMode: PlanMode;
   horizon: { start: string; end: string; workdays: number };
@@ -177,6 +210,8 @@ export interface PlanResult {
   parts: PartResult[];
   partMonths: PartMonthResult[];
   stages: StageResult[];
+  /** 배치별 완료 예정(배치가 있는 업데이트만, docs/33) */
+  batches: BatchResult[];
   /** 날짜별·파트별 배정량(검사·차트용): dailyAssigned[파트 순번][영업일 순번] */
   daily: { dates: string[]; partIds: string[]; capacity: number[][]; assigned: number[][] };
   meta: { stageCount: number; elapsedMs: number };

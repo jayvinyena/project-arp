@@ -1,6 +1,8 @@
 // 에셋 제작 현황(docs/20-asset-management.md 16절): 에셋 리스트 + 트렐로식 보드(칸반) + 에셋 카드 창.
 // 보드 열 = 제작 단계(대기 · 원화 · 모델링 · … · 완료) 또는 파트별 상태. 카드를 끌면 파트 상태가 바뀌고 작업 진척에 자동 집계된다.
 // 보조 탭: 배치 · 물량 대조.
+import { BatchPill, batchWhen } from './BatchPill.tsx';
+import type { BatchRow } from '../../../core/plan.ts';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { PageEyebrow } from './Help.tsx';
 import { Field } from './SetupPage.tsx';
@@ -371,7 +373,7 @@ function BatchRows(props: { batches: AssetsView['batches']; ro: boolean; apply: 
   const r = useReorder(props.batches.map(b => b.batchId), ids => props.apply({ kind: 'reorderBatches', batchIds: ids }), { disabled: props.ro });
   return (
     <tbody data-reorder-box="">
-      {props.batches.length === 0 && <tr><td colSpan={7} class="muted small">배치가 없습니다. 아래에서 더합니다.</td></tr>}
+      {props.batches.length === 0 && <tr><td colSpan={8} class="muted small">배치가 없습니다. 아래에서 더합니다.</td></tr>}
       {props.batches.map(b => (
         <tr class={`row ${r.cls(b.batchId)}`} {...r.item(b.batchId)}>
           <td class="c">{!props.ro && <button {...r.handle(b.batchId, b.name)}><Grip /></button>}</td>
@@ -396,7 +398,7 @@ export function AssetsPage(props: {
   const ro = props.readOnly;
   const pref = <T,>(k: string, d: T): T => { try { return (localStorage.getItem(`arp.assets.${k}`) as T | null) ?? d; } catch { return d; } };
   const [updateId, setUpdateId] = useState<string | null>(props.focus?.updateId ?? props.updateId);
-  const [v, setV] = useState<AssetsView | null>(null);
+  const [v, setV] = useState<(AssetsView & { forecast: BatchRow[] }) | null>(null);
   const [tab, setTab] = useState<Tab>('assets');
   const [view, setView] = useState<View>(() => pref('view', 'list'));
   const [boardBy, setBoardBy] = useState<string>(() => pref('boardBy', 'stage')); // 'stage' 또는 파트 ID
@@ -801,8 +803,8 @@ export function AssetsPage(props: {
           <div class="card-body" style="padding-top: 4px">
             <div class="table-wrap ref-wrap">
               <table class="grid edit ref batch-table">
-                <colgroup><col style="width: 44px" /><col /><col style="width: 170px" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 200px" /><col style="width: 48px" /></colgroup>
-                <thead><tr><th aria-label="순서" /><th>배치</th><th>마감일</th><th class="n">에셋</th><th class="n">완료</th><th>진행</th><th aria-label="행 작업" /></tr></thead>
+                <colgroup><col style="width: 44px" /><col /><col style="width: 170px" /><col style="width: 80px" /><col style="width: 80px" /><col style="width: 170px" /><col style="width: 200px" /><col style="width: 48px" /></colgroup>
+                <thead><tr><th aria-label="순서" /><th>배치</th><th>마감일</th><th class="n">에셋</th><th class="n">완료</th><th>진행</th><th title="지금 인력으로 계산한 완료 예정. 업데이트 안에서는 이 표의 순서대로 작업한다고 봅니다">완료 예정</th><th aria-label="행 작업" /></tr></thead>
                 <BatchRows batches={v.batches} ro={ro} apply={apply}>{b => (
                     <>
                       <td><Field class="field" value={b.name} label={`${b.name} 배치 이름`} disabled={ro} onCommit={t => apply({ kind: 'batchField', batchId: b.batchId, field: 'name', value: t })} /></td>
@@ -810,6 +812,7 @@ export function AssetsPage(props: {
                       <td class="n num">{b.count}</td>
                       <td class="n num">{b.done}</td>
                       <td><span class="share"><span class="num small">{fmtPct(b.progress)}</span><span class="bar"><span class="fill" style={{ width: `${Math.round(b.progress * 100)}%` }} /></span></span></td>
+                      <td>{(() => { const f = v.forecast.find(x => x.batchId === b.batchId); return f ? <span class="batch-when"><span class="num small">{batchWhen(f)}</span><BatchPill b={f} /></span> : <span class="small faint">{b.count && b.done >= b.count ? '모두 완료' : '—'}</span>; })()}</td>
                       <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${b.name} 배치 지우기`} title="지우면 이 배치의 에셋은 미배정이 됩니다" onClick={() => void apply({ kind: 'deleteBatch', batchId: b.batchId })}><IconX /></button>}</td>
                     </>
                 )}</BatchRows>
