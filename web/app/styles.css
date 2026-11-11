@@ -1487,3 +1487,6 @@ table.grid.dash-people-table td:first-child { white-space: nowrap; overflow: hid
 table.grid.dash-batch-table { table-layout: fixed; }
 .dash-batch-table td { white-space: normal; }
 .dash-batch-table .share { min-width: 0; }
+
+/* 리소스 지우기 확인 창: 함께 지워질 것 */
+.del-list { margin: 0; padding-left: 18px; display: grid; gap: 2px; color: var(--text); }

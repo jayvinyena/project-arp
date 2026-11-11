@@ -166,3 +166,23 @@ test('AI 활용 비율(파트별): 공수 = 기본 × (1 − 비율) + AI × 비
   assert.equal(req(), base);
   raw.close();
 });
+
+test('리소스 함께 지우기(cascade): 물량 · 유형 템플릿 · 작업 진척까지 지우고 한 번에 되돌린다 · 화면에 쓰이는 곳 수', () => {
+  const { db, session, edit, undo } = open();
+  const rt = 'BG_MAP';
+  const count = t => Number(db.get(`SELECT count(*) AS n FROM ${t} WHERE resource_type_id = ?`, [rt]).n);
+  const before = { volumes: count('volumes'), templates: count('type_templates'), progress: count('progress') };
+  assert.ok(before.volumes > 0, '물량에 쓰인다');
+  const view = setupView(db).resources.find(r => r.resourceTypeId === rt);
+  assert.equal(view.used, true);
+  assert.deepEqual([view.usage.volumes, view.usage.templates], [before.volumes, before.templates]);
+  assert.throws(() => edit({ kind: 'deleteResource', resourceTypeId: rt }), /쓰이는 리소스/, 'cascade 없이는 막는다');
+  edit({ kind: 'deleteResource', resourceTypeId: rt, cascade: true });
+  const batch = lastBatch(db);
+  assert.equal(db.get('SELECT 1 AS ok FROM resource_types WHERE resource_type_id = ?', [rt]), undefined);
+  assert.deepEqual([count('volumes'), count('type_templates'), count('progress')], [0, 0, 0]);
+  assert.ok(!session.calculate({ planMode: 'TARGET' }).blocked, '지운 뒤에도 계산된다');
+  undo(batch);
+  assert.ok(db.get('SELECT 1 AS ok FROM resource_types WHERE resource_type_id = ?', [rt]));
+  assert.deepEqual({ volumes: count('volumes'), templates: count('type_templates'), progress: count('progress') }, before, '한 번에 되돌린다');
+});

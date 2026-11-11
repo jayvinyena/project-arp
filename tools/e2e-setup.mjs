@@ -78,6 +78,14 @@ await withBrowser(async (cdp, base) => {
   await cdp.waitUntil(`!!document.querySelector('input[aria-label="탈것 원화 기본 공수"]')`, 8000).catch(() => {});
   await typeIn(cdp, '탈것 원화 기본 공수', '2');
   check('리소스 더하기 · 공수 넣기', (await value(cdp, '탈것 원화 기본 공수')) === '2' && (await value(cdp, '탈것 분류')) === '오브젝트');
+  // 리소스 지우기: 물량에 쓰이는 리소스(이펙트)도 X → 함께 지워질 것을 보여 주는 창 → 모두 지우기
+  await cdp.eval(`document.querySelector('button[aria-label="이펙트 리소스 지우기"]').click()`);
+  await cdp.waitUntil(`!!document.querySelector('[aria-label="리소스 지우기"]')`, 5000).catch(() => {});
+  const delText = await cdp.eval(`document.querySelector('[aria-label="리소스 지우기"]')?.textContent ?? ''`);
+  check('쓰이는 리소스도 X를 누르면 함께 지워질 것(업데이트 물량 등)을 보여 준다', delText.includes('업데이트') && delText.includes('물량') && delText.includes('사용 안 함으로 두기'), delText.slice(0, 80));
+  await cdp.eval(`[...document.querySelectorAll('[aria-label="리소스 지우기"] button')].find(b => b.textContent === '모두 지우기').click()`);
+  await cdp.waitUntil(`!document.querySelector('button[aria-label="이펙트 리소스 지우기"]')`, 8000).catch(() => {});
+  check('모두 지우기 → 리소스 줄이 사라진다', !(await cdp.eval(`!!document.querySelector('button[aria-label="이펙트 리소스 지우기"]')`)));
   await shot(cdp, 'setup-1440');
   await shot(cdp, 'setup-390', 390);
 

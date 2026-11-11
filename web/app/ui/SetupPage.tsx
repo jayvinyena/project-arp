@@ -51,6 +51,8 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
   const [newRes, setNewRes] = useState({ group: '', name: '', pipe: '' });
   const [hol, setHol] = useState({ date: '', name: '', kind: 'COMPANY' as 'PUBLIC' | 'COMPANY' });
   const [moveReq, setMoveReq] = useState<MoveRequest | PipelineRequest | null>(null);
+  /** 리소스 지우기: 쓰이는 곳이 있으면 무엇이 함께 지워지는지 보여 주고 고르게 한다 */
+  const [delRes, setDelRes] = useState<SetupView['resources'][number] | null>(null);
   useEffect(() => { void rpc.setup().then(setV); }, [props.version]);
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const ro = props.readOnly;
@@ -236,9 +238,9 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
                         })}
                         <td class="c"><label class="check"><input type="checkbox" aria-label={`${r.name} 사용`} checked={r.active} disabled={ro} onChange={() => void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: !r.active })} /></label></td>
                         <td><Field class="field ghost-field" value={r.groupName} label={`${r.name} 분류`} list="setup-groups" disabled={ro} placeholder="분류 없음" onCommit={t => apply({ kind: 'resourceGroup', resourceTypeId: r.resourceTypeId, groupName: t })} /></td>
-                        <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 리소스 지우기`} disabled={r.used}
-                          title={r.used ? '물량·유형 템플릿·작업 진척에 사용됩니다. 사용 안 함으로 두거나 그곳에서 먼저 제외하십시오' : '지우기'}
-                          onClick={() => void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId })}><IconX /></button>}</td>
+                        <td class="n">{!ro && <button type="button" class="btn ghost icon-btn" aria-label={`${r.name} 리소스 지우기`}
+                          title={r.used ? '지우기(물량 · 템플릿 등 함께 지워질 것을 먼저 보여 줍니다)' : '지우기(변경 이력에서 되돌릴 수 있습니다)'}
+                          onClick={() => { if (r.used) setDelRes(r); else void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId }); }}><IconX /></button>}</td>
                       </tr>
                     ))}
                   </>
@@ -264,6 +266,31 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
           )}
         </div>
       </section>
+      {delRes && (() => {
+        const u = delRes.usage;
+        const lines = [
+          u.volumes ? `업데이트 ${u.volumes}곳의 물량(기본안 합 ${u.qty}개)` : '',
+          u.templates ? `유형 템플릿 ${u.templates}곳` : '',
+          u.progress ? `작업 진척 기록(완료 ${u.progress}개)` : '',
+          u.assets ? `에셋 ${u.assets}개(파트 상태 · 링크 · 댓글 포함)` : '',
+        ].filter(Boolean);
+        const records = u.progress > 0 || u.assets > 0;
+        return (
+          <div class="overlay" onClick={e => { if (e.target === e.currentTarget) setDelRes(null); }}>
+            <div class="card dialog confirm-dialog" role="dialog" aria-label="리소스 지우기">
+              <h2 style="font-size: 16px">"{delRes.name}" 리소스를 지울까요?</h2>
+              <p class="small muted" style="margin: 8px 0 6px">이 리소스를 지우면 다음도 함께 지워집니다.</p>
+              <ul class="del-list small">{lines.map(l => <li>{l}</li>)}</ul>
+              <p class={`small ${records ? 'warn-text' : 'muted'}`} style="margin: 6px 0 14px">{records ? '작업 기록이 있습니다. 기록을 남기려면 "사용 안 함"으로 두십시오(계산 · 화면에서만 빠짐). ' : ''}변경 이력에서 한 번에 되돌릴 수 있습니다.</p>
+              <div class="inline" style="justify-content: flex-end">
+                <button type="button" class="btn sm ghost" onClick={() => setDelRes(null)}>그만두기</button>
+                {delRes.active && <button type="button" class="btn sm" onClick={() => { const r = delRes; setDelRes(null); void apply({ kind: 'resourceActive', resourceTypeId: r.resourceTypeId, active: false }); }}>사용 안 함으로 두기</button>}
+                <button type="button" class="btn sm danger" onClick={() => { const r = delRes; setDelRes(null); void apply({ kind: 'deleteResource', resourceTypeId: r.resourceTypeId, cascade: true }); }}>모두 지우기</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {moveReq && <MoveDialog v={v} req={moveReq} apply={apply} onClose={() => setMoveReq(null)} />}
     </div>
   );

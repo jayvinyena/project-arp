@@ -391,6 +391,8 @@ export interface SetupView {
   groups: { groupId: string; name: string }[];
   resources: {
     resourceTypeId: string; name: string; groupId: string | null; groupName: string; active: boolean; used: boolean;
+    /** 지울 때 함께 지워질 것: 물량 행 수 · 기본안 물량 합 · 유형 템플릿 행 수 · 작업 진척 완료 수량 합 · 에셋 수 */
+    usage: { volumes: number; qty: number; templates: number; progress: number; assets: number };
     /** 고른 파이프라인(없으면 null = 파트 표 순서) */
     pipelineId: string | null;
     /** records = 그 칸의 작업 진척(완료 수량 합) · 에셋 상태 수: 비울 때 옮기기 · 지우기 창을 띄운다 */
@@ -436,8 +438,16 @@ export function setupView(db: SqlDb): SetupView {
       const k = `${id}|${rp.part_id}`;
       efforts[String(rp.part_id)] = { base: of('BASE'), ai: of('AI'), rework: Number(rp.rework_rate), done: doneBy.get(k) ?? 0, assets: assetBy.get(k) ?? 0 };
     }
-    const used = ['volumes', 'type_templates', 'progress', 'assets'].some(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [id]));
-    return { resourceTypeId: id, name: String(r.name), groupId: r.group_id == null ? null : String(r.group_id), groupName: r.group_id == null ? '' : groupName.get(String(r.group_id)) ?? '', active: Number(r.active) === 1, used, pipelineId: (r.pipeline_id as string) ?? null, efforts };
+    const usage = {
+      volumes: Number(db.get('SELECT count(*) AS n FROM volumes WHERE resource_type_id = ?', [id])?.n ?? 0),
+      qty: Number(db.get('SELECT coalesce(sum(target_qty), 0) AS n FROM volumes WHERE resource_type_id = ?', [id])?.n ?? 0),
+      templates: Number(db.get('SELECT count(*) AS n FROM type_templates WHERE resource_type_id = ?', [id])?.n ?? 0),
+      progress: Number(db.get('SELECT coalesce(sum(completed_qty), 0) AS n FROM progress WHERE resource_type_id = ?', [id])?.n ?? 0),
+      assets: Number(db.get('SELECT count(*) AS n FROM assets WHERE resource_type_id = ?', [id])?.n ?? 0),
+    };
+    const used = usage.volumes + usage.templates + usage.progress + usage.assets > 0
+      || !!db.get('SELECT 1 AS ok FROM progress WHERE resource_type_id = ? LIMIT 1', [id]);
+    return { resourceTypeId: id, usage, name: String(r.name), groupId: r.group_id == null ? null : String(r.group_id), groupName: r.group_id == null ? '' : groupName.get(String(r.group_id)) ?? '', active: Number(r.active) === 1, used, pipelineId: (r.pipeline_id as string) ?? null, efforts };
   });
   return {
     project: {

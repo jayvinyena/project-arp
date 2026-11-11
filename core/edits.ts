@@ -64,7 +64,8 @@ export type Edit =
   | { kind: 'resourceGroup'; resourceTypeId: string; groupName: string }
   | { kind: 'renameGroup'; groupId: string; name: string }
   | { kind: 'resourceActive'; resourceTypeId: string; active: boolean }
-  | { kind: 'deleteResource'; resourceTypeId: string }
+  /** cascade: 물량 · 유형 템플릿 · 작업 진척 · 에셋까지 함께 지운다(한 묶음, 되돌리기 한 번) */
+  | { kind: 'deleteResource'; resourceTypeId: string; cascade?: boolean }
   | { kind: 'effort'; resourceTypeId: string; partId: string; profileId: 'BASE' | 'AI'; days: number | null }
   | { kind: 'rework'; resourceTypeId: string; partId: string; rate: number }
   // AI 활용 비율(파트별): 공수 = 기본 × (1 − 비율) + AI 사용 시 × 비율
@@ -632,7 +633,22 @@ export function applyEdit(db: SqlDb, session: ProjectSession, edit: Edit, ctx: E
       const old = db.get('SELECT * FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
       if (!old) return { changed: false };
       const used = ['volumes', 'type_templates', 'progress', 'assets'].filter(t => db.get(`SELECT 1 AS ok FROM ${t} WHERE resource_type_id = ? LIMIT 1`, [edit.resourceTypeId]));
-      if (used.length) fail('물량·유형 템플릿·작업 진척에 쓰이는 리소스입니다. 그곳에서 제외한 뒤 삭제하거나 "사용 안 함"으로 두십시오.');
+      if (used.length && !edit.cascade) fail('물량·유형 템플릿·작업 진척·에셋에 쓰이는 리소스입니다. 함께 지우거나 "사용 안 함"으로 두십시오.');
+      if (used.length) {
+        // 함께 지우기: 에셋(파트 상태 · 링크 · 댓글 · 속성까지) → 작업 진척 → 물량 → 유형 템플릿. 모두 이력에 남아 한 번에 되돌린다
+        const assetIds = db.all('SELECT asset_id FROM assets WHERE resource_type_id = ?', [edit.resourceTypeId]).map(r => String(r.asset_id));
+        if (assetIds.length) applyAssetEdit(db, session, { kind: 'deleteAssets', assetIds } as AssetEdit, ctx);
+        const keys: Record<string, (r: Record<string, unknown>) => string> = {
+          progress: r => `${r.update_id}|${r.resource_type_id}|${r.part_id}`,
+          volumes: r => `${r.update_id}|${r.resource_type_id}`,
+          type_templates: r => `${r.update_type_id}|${r.resource_type_id}`,
+        };
+        for (const t of ['progress', 'volumes', 'type_templates'] as const) {
+          for (const r of db.all(`SELECT * FROM ${t} WHERE resource_type_id = ?`, [edit.resourceTypeId])) log(db, ctx, 'DELETE', t, keys[t](r), null, r, undefined);
+          db.run(`DELETE FROM ${t} WHERE resource_type_id = ?`, [edit.resourceTypeId]);
+        }
+        dirty('progress', 'volumes', 'batches', 'batch_work');
+      }
       const resourceParts = db.all('SELECT * FROM resource_parts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       const efforts = db.all('SELECT * FROM efforts WHERE resource_type_id = ?', [edit.resourceTypeId]);
       db.run('DELETE FROM resource_types WHERE resource_type_id = ?', [edit.resourceTypeId]);
