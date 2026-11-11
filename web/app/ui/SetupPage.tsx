@@ -134,7 +134,7 @@ export function SetupPage(props: { version: number; readOnly: boolean; onApply: 
         <div class="card-body" style="padding-top: 8px">
           <div class="table-wrap ref-wrap">
             <table class="grid edit ref setup-parts">
-              <colgroup><col style="width: 44px" /><col /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col style="width: 200px" /><col style="width: 110px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
+              <colgroup><col style="width: 44px" /><col style="width: 240px" /><col class="num-col" /><col class="num-col" /><col class="num-col" /><col /><col style="width: 110px" /><col style="width: 64px" /><col style="width: 48px" /></colgroup>
               <thead><tr><th aria-label="순서" /><th>이름</th><th class="n">기본 인원 <span class="unit">명</span></th><th class="n">기본 가동률 <span class="unit">%</span></th><th class="n" title="이 파트 작업 중 AI 사용 시 공수로 계산하는 비율">AI 활용 <span class="unit">%</span></th><th title="이 파트를 단계로 쓰는 파이프라인">파이프라인</th><th class="n">거치는 리소스</th><th class="c">사용</th><th aria-label="행 작업" /></tr></thead>
               <PartRows v={v} ro={ro} apply={apply}>{p => (
                   <>

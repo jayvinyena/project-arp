@@ -2017,3 +2017,19 @@ table.grid.vol-compare { min-width: 760px; }
   .update-facts { order: 3; margin-left: 0; }
 }
 @media (pointer: coarse) { .update-tab { min-height: 40px; } }
+
+/* ───────── 넓은 화면에서 한 칸만 늘어지지 않게(tools/find-stretch.mjs) ─────────
+   이름 칸은 고정, 남는 폭은 뒤쪽 글 칸(완료 예정 · 보정 · 파이프라인 · 진행)이 받는다 */
+table.grid.compare { width: auto; }
+table.grid.compare th:first-child, table.grid.compare td:first-child { min-width: 200px; }
+table.grid.compare th:not(:first-child), table.grid.compare td:not(:first-child) { min-width: 180px; }
+table.grid.people-table { max-width: 1240px; }
+table.grid.dash-matrix td:last-child .share { max-width: 320px; }
+/* 보정 단추: 수가 바뀌어도 같은 폭 */
+.vol-fix .btn { min-width: 150px; justify-content: center; }
+.btn-n { display: inline-block; min-width: 4.2ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent-ink); }
+.btn:disabled .btn-n { color: inherit; }
+.vol-fix .btn:last-child .btn-n { min-width: 0; }
+table.grid.dash-matrix { table-layout: fixed; }
+table.grid.dash-matrix td.heat, table.grid.dash-matrix thead th.c { min-width: 96px; }
+table.grid.setup-parts { max-width: 1240px; }

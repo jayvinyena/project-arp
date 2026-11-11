@@ -229,7 +229,7 @@ export function DashboardPage(props: {
         <div class="card-body" style="padding-top: 4px">
           <div class="table-wrap ref-wrap">
             <table class="grid ref dash-matrix">
-              <colgroup><col />{v.parts.map(() => <col class="heat-col" />)}<col style="width: 170px" /></colgroup>
+              <colgroup><col style="width: 240px" />{v.parts.map(() => <col />)}<col style="width: 220px" /></colgroup>
               <thead><tr><th>리소스</th>{v.parts.map(p => <th class="c">{p.name}</th>)}<th title="끝낸 파트 작업의 기본 공수 ÷ 전체 공수(작업 진척의 끝까지 완료와 다릅니다)">진행(공수)</th></tr></thead>
               <tbody>
                 {v.matrix.map(g => (

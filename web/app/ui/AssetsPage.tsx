@@ -904,7 +904,7 @@ export function AssetsPage(props: {
           <div class="card-body" style="padding-top: 4px">
             <div class="table-wrap ref-wrap">
               <table class="grid edit ref batch-table">
-                <colgroup><col style="width: 44px" /><col /><col style="width: 170px" /><col style="width: 80px" /><col style="width: 80px" /><col style="width: 170px" /><col style="width: 200px" /><col style="width: 48px" /></colgroup>
+                <colgroup><col style="width: 44px" /><col style="width: 300px" /><col style="width: 170px" /><col style="width: 80px" /><col style="width: 80px" /><col style="width: 170px" /><col /><col style="width: 48px" /></colgroup>
                 <thead><tr><th aria-label="순서" /><th>배치</th><th>마감일</th><th class="n">에셋</th><th class="n">완료</th><th>진행</th><th title="지금 인력으로 계산한 완료 예정. 업데이트 안에서는 이 표의 순서대로 작업한다고 봅니다">완료 예정</th><th aria-label="행 작업" /></tr></thead>
                 <BatchRows batches={v.batches} ro={ro} apply={apply}>{b => (
                     <>
@@ -950,7 +950,7 @@ export function AssetsPage(props: {
             </dl>
             <div class="table-wrap ref-wrap">
               <table class="grid ref vol-compare">
-                <colgroup><col /><col style="width: 130px" /><col style="width: 140px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 330px" /></colgroup>
+                <colgroup><col style="width: 280px" /><col style="width: 130px" /><col style="width: 140px" /><col style="width: 120px" /><col style="width: 120px" /><col /></colgroup>
                 <thead><tr><th>리소스 종류</th><th class="n">{MODE_LABEL[volMode]} 계획 물량</th><th class="n" title={`포함 템플릿이 ${MODE_LABEL[volMode]}에 드는 에셋 수`}>{MODE_LABEL[volMode]} 실 제작 물량</th><th class="n" title="실 제작 물량 − 계획 물량">차이</th><th class="n" title="모든 파트를 끝낸 에셋 수">제작 완료된 물량</th><th>보정 <span class="unit">세 템플릿 함께</span></th></tr></thead>
                 <tbody>
                   {v.groups.map(g => (
@@ -974,11 +974,11 @@ export function AssetsPage(props: {
                             <td class="n num" title={`실 제작 물량: ${all(reg)}`} data-all={reg.join('·')}>{reg[mi]}</td>
                             <td class={`n num${diff < 0 ? ' warn-num' : diff > 0 ? ' bad-num' : ''}`}>{diff === 0 ? <span class="faint">맞음</span> : diff > 0 ? <>+{diff} <span class="vol-word">많음</span></> : <>−{-diff} <span class="vol-word">모자람</span></>}</td>
                             <td class="n num">{r.done}</td>
-                            <td>{!ro && <span class="inline nowrap">
+                            <td>{!ro && <span class="inline nowrap vol-fix">
                               <button type="button" class="btn sm" disabled={toMake === 0}
-                                title={toMake ? `실 제작 물량을 계획에 맞춥니다: 이름 미정 에셋 ${toMake}개를 만듭니다(포함 템플릿 구간별로 모자란 만큼)` : '실 제작 물량이 계획 물량 이상입니다'} onClick={() => void apply({ kind: 'fillAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>실 제작 → 계획{toMake ? ` (+${toMake})` : ''}</button>
+                                title={toMake ? `실 제작 물량을 계획에 맞춥니다: 이름 미정 에셋 ${toMake}개를 만듭니다(포함 템플릿 구간별로 모자란 만큼)` : '실 제작 물량이 계획 물량 이상입니다'} onClick={() => void apply({ kind: 'fillAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>실 제작 → 계획<span class="btn-n" aria-hidden={toMake ? undefined : 'true'}>{toMake ? `+${toMake}` : ''}</span></button>
                               <button type="button" class="btn sm" disabled={r.registered.total === 0 || same}
-                                title={r.registered.total === 0 ? '등록 에셋이 없어 계획을 맞출 수 없습니다' : same ? '이미 같습니다' : `계획 물량을 실 제작 물량에 맞춥니다: ${all(vols)} → ${all(reg)}`} onClick={() => void apply({ kind: 'volumeFromAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>계획 → 실 제작</button>
+                                title={r.registered.total === 0 ? '등록 에셋이 없어 계획을 맞출 수 없습니다' : same ? '이미 같습니다' : `계획 물량을 실 제작 물량에 맞춥니다: ${all(vols)} → ${all(reg)}`} onClick={() => void apply({ kind: 'volumeFromAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>계획 → 실 제작<span class="btn-n" aria-hidden="true" /></button>
                             </span>}</td>
                           </tr>
                         );
