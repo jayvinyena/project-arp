@@ -300,7 +300,8 @@ export function adviseDeadlines(data: ProjectData, options: AdvisorOptions = {})
     if (st.kind !== 'headcount' && st.kind !== 'outsource') continue;
     const [part, range] = st.label.split('|');
     const r = range.split('~');
-    const when = r[0] === r[1] ? r[0] : range;
+    const ym = (x: string) => `${x.slice(2, 4)}년 ${Number(x.slice(5, 7))}월`;
+    const when = r[0] === r[1] ? ym(r[0]) : `${ym(r[0])} ~ ${ym(r[1])}`;
     st.label = st.kind === 'headcount' ? `${part} 인원 +${fmt(st.amount)}명 (${when})` : `${part} 외주 +${fmt(st.amount)}인·일/월 (${when})`;
   }
 

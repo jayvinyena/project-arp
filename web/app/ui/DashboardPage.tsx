@@ -91,7 +91,12 @@ function BurnUp(props: { v: View }) {
         </div>
       )}
       {/* 그래프를 글로도(docs/34 B-22): 마우스 · 터치 없이 읽게 */}
-      <p class="small muted chart-sum">{lastActual ? <>지금까지 실제 <b>{fmtPct(lastActual.actual! / trend.total)}</b>{lastActual.ideal != null ? <> · 같은 때 계획선 {fmtPct(lastActual.ideal / trend.total)}</> : ''}</> : '아직 완료 기록이 없습니다'}{forecast?.completion ? <> · 완료 예정 {fmtShortDate(forecast.completion)}</> : ''}{win.target ? <> · {win.targetLabel} {fmtShortDate(win.target)}</> : ''}</p>
+      <dl class="kv-row chart-sum">
+        <div><dt>지금까지 실제</dt><dd>{lastActual ? fmtPct(lastActual.actual! / trend.total) : '—'}</dd></div>
+        {lastActual?.ideal != null && <div><dt>같은 때 계획선</dt><dd>{fmtPct(lastActual.ideal / trend.total)}</dd></div>}
+        {forecast?.completion && <div><dt>완료 예정</dt><dd>{fmtShortDate(forecast.completion)}</dd></div>}
+        {win.target && <div><dt>{win.targetLabel}</dt><dd>{fmtShortDate(win.target)}</dd></div>}
+      </dl>
     </div>
   );
 }
@@ -167,7 +172,10 @@ export function DashboardPage(props: {
           <span class="stat-label">진행률</span>
           <b class="stat-num">{fmtPct(s.rate)}</b>
           <span class="dash-bar"><span style={{ width: `${Math.min(100, s.rate * 100)}%` }} />{s.idealRate != null && <i style={{ left: `${s.idealRate * 100}%` }} title={`오늘 계획선 ${fmtPct(s.idealRate)}`} />}</span>
-          <span class="small faint">{fmtInt(s.doneDays)} / {fmtInt(s.totalDays)} 인·일{s.idealRate != null ? ` · 계획선 ${fmtPct(s.idealRate)}` : ''}</span>
+          <dl class="stat-kv">
+            <div><dt>끝낸 공수</dt><dd>{fmtInt(s.doneDays)} / {fmtInt(s.totalDays)} 인·일</dd></div>
+            {s.idealRate != null && <div><dt>오늘 계획선</dt><dd>{fmtPct(s.idealRate)}</dd></div>}
+          </dl>
         </div>
         <div class="stat">
           <span class="stat-label">계획선 대비</span>
@@ -183,8 +191,12 @@ export function DashboardPage(props: {
           <span class="stat-label">다음 배치 마감</span>
           {next ? <>
             <b class={`stat-num${next.daysLeft! < 0 ? ' bad-num' : next.daysLeft! <= 14 ? ' warn-num' : ''}`}>{next.daysLeft! < 0 ? `${-next.daysLeft!}일 지남` : `D-${next.daysLeft}`}</b>
-            <span class="small faint">{next.name} · {fmtShortDate(next.due)} · 진행 {fmtPct(next.progress)}</span>
-            {(() => { const f = v.forecast?.batches.find(x => x.batchId === next.batchId); return f ? <span class="batch-when small">완료 예정 {batchWhen(f)} <BatchPill b={f} /></span> : null; })()}
+            <dl class="stat-kv">
+              <div><dt>배치</dt><dd>{next.name}</dd></div>
+              <div><dt>마감</dt><dd>{fmtShortDate(next.due)}</dd></div>
+              <div><dt>진행</dt><dd>{fmtPct(next.progress)}</dd></div>
+              {(() => { const f = v.forecast?.batches.find(x => x.batchId === next.batchId); return f ? <div><dt>완료 예정</dt><dd>{batchWhen(f)} <BatchPill b={f} /></dd></div> : null; })()}
+            </dl>
           </> : <><b class="stat-num">—</b><span class="small faint">마감일이 있는 배치가 없습니다</span></>}
         </div>
       </div>
@@ -341,11 +353,14 @@ export function DashboardPage(props: {
           )}
           {v.people.headcount.month && (
             <div class="headcount small" role="group" aria-label="파트 인원 비교">
-              <span class="faint">파트 인원({v.people.headcount.month.replace('-', '년 ')}월) 명단 · 인력 표</span>
-              {v.people.headcount.parts.map(p => {
-                const off = p.capacity != null && p.roster !== Math.round(p.capacity);
-                return <span class={`headcount-chip${off ? ' off' : ''}`} title={off ? `작업자 명단(참여 중, 소속팀 ${p.name}) ${p.roster}명과 인력 표 인원 ${p.capacity}명이 다릅니다. 계산은 인력 표 숫자를 씁니다` : undefined}>{p.name} <b>{p.roster}</b> · {p.capacity ?? '—'}</span>;
-              })}
+              <span class="faint">파트 인원 비교 · {v.people.headcount.month.replace('-', '년 ')}월 <span title="계산은 인력 표 숫자를 씁니다. 다르면 주황">(다르면 주황)</span></span>
+              <table class="mini-grid">
+                <thead><tr><th />{v.people.headcount.parts.map(p => <th>{p.name}</th>)}</tr></thead>
+                <tbody>
+                  <tr><th>작업자 명단</th>{v.people.headcount.parts.map(p => { const off = p.capacity != null && p.roster !== Math.round(p.capacity); return <td class={off ? 'off' : ''} title={off ? `작업자 명단(참여 중, 소속팀 ${p.name}) ${p.roster}명과 인력 표 ${p.capacity}명이 다릅니다` : undefined}>{p.roster}</td>; })}</tr>
+                  <tr><th>인력 표</th>{v.people.headcount.parts.map(p => { const off = p.capacity != null && p.roster !== Math.round(p.capacity); return <td class={off ? 'off' : ''}>{p.capacity ?? '—'}</td>; })}</tr>
+                </tbody>
+              </table>
             </div>
           )}
         </div>

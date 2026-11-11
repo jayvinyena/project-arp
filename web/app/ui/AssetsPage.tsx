@@ -287,7 +287,10 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
         <div class="cw-body" ref={bodyRef}>
           <div class="cw-main">
             <Field class="title-input" value={a.name} label="에셋 이름" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'name', value: t })} />
-            <p class="small muted cw-sub">{group?.name} · {rt?.name}{a.category && a.category !== rt?.name ? ` · ${a.category}` : ''}{a.code ? ` · ${a.code}` : ''} · 단계 <b>{stageName}</b> · 진행 {fmtPct(a.progress)}{a.retakes ? ` · 리테이크 ${a.retakes}회` : ''}
+            <p class="small muted cw-sub"><span class="cw-crumb">{group?.name} › {rt?.name}{a.category && a.category !== rt?.name ? ` › ${a.category}` : ''}</span>
+              {a.code && <span class="cw-code" title="에셋 코드">{a.code}</span>}
+              <span class="cw-prog" title={`지금 단계 ${stageName}`}><span class="cw-prog-bar"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></span>진행 <b>{fmtPct(a.progress)}</b></span>
+              {a.retakes > 0 && <span class="label-chip">리테이크 {a.retakes}회</span>}
               {overdue && <span class="label-chip overdue">마감 지남 {fmtShortDate(due!)}</span>}
               {a.jiraKey && (href ? <a class="label-chip link" href={href} target="_blank" rel="noreferrer">{a.jiraKey} ↗</a> : <span class="label-chip">{a.jiraKey}</span>)}</p>
 
@@ -422,7 +425,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                 <input class="field" type="date" aria-label="에셋 마감일" value={a.dueDate ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'due_date', value: (e.target as HTMLInputElement).value || null })} /></div>
             </div>
             <details class="cw-more" open={more} onToggle={e => { const o = (e.currentTarget as HTMLDetailsElement).open; setMore(o); try { localStorage.setItem('arp.card.more', o ? '1' : '0'); } catch { /* 기억 못 해도 된다 */ } }}>
-              <summary><span class="cw-more-h">더 보기</span><span class="small faint cw-more-sum">{[MODE_LABEL[a.tier], a.jiraKey ? `Jira ${a.jiraKey}` : '', a.category ?? '', a.code ?? ''].filter(Boolean).join(' · ')}</span></summary>
+              <summary><span class="cw-more-h">더 보기</span><span class="small cw-more-sum">{([['템플릿', MODE_LABEL[a.tier]], ['Jira', a.jiraKey], ['분류', a.category], ['코드', a.code]] as [string, string | null][]).filter(x => x[1]).map(([k, x]) => <span class="kv-inline"><i>{k}</i>{x}</span>)}</span></summary>
               <div class="cw-props">
                 <div class="cw-prop"><span class="cw-side-h">포함 템플릿</span>
                   <select class="field" aria-label="포함 템플릿" value={a.tier} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'tier', value: (e.target as HTMLSelectElement).value })}>
@@ -733,7 +736,7 @@ export function AssetsPage(props: {
                 const names = add.names.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
                 if (await apply({ kind: 'createAssets', updateId: v.updateId!, resourceTypeId: add.rt || rts[0]?.resourceTypeId || '', names, batchId: batch !== 'all' && batch !== 'none' ? batch : null })) setAdd({ ...add, names: '' });
               }}>더하기</button>
-              <span class="small faint">물량만큼 한 번에 만들려면 "물량 대조" 탭의 "빈 에셋 만들기"를 씁니다.</span>
+              <span class="small faint">물량만큼 한 번에 만들려면 "물량 대조" 탭의 보정 "실 제작 → 계획"을 씁니다.</span>
             </div>
           )}
           <Summary />
@@ -765,7 +768,7 @@ export function AssetsPage(props: {
           {shown.length === 0 && (
             <div class="empty-assets">
               <p class="muted">{v.assets.length ? '조건에 맞는 에셋이 없습니다.' : '아직 등록된 에셋이 없습니다.'}</p>
-              <p class="small faint">"에셋 더하기"나 "엑셀에서 가져오기"(팀 제작 리스트도 그대로)로 등록하거나, "물량 대조" 탭의 "빈 에셋 만들기"로 물량만큼 한 번에 만듭니다.</p>
+              <p class="small faint">"에셋 더하기"나 "엑셀에서 가져오기"(팀 제작 리스트도 그대로)로 등록하거나, "물량 대조" 탭의 보정 "실 제작 → 계획"으로 물량만큼 한 번에 만듭니다.</p>
             </div>
           )}
 
@@ -932,18 +935,22 @@ export function AssetsPage(props: {
       {tab === 'volumes' && (
         <section class="card">
           <div class="card-head">
-            <div><h2>물량 대조</h2><p class="small muted" style="margin-top: 2px">계획 물량과 등록 에셋 수를 템플릿 하나씩 비교합니다. 물량이 계획의 기준이고, 에셋은 그 안의 실제 목록입니다.</p></div>
+            <div><h2>물량 대조</h2><p class="small muted" style="margin-top: 2px">계획 물량과 실 제작 물량을 템플릿 하나씩 비교하고, 다르면 보정합니다.</p></div>
             <div class="inline" style="gap: 8px"><span class="small faint">기준</span>
               <div class="segmented wide" role="radiogroup" aria-label="비교할 물량 템플릿">
                 {(['MIN', 'TARGET', 'STRETCH'] as const).map(m => <button type="button" role="radio" aria-checked={volMode === m} class={volMode === m ? 'on' : ''} onClick={() => pickVolMode(m)}>{MODE_LABEL[m]}</button>)}
               </div></div>
           </div>
           <div class="card-body" style="padding-top: 4px">
-            <p class="small faint vol-note">에셋은 "포함 템플릿"에 따라 셉니다: {MODE_LABEL.MIN} 에셋은 세 템플릿 모두에, {MODE_LABEL.TARGET} 에셋은 {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH}에, {MODE_LABEL.STRETCH} 에셋은 {MODE_LABEL.STRETCH}에만 들어갑니다. 칸에 올리면 세 템플릿 값을 모두 봅니다.</p>
+            <dl class="vol-guide">
+              <div><dt>계획 물량</dt><dd>런칭 물량 설계 · 업데이트 계획에서 정한 수. 일정 계산의 기준입니다.</dd></div>
+              <div><dt>실 제작 물량</dt><dd>이 업데이트에 등록한 에셋 수. 에셋의 "포함 템플릿"으로 셉니다({MODE_LABEL.MIN} 에셋은 세 템플릿 모두, {MODE_LABEL.TARGET} 에셋은 {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH}, {MODE_LABEL.STRETCH} 에셋은 {MODE_LABEL.STRETCH}에만).</dd></div>
+              <div><dt>보정</dt><dd>둘이 다를 때 한쪽을 다른 쪽에 맞춥니다. <b>실 제작 → 계획</b>: 모자란 만큼 이름 미정 에셋을 만듭니다(나중에 이름 · 담당을 채움). <b>계획 → 실 제작</b>: 계획 물량을 등록 에셋 수로 바꿉니다(일정이 다시 계산됨). 두 단추 모두 세 템플릿을 한꺼번에 맞추고, 되돌리기로 돌아옵니다.</dd></div>
+            </dl>
             <div class="table-wrap ref-wrap">
               <table class="grid ref vol-compare">
-                <colgroup><col /><col style="width: 120px" /><col style="width: 150px" /><col style="width: 120px" /><col style="width: 90px" /><col style="width: 270px" /></colgroup>
-                <thead><tr><th>리소스 종류</th><th class="n">{MODE_LABEL[volMode]} 물량</th><th class="n" title={`포함 템플릿이 ${MODE_LABEL[volMode]}에 드는 에셋 수`}>{MODE_LABEL[volMode]}에 드는 에셋</th><th class="n" title="에셋 − 물량">차이</th><th class="n">완료</th><th>맞추기</th></tr></thead>
+                <colgroup><col /><col style="width: 130px" /><col style="width: 140px" /><col style="width: 120px" /><col style="width: 120px" /><col style="width: 330px" /></colgroup>
+                <thead><tr><th>리소스 종류</th><th class="n">{MODE_LABEL[volMode]} 계획 물량</th><th class="n" title={`포함 템플릿이 ${MODE_LABEL[volMode]}에 드는 에셋 수`}>{MODE_LABEL[volMode]} 실 제작 물량</th><th class="n" title="실 제작 물량 − 계획 물량">차이</th><th class="n" title="모든 파트를 끝낸 에셋 수">제작 완료된 물량</th><th>보정 <span class="unit">세 템플릿 함께</span></th></tr></thead>
                 <tbody>
                   {v.groups.map(g => (
                     <>
@@ -954,18 +961,23 @@ export function AssetsPage(props: {
                         const mi = volMode === 'MIN' ? 0 : volMode === 'TARGET' ? 1 : 2;
                         const diff = reg[mi] - (vols[mi] ?? 0);
                         const all = (xs: (number | null)[]) => (['MIN', 'TARGET', 'STRETCH'] as const).map((m, i) => `${MODE_LABEL[m]} ${xs[i] ?? '—'}`).join(' · ');
+                        // 빈 에셋으로 채울 수: 포함 템플릿 구간마다 모자란 만큼(최소안 · 기본안 − 최소안 · 최대안 − 기본안)
+                        const band = [vols[0] ?? 0, (vols[1] ?? 0) - (vols[0] ?? 0), (vols[2] ?? 0) - (vols[1] ?? 0)];
+                        const have = [r.registered.MIN, r.registered.TARGET, r.registered.total - r.registered.MIN - r.registered.TARGET];
+                        const toMake = band.reduce((n, b, i) => n + Math.max(0, b - have[i]), 0);
+                        const same = reg[0] === r.volume.min && reg[1] === r.volume.target && reg[2] === r.volume.stretch;
                         return (
                           <tr class="row in-group">
                             <td><b>{r.name}</b>{r.manualProgress && <span class="tag" title="에셋을 만들면 완료 수량은 에셋 상태로 다시 셉니다. '빈 에셋 만들기'는 손으로 넣은 완료 수량을 앞 에셋부터 완료로 옮깁니다" style="margin-left: 6px">손 입력 진척 있음</span>}</td>
-                            <td class="n num" title={`물량: ${all(vols)}`}>{vols[mi] ?? '—'}</td>
-                            <td class="n num" title={`에셋: ${all(reg)}`} data-all={reg.join('·')}>{reg[mi]}</td>
+                            <td class="n num" title={`계획 물량: ${all(vols)}`}>{vols[mi] ?? '—'}</td>
+                            <td class="n num" title={`실 제작 물량: ${all(reg)}`} data-all={reg.join('·')}>{reg[mi]}</td>
                             <td class={`n num${diff < 0 ? ' warn-num' : diff > 0 ? ' bad-num' : ''}`}>{diff === 0 ? <span class="faint">맞음</span> : diff > 0 ? <>+{diff} <span class="vol-word">많음</span></> : <>−{-diff} <span class="vol-word">모자람</span></>}</td>
                             <td class="n num">{r.done}</td>
                             <td>{!ro && <span class="inline nowrap">
-                              <button type="button" class="btn sm" disabled={reg[2] >= (r.volume.stretch ?? 0) && reg[0] >= (r.volume.min ?? 0) && reg[1] >= (r.volume.target ?? 0)}
-                                title="세 템플릿 모두 모자란 만큼 이름 미정 에셋을 만듭니다(포함 템플릿 구간별로)" onClick={() => void apply({ kind: 'fillAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>빈 에셋 만들기</button>
-                              <button type="button" class="btn sm" disabled={r.registered.total === 0 || (reg[0] === r.volume.min && reg[1] === r.volume.target && reg[2] === r.volume.stretch)}
-                                title="세 템플릿 물량을 모두 등록 에셋 수에 맞춥니다" onClick={() => void apply({ kind: 'volumeFromAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>물량을 에셋에</button>
+                              <button type="button" class="btn sm" disabled={toMake === 0}
+                                title={toMake ? `실 제작 물량을 계획에 맞춥니다: 이름 미정 에셋 ${toMake}개를 만듭니다(포함 템플릿 구간별로 모자란 만큼)` : '실 제작 물량이 계획 물량 이상입니다'} onClick={() => void apply({ kind: 'fillAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>실 제작 → 계획{toMake ? ` (+${toMake})` : ''}</button>
+                              <button type="button" class="btn sm" disabled={r.registered.total === 0 || same}
+                                title={r.registered.total === 0 ? '등록 에셋이 없어 계획을 맞출 수 없습니다' : same ? '이미 같습니다' : `계획 물량을 실 제작 물량에 맞춥니다: ${all(vols)} → ${all(reg)}`} onClick={() => void apply({ kind: 'volumeFromAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>계획 → 실 제작</button>
                             </span>}</td>
                           </tr>
                         );

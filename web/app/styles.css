@@ -1938,3 +1938,57 @@ table.grid.asset-parts-table .field, table.grid.asset-parts-table .st-select { h
 @media (max-width: 640px) { table.grid.vol-compare { min-width: 660px; } }
 table.grid.vol-compare { min-width: 760px; }
 @media (max-width: 640px) { table.grid.vol-compare { min-width: 660px; } }
+
+/* ───────── 글 나열 대신 이름 붙은 값(tools/find-runons.mjs로 찾은 곳) ───────── */
+.kv-row { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; }
+.kv-row > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.kv-row dt { font-size: var(--fs-11); font-weight: 600; color: var(--text-3); }
+.kv-row dd { margin: 0; display: flex; align-items: baseline; gap: 4px; font-size: var(--fs-14); font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kv-row dd small { font-size: var(--fs-11); font-weight: 500; color: var(--text-3); }
+.kv-help { font-size: var(--fs-11); color: var(--text-3); }
+.kv-bar { display: inline-block; width: 56px; height: 5px; border-radius: 3px; background: var(--hover); overflow: hidden; align-self: center; }
+.kv-bar > span { display: block; height: 100%; background: var(--accent); }
+/* 부하 칸 숫자 */
+.hm-cell { font-size: var(--fs-11); font-weight: 650; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.hm-cell.u3, .hm-cell.u4, .hm-cell.u5 { color: #fff; }
+.hm-cell.u5 { text-shadow: 0 0 2px rgb(0 0 0 / 45%); }
+.hm-readout { min-height: 74px; margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.hm-readout > p { margin: 0; line-height: 52px; }
+.hm-ro-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: var(--fs-13); }
+.hm-ro-head .pill { margin-left: 2px; }
+/* 계획 머리 판정 수 */
+.head-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.head-stats .pill.plain { background: var(--hover); color: var(--text-2); }
+/* 상세 창 */
+.drawer-kv { margin-top: 10px; }
+/* 현황판 */
+.stat-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; margin: 4px 0 0; font-size: var(--fs-12); }
+.stat-kv > div { display: contents; }
+.stat-kv dt { color: var(--text-3); font-weight: 600; }
+.stat-kv dd { margin: 0; color: var(--text); font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.chart-sum { margin-top: 8px; }
+.mini-grid { border-collapse: collapse; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.mini-grid th, .mini-grid td { padding: 3px 10px; text-align: center; border-bottom: 1px solid var(--line); }
+.mini-grid thead th { font-weight: 650; color: var(--text-2); }
+.mini-grid tbody th { text-align: left; font-weight: 600; color: var(--text-3); padding-left: 0; }
+.mini-grid td { font-weight: 650; color: var(--text); }
+.mini-grid td.off { background: var(--warn-soft); color: var(--warn); }
+.headcount { flex-direction: column; align-items: flex-start; }
+/* 카드 설명 줄 */
+.cw-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.cw-sub .label-chip { margin-left: 0; }
+.cw-crumb { color: var(--text-2); }
+.cw-code { padding: 0 6px; border-radius: 5px; background: var(--hover); font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: var(--fs-11); color: var(--text-2); }
+.cw-prog { display: inline-flex; align-items: center; gap: 6px; }
+.cw-prog-bar { width: 56px; height: 5px; border-radius: 3px; background: var(--hover); overflow: hidden; }
+.cw-prog-bar > span { display: block; height: 100%; background: var(--ok); }
+.kv-inline { display: inline-flex; align-items: baseline; gap: 4px; margin-right: 12px; color: var(--text-2); font-weight: 600; }
+.kv-inline i { font-style: normal; font-weight: 500; color: var(--text-3); font-size: var(--fs-11); }
+.hm-cell { display: grid; place-items: center; }
+
+/* 물량 대조 설명: 용어 세 개 */
+.vol-guide { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: var(--fs-12); }
+.vol-guide > div { display: contents; }
+.vol-guide dt { font-weight: 700; color: var(--text); }
+.vol-guide dd { margin: 0; color: var(--text-2); }
+@media (max-width: 640px) { .vol-guide { grid-template-columns: minmax(0, 1fr); } .vol-guide dd { margin-bottom: 4px; } }

@@ -115,7 +115,7 @@ function LoadMap(props: { view: PlanView }) {
   return (
     <section class="card">
       <div class="card-head">
-        <div><h2>파트 부하 · {MODE_LABEL[props.view.planMode]}</h2><p class="small muted" style="margin-top: 2px">달마다 작업 가능량을 얼마나 썼는지. 진할수록 꽉 찬 달, 빗금은 가능량보다 많이 배정된 달입니다. 칸을 누르면 아래에 숫자가 표시됩니다.</p></div>
+        <div><h2>파트 부하 · {MODE_LABEL[props.view.planMode]}</h2><p class="small muted" style="margin-top: 2px">달마다 작업 가능량을 얼마나 썼는지(칸 숫자 = 가동률 %). 진할수록 꽉 찬 달, 빗금은 가능량보다 많이 배정된 달입니다. 칸을 누르면 아래에 풀어 보입니다.</p></div>
         <div class="legend scale"><span>쉼</span><i class="heat u0" /><i class="heat u1" /><i class="heat u2" /><i class="heat u3" /><i class="heat u4" /><span>꽉 참</span><i class="heat u5" /><span>넘침</span></div>
       </div>
       <div class="card-body">
@@ -128,14 +128,23 @@ function LoadMap(props: { view: PlanView }) {
               {p.months.map(m => (
                 <button type="button" class={`hm-cell ${tone(m)}${pick?.part === p.partId && pick.month === m.month ? ' on' : ''}`} aria-label={`${p.name} ${fmtMonth(m.month)} ${fmtPct(m.utilization)}`}
                   aria-pressed={pick?.part === p.partId && pick.month === m.month} onClick={() => setPick({ part: p.partId, month: m.month })}
-                  title={`${p.name} ${fmtMonth(m.month)}: 배정 ${fmtDays(m.assigned)} / 가능 ${fmtDays(m.capacity)}인·일 (${fmtPct(m.utilization)})${m.remaining > 0.05 ? ` · 밀린 일 ${fmtDays(m.remaining)}인·일` : ''}`} />
+                  title={`${p.name} ${fmtMonth(m.month)}: 배정 ${fmtDays(m.assigned)} / 가능 ${fmtDays(m.capacity)}인·일 (${fmtPct(m.utilization)})${m.remaining > 0.05 ? ` · 달 끝 남은 일 ${fmtDays(m.remaining)}인·일` : ''}`}>{m.utilization >= 0.05 ? Math.round(m.utilization * 100) : ''}</button>
               ))}
             </>
           ))}
         </div>
-        <p class="small hm-readout" aria-live="polite">{picked
-          ? <><b>{pickedName} · {fmtMonth(picked.month)}</b> 배정 {fmtDays(picked.assigned)} / 가능 {fmtDays(picked.capacity)}인·일 · <b>{fmtPct(picked.utilization)}</b>{picked.remaining > 0.05 ? ` · 밀린 일 ${fmtDays(picked.remaining)}인·일` : ''}</>
-          : <span class="faint">칸을 누르면 그 달의 배정 · 가능량이 여기에 표시됩니다.</span>}</p>
+        <div class="hm-readout" aria-live="polite">{picked
+          ? <>
+            <div class="hm-ro-head"><b>{pickedName}</b><span class="muted">{fmtMonth(picked.month)}</span>
+              <span class={`pill ${picked.utilization > 1.005 ? 'bad' : picked.utilization >= 0.98 ? 'warn' : 'plain'}`}>{picked.utilization > 1.005 ? '넘침' : picked.utilization >= 0.98 ? '꽉 참' : picked.utilization >= 0.5 ? '보통' : '여유'}</span></div>
+            <dl class="kv-row">
+              <div><dt>가동률</dt><dd><b>{fmtPct(picked.utilization)}</b><span class="kv-bar"><span style={{ width: `${Math.min(100, picked.utilization * 100)}%` }} /></span></dd><span class="kv-help">배정 ÷ 가능</span></div>
+              <div><dt>배정</dt><dd>{fmtDays(picked.assigned)}<small>인·일</small></dd><span class="kv-help">이 달에 맡긴 일</span></div>
+              <div><dt>가능</dt><dd>{fmtDays(picked.capacity)}<small>인·일</small></dd><span class="kv-help">인원 × 영업일 × 가동률 · 생산성</span></div>
+              <div><dt>달 끝 남은 일</dt><dd>{picked.remaining > 0.05 ? <>{fmtDays(picked.remaining)}<small>인·일</small></> : <span class="faint">없음</span>}</dd><span class="kv-help">이 파트가 다음 달로 넘기는 일</span></div>
+            </dl>
+          </>
+          : <p class="small faint">칸 숫자는 가동률(%)입니다. 칸을 누르면 그 달의 배정 · 가능량 · 남은 일을 여기에 풀어 보입니다.</p>}</div>
       </div>
     </section>
   );
@@ -291,8 +300,13 @@ function UpdateDrawer(props: {
                   {Object.entries(LIFE).map(([k, v]) => <option value={k}>{v}</option>)}
                 </select>
                 {st && <span class={`pill ${st.tone}`} data-icon={st.icon}>{st.text}</span>}
-                {props.row?.result?.completion && <span class="muted small">완료 예정 {fmtDate(props.row.result.completion)}{props.row.range ? ` · 범위 ${props.row.range.min ? fmtShortDate(props.row.range.min) : '기간 밖'} ~ ${props.row.range.stretch ? fmtShortDate(props.row.range.stretch) : '기간 밖'}` : ''}</span>}
               </div>
+              {props.row?.result?.completion && (
+                <dl class="kv-row drawer-kv">
+                  <div><dt>완료 예정</dt><dd>{fmtDate(props.row.result.completion)}</dd></div>
+                  {props.row.range && <div><dt>{MODE_LABEL.MIN} ~ {MODE_LABEL.STRETCH}</dt><dd>{props.row.range.min ? fmtShortDate(props.row.range.min) : '기간 밖'} ~ {props.row.range.stretch ? fmtShortDate(props.row.range.stretch) : '기간 밖'}</dd></div>}
+                </dl>
+              )}
               <p class="small muted" style="margin: 6px 0 0">날짜 · 물량을 고치면 바로 다시 계산합니다.</p>
               {props.row?.result?.reason && props.row.result.status !== 'ON_TRACK' && <Reason reason={props.row.result.reason} />}
               {props.row && props.row.batches.length > 0 && (
@@ -378,7 +392,12 @@ export function PlanPage(props: {
           <PageEyebrow page="plan" />
           {/* 개수는 런칭을 뺀 업데이트만 센다(런칭 + 시즌 3개 = "런칭과 업데이트 3개") */}
           <h1>{planTitle(live)}</h1>
-          <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 사용합니다.{!errors.length && ` 늦음 ${late}개 · 빠듯 ${tight}개${batchLate ? ` · 늦는 배치 ${batchLate}개` : ''}.`}</p>
+          <p class="muted" style="margin-top: 6px">모든 업데이트가 같은 인력을 우선순위대로 나눠 사용합니다.</p>
+          {!errors.length && <div class="head-stats" role="status">
+            <span class={`pill ${late ? 'bad' : 'plain'}`} data-icon="▲">늦음 {late}</span>
+            <span class={`pill ${tight ? 'warn' : 'plain'}`} data-icon="!">빠듯 {tight}</span>
+            {batchLate > 0 && <span class="pill bad" data-icon="▲">늦는 배치 {batchLate}</span>}
+          </div>}
         </div>
         <div class="inline">
           <ModeSwitch value={props.planMode} onChange={props.setPlanMode} />
