@@ -89,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
 npm run check                             # 형식 검사(TypeScript, 오류 0)
 npm test                                  # 검사 181개
-npm run e2e                               # 크롬 시험 264개(동시 3개, 1분 안팎, 시간 초과로 멈춘 묶음은 혼자 한 번 더): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 21 · 보기 모드 · 소식 11 · 업데이트 계획 14 · 작업 진척 5 · 에셋 25 · 제작 리스트 가져오기 · 거르기 32 · 현황판 20 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 15 · 공정 순서 · 파이프라인 21 · 배포 12
+npm run e2e                               # 크롬 시험 271개(동시 3개, 1분 안팎, 시간 초과로 멈춘 묶음은 혼자 한 번 더): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 21 · 보기 모드 · 소식 11 · 업데이트 계획 17 · 작업 진척 5 · 에셋 26 · 제작 리스트 가져오기 · 거르기 32 · 현황판 22 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 15 · 공정 순서 · 파이프라인 22 · 배포 12
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)
@@ -122,7 +122,7 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 | [docs/07-update-plan.md](docs/07-update-plan.md) | 업데이트 계획 · 작업 진척 · 유형 템플릿 · 인력 화면과 로직 |
 | [core/edits.ts](core/edits.ts) · [core/plan.ts](core/plan.ts) | 모든 고치기 20종 · 계획/상세/실적/유형/인력 보기 |
 | [web/app/ui/PlanPage.tsx](web/app/ui/PlanPage.tsx) · [ProgressPage.tsx](web/app/ui/ProgressPage.tsx) · [TemplatesPage.tsx](web/app/ui/TemplatesPage.tsx) · [CapacityPage.tsx](web/app/ui/CapacityPage.tsx) | 화면 |
-| [test/plan.test.mjs](test/plan.test.mjs) · [test/progress.test.mjs](test/progress.test.mjs) · [tools/e2e-plan.mjs](tools/e2e-plan.mjs) · [tools/e2e-progress.mjs](tools/e2e-progress.mjs) | 검사 7+5개 · 크롬 시험 14+5개 |
+| [test/plan.test.mjs](test/plan.test.mjs) · [test/progress.test.mjs](test/progress.test.mjs) · [tools/e2e-plan.mjs](tools/e2e-plan.mjs) · [tools/e2e-progress.mjs](tools/e2e-progress.mjs) | 검사 7+5개 · 크롬 시험 17+5개 |
 
 ## 4단계 산출물
 
