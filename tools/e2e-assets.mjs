@@ -136,6 +136,7 @@ await withBrowser(async (cdp, base) => {
   await typeIn(cdp, '.asset-card-window textarea[aria-label="설명"]', '실루엣 확정본 기준으로 작업\n표정 3종 포함');
   await select(cdp, '.asset-card-window input[aria-label="에셋 마감일"]', '2027-01-15');
   await sleep(400);
+  await cdp.eval("document.querySelector('.asset-card-window button[aria-label=\"링크 입력 열기\"]').click()"); await sleep(150);
   await typeIn(cdp, '.asset-card-window input[aria-label="링크 제목"]', '컨셉 문서', false);
   await typeIn(cdp, '.asset-card-window input[aria-label="링크 주소"]', 'https://wiki.example.com/cookie', false);
   await clickText(cdp, '링크 더하기', "document.querySelector('.asset-card-window')");

@@ -103,6 +103,7 @@ await withBrowser(async (cdp, base) => {
   check('카드: Jira 링크 · 기획서 링크', card.jiraHref === 'https://example.atlassian.net/browse/ART-12' && card.links.includes('기획서'), card.links);
   check('카드: 세부 분류 · 리소스명 · 파트 상태(애니 진행 · FX 해당 없음)', card.cat === '신규 캐릭터' && card.code === 'CH_WindKnight' && card.anim === 'WIP' && card.fx === 'OMIT', JSON.stringify(card));
   // 속성 더하기 · 지우기
+  await cdp.eval("document.querySelector('.asset-card-window button[aria-label=\"속성 입력 열기\"]').click()"); await sleep(150);
   await cdp.eval(`(() => {
     const set = (l, v) => { const i = document.querySelector('input[aria-label="' + l + '"]'); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); };
     set('속성 이름', '무기'); set('속성 값', '창');

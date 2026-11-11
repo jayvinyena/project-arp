@@ -9,7 +9,7 @@ const SAMPLES = ['assets', 'normal'];
 // 화면 안에서 도는 검사(문자열로 넘긴다)
 const SCAN = `(() => {
   const out = [];
-  const shown = el => { const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return false; const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && !el.closest('[aria-hidden="true"], .reserve'); };
+  const shown = el => { const dt = el.closest('details'); if (dt && !dt.open && !el.closest('summary')) return false; const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return false; const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && !el.closest('[aria-hidden="true"], .reserve'); };
   const name = el => (el.getAttribute('aria-label') || el.textContent || el.value || el.placeholder || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
   const where = el => { const c = el.closest('section.card, .card, [role=dialog], .sidebar, .page-head'); const h = c?.querySelector('h1, h2, h3, [aria-label]'); return (c?.getAttribute('aria-label') || h?.textContent || '').trim().slice(0, 24); };
   const textRects = el => {

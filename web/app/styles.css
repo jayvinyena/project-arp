@@ -1850,3 +1850,50 @@ table.grid.people-table select.field { width: 100%; }
 .people-add { grid-template-columns: minmax(120px, 1fr) minmax(190px, 1fr) minmax(160px, 1.2fr) minmax(160px, 1.4fr) auto; }
 @media (max-width: 860px) { .people-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 @media (max-width: 640px) { .people-add { grid-template-columns: minmax(0, 1fr); } }
+
+/* ───────── 에셋 카드 패널 줄이기(docs/35) ───────── */
+/* P1 · P2: 자주 쓰는 4칸 2 × 2(이름 왼쪽, 칸 오른쪽), 나머지는 "더 보기" */
+.cw-side { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.cw-props { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.cw-prop { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
+.cw-prop .cw-side-h { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cw-prop .field, .cw-prop .st-select { width: 100%; height: 32px; }
+.cw-prop-none { padding-left: 2px; }
+.cw-prop-note { display: block; font-size: var(--fs-11); font-weight: 500; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
+.cw-more { border-top: 1px solid var(--line); padding-top: 6px; }
+.cw-more > summary { display: flex; align-items: center; gap: 8px; height: 26px; cursor: pointer; list-style: none; border-radius: 6px; }
+.cw-more > summary::-webkit-details-marker { display: none; }
+.cw-more > summary::before { content: ''; width: 6px; height: 6px; margin: 0 2px 0 4px; border-right: 1.5px solid var(--text-3); border-bottom: 1.5px solid var(--text-3); transform: rotate(-45deg); transition: transform .12s; flex: none; }
+.cw-more[open] > summary::before { transform: rotate(45deg); }
+.cw-more > summary:focus-visible { outline: none; box-shadow: var(--ring); }
+.cw-more-h { font-size: var(--fs-12); font-weight: 700; color: var(--text-2); flex: none; }
+.cw-more-sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-more[open] .cw-more-sum { visibility: hidden; }
+.cw-more .cw-props { margin-top: 6px; }
+/* P3: 설명 줄 끝 표시 */
+.cw-sub .label-chip { margin-left: 6px; vertical-align: 1px; }
+/* P4: 지우기는 맨 아래 */
+.cw-danger-zone { order: 3; padding-top: 12px; border-top: 1px solid var(--line); align-items: flex-start; }
+/* P5: 체크리스트 촘촘히 */
+table.grid.asset-parts-table td { padding-top: 4px; padding-bottom: 4px; }
+table.grid.asset-parts-table .field, table.grid.asset-parts-table .st-select { height: 30px; }
+/* P6: 속성 · 링크 "더하기" */
+.cw-section .sub-h .cw-add { margin-left: auto; height: 26px; }
+.cw-section .sub-h { width: 100%; }
+
+@media (max-width: 640px) {
+  .cw-prop { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .cw-props { gap: 8px 10px; }
+  /* 체크리스트 줄 카드: 1줄 = 파트 · 상태, 2줄 = 담당 · 완료일, Jira는 값이 있을 때만, 리테이크는 있을 때만 */
+  table.grid.asset-parts-table tr.row { gap: 4px 10px; padding: 8px 10px; }
+  table.grid.asset-parts-table tr.row td:nth-child(3), table.grid.asset-parts-table tr.row td:nth-child(4) { grid-row: 2; }
+  table.grid.asset-parts-table tr.row td:nth-child(4) { grid-column: 1; }
+  table.grid.asset-parts-table tr.row td:nth-child(3) { grid-column: 2; }
+  table.grid.asset-parts-table tr.row td:nth-child(3)::before, table.grid.asset-parts-table tr.row td:nth-child(4)::before { content: none; }
+  table.grid.asset-parts-table tr.row td:nth-child(5):has(input:placeholder-shown) { display: none; }
+  table.grid.asset-parts-table tr.row td.rt-zero { display: none; }
+}
+.cw-side { align-items: stretch; }
+@media (max-width: 640px) { table.grid.asset-parts-table tr.row.current td { background: transparent; } table.grid.asset-parts-table tr.row.current { background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface)); } }
+.cw-prop { grid-template-columns: 88px minmax(0, 1fr); }
+@media (max-width: 640px) { .cw-prop { grid-template-columns: minmax(0, 1fr); } }

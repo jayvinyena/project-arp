@@ -198,10 +198,14 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
   const [attr, setAttr] = useState({ name: '', value: '' });
   const [showActivity, setShowActivity] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // 거의 안 바꾸는 칸(포함 템플릿 · Jira 키 · 세부 분류 · 에셋 코드)은 접어 둔다(docs/35 P2), 펼침은 이 브라우저에 기억
+  const [more, setMore] = useState(() => { try { return localStorage.getItem('arp.card.more') === '1'; } catch { return false; } });
+  const [attrOpen, setAttrOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   useEffect(() => { void rpc.assetDetail(a.assetId).then(setD); }, [a.assetId, props.version]);
   // 다른 카드로 넘어가면 입력 중이던 것 · 확인 상태를 비우고 맨 위로
   useEffect(() => {
-    setLink({ title: '', url: '' }); setComment(''); setAttr({ name: '', value: '' }); setConfirmDelete(false); setShowActivity(false);
+    setLink({ title: '', url: '' }); setComment(''); setAttr({ name: '', value: '' }); setConfirmDelete(false); setShowActivity(false); setAttrOpen(false); setLinkOpen(false);
     bodyRef.current?.scrollTo(0, 0);
   }, [a.assetId]);
   // ↑ ↓(또는 K · J): 입력 칸 밖에서 앞뒤 카드로
@@ -264,14 +268,9 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
         <div class="cw-body" ref={bodyRef}>
           <div class="cw-main">
             <Field class="title-input" value={a.name} label="에셋 이름" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'name', value: t })} />
-            <p class="small muted cw-sub">{group?.name} · {rt?.name}{a.category && a.category !== rt?.name ? ` · ${a.category}` : ''}{a.code ? ` · ${a.code}` : ''} · 단계 <b>{stageName}</b> · 진행 {fmtPct(a.progress)}{a.retakes ? ` · 리테이크 ${a.retakes}회` : ''}</p>
-            <div class="cw-labels">
-              <span class={`label-chip st-${a.sub}`}>{LABEL[a.sub]}</span>
-              <span class="label-chip">{batch ? batch.name : '미배정'}</span>
-              <span class="label-chip">{MODE_LABEL[a.tier]}</span>
-              {due && <span class={`label-chip${overdue ? ' overdue' : ''}`}>마감 {fmtShortDate(due)}{a.dueDate ? '' : '(배치)'}</span>}
-              {a.jiraKey && (href ? <a class="label-chip link" href={href} target="_blank" rel="noreferrer">{a.jiraKey} ↗</a> : <span class="label-chip">{a.jiraKey}</span>)}
-            </div>
+            <p class="small muted cw-sub">{group?.name} · {rt?.name}{a.category && a.category !== rt?.name ? ` · ${a.category}` : ''}{a.code ? ` · ${a.code}` : ''} · 단계 <b>{stageName}</b> · 진행 {fmtPct(a.progress)}{a.retakes ? ` · 리테이크 ${a.retakes}회` : ''}
+              {overdue && <span class="label-chip overdue">마감 지남 {fmtShortDate(due!)}</span>}
+              {a.jiraKey && (href ? <a class="label-chip link" href={href} target="_blank" rel="noreferrer">{a.jiraKey} ↗</a> : <span class="label-chip">{a.jiraKey}</span>)}</p>
 
             <section class="cw-section">
               <h3 class="sub-h">파트 체크리스트 <span class="small faint">완료 {view.parts.filter(p => a.parts[p.partId]?.status === 'DONE').length} / {view.parts.filter(p => a.parts[p.partId] && a.parts[p.partId].status !== 'OMIT').length}</span></h3>
@@ -293,9 +292,9 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                             ? <input class="field" type="date" aria-label={`${p.name} 완료일`} value={s.doneAt ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, doneAt: (e.target as HTMLInputElement).value || null })} />
                             : <span class="faint small">{s.startedAt ? `시작 ${s.startedAt}` : '—'}</span>}</td>
                           <td><Field value={s.assignee ?? ''} label={`${p.name} 담당`} placeholder="이름" list="asset-people" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, assignee: t })} /></td>
-                          <td><span class="inline nowrap"><Field value={s.jiraKey ?? ''} label={`${p.name} Jira 키`} placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, jiraKey: t })} />
+                          <td><span class="inline nowrap"><Field class="field ghost-field" value={s.jiraKey ?? ''} label={`${p.name} Jira 키`} placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetPart', assetIds: [a.assetId], partId: p.partId, jiraKey: t })} />
                             {jh && <a class="jira-link" href={jh} target="_blank" rel="noreferrer" aria-label={`${s.jiraKey} 열기`}>↗</a>}</span></td>
-                          <td class="n num">{s.retakes || <span class="faint">0</span>}</td>
+                          <td class={`n num${s.retakes ? '' : ' rt-zero'}`}>{s.retakes || <span class="faint">0</span>}</td>
                         </tr>
                       );
                     })}
@@ -310,7 +309,8 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
             </section>
 
             <section class="cw-section">
-              <h3 class="sub-h">속성 <span class="small faint">제작 리스트의 추가 칸(속성 · 지역 · 무기 …)</span></h3>
+              <h3 class="sub-h">속성 <span class="small faint">제작 리스트의 추가 칸(속성 · 지역 · 무기 …)</span>
+                {!ro && !attrOpen && <button type="button" class="btn sm ghost cw-add" aria-label="속성 입력 열기" onClick={() => setAttrOpen(true)}><IconPlus />더하기</button>}</h3>
               <div class="cw-attrs">
                 {a.attrs.length === 0 && <p class="small faint">아직 속성이 없습니다.</p>}
                 {a.attrs.map(x => (
@@ -321,17 +321,19 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                   </div>
                 ))}
               </div>
-              {!ro && (
+              {!ro && attrOpen && (
                 <div class="inline cw-link-add">
                   <input class="field" aria-label="속성 이름" placeholder="이름(예: 속성)" value={attr.name} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, name: t })); }} />
                   <input class="field" aria-label="속성 값" placeholder="값(예: 바람)" value={attr.value} onInput={e => { const t = (e.target as HTMLInputElement).value; setAttr(x => ({ ...x, value: t })); }} />
                   <button type="button" class="btn sm" disabled={!attr.name.trim() || !attr.value.trim()} onClick={async () => { if (await apply({ kind: 'assetAttr', assetIds: [a.assetId], name: attr.name, value: attr.value })) setAttr({ name: '', value: '' }); }}><IconPlus />속성 더하기</button>
+                  <button type="button" class="btn ghost icon-btn" aria-label="속성 입력 닫기" onClick={() => { setAttrOpen(false); setAttr({ name: '', value: '' }); }}><IconX /></button>
                 </div>
               )}
             </section>
 
             <section class="cw-section">
-              <h3 class="sub-h">링크</h3>
+              <h3 class="sub-h">링크
+                {!ro && !linkOpen && <button type="button" class="btn sm ghost cw-add" aria-label="링크 입력 열기" onClick={() => setLinkOpen(true)}><IconPlus />더하기</button>}</h3>
               <ul class="cw-links">
                 {a.jiraKey && <li><span class="link-kind">Jira</span>{href ? <a href={href} target="_blank" rel="noreferrer">{a.jiraKey}</a> : <span>{a.jiraKey} <span class="small faint">(Jira 주소는 프로젝트 · 파트 · 리소스 화면에서 입력)</span></span>}</li>}
                 {(d?.links ?? []).map(l => (
@@ -340,11 +342,12 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                 ))}
                 {!a.jiraKey && !(d?.links.length) && <li class="small faint">아직 링크가 없습니다.</li>}
               </ul>
-              {!ro && (
+              {!ro && linkOpen && (
                 <div class="inline cw-link-add">
                   <input class="field" aria-label="링크 제목" placeholder="제목(예: 컨셉 문서)" value={link.title} onInput={e => { const t = (e.target as HTMLInputElement).value; setLink(x => ({ ...x, title: t })); }} />
                   <input class="field" aria-label="링크 주소" placeholder="https://" value={link.url} onInput={e => { const t = (e.target as HTMLInputElement).value; setLink(x => ({ ...x, url: t })); }} />
                   <button type="button" class="btn sm" disabled={!link.url.trim()} onClick={async () => { if (await apply({ kind: 'addLink', assetId: a.assetId, title: link.title, url: link.url })) setLink({ title: '', url: '' }); }}><IconPlus />링크 더하기</button>
+                  <button type="button" class="btn ghost icon-btn" aria-label="링크 입력 닫기" onClick={() => { setLinkOpen(false); setLink({ title: '', url: '' }); }}><IconX /></button>
                 </div>
               )}
             </section>
@@ -369,41 +372,51 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
                 ))}
               </ul>
             </section>
+
+            {!ro && (
+              <section class="cw-section cw-danger-zone">
+                {confirmDelete
+                  ? <div class="cw-danger"><span class="small">이 에셋을 지우시겠습니까? 썸네일은 돌아오지 않습니다(다른 것은 되돌리기로 돌아옵니다).</span>
+                    <button type="button" class="btn sm danger" onClick={async () => { if (await apply({ kind: 'deleteAssets', assetIds: [a.assetId] })) props.onClose(); }}>지우기</button>
+                    <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></div>
+                  : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>이 에셋 지우기</button>}
+              </section>
+            )}
           </div>
 
           <aside class="cw-side">
-            <span class="cw-side-h">단계</span>
-            <select class="field" aria-label="단계 옮기기" value={a.stage} disabled={ro} onChange={e => props.move([a.assetId], (e.target as HTMLSelectElement).value)}>
-              {stagesOf(a, view.parts, view.pipelines).map(s => <option value={s.id}>{s.name}</option>)}
-            </select>
-            {a.stage !== 'TODO' && a.stage !== 'DONE' && <>
-              <span class="cw-side-h">세부 상태</span>
-              <StatusSelect value={a.sub} label="세부 상태" disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
-            </>}
-            <span class="cw-side-h">배치</span>
-            <select class="field" aria-label="배치" value={a.batchId ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'batch_id', value: (e.target as HTMLSelectElement).value || null })}>
-              <option value="">미배정</option>
-              {view.batches.map(b => <option value={b.batchId}>{b.name}{b.dueDate ? ` · 마감 ${fmtShortDate(b.dueDate)}` : ''}</option>)}
-            </select>
-            <span class="cw-side-h">마감일</span>
-            <input class="field" type="date" aria-label="에셋 마감일" value={a.dueDate ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'due_date', value: (e.target as HTMLInputElement).value || null })} />
-            {!a.dueDate && batch?.dueDate && <span class="small faint">비우면 배치 마감일({batch.dueDate})</span>}
-            <span class="cw-side-h">포함 템플릿</span>
-            <select class="field" aria-label="포함 템플릿" value={a.tier} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'tier', value: (e.target as HTMLSelectElement).value })}>
-              {TIERS.map(t => <option value={t}>{MODE_LABEL[t]}</option>)}
-            </select>
-            <span class="cw-side-h">Jira 키</span>
-            <Field value={a.jiraKey ?? ''} label="에셋 Jira 키" placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'jira_key', value: t })} />
-            <span class="cw-side-h">세부 분류</span>
-            <Field value={a.category ?? ''} label="세부 분류" placeholder="예: 코스튬 · 상의" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'category', value: t })} />
-            <span class="cw-side-h">에셋 코드</span>
-            <Field value={a.code ?? ''} label="에셋 코드" placeholder="제작 리스트의 리소스명(예: CH_0123)" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'code', value: t })} />
-            <div class="viewer-slot small faint">에셋 뷰어(큰 이미지 · 3D)는 다음 단계에서 이 자리에</div>
-            {!ro && (confirmDelete
-              ? <div class="cw-danger"><span class="small">지우시겠습니까? 썸네일은 돌아오지 않습니다.</span>
-                <button type="button" class="btn sm danger" onClick={async () => { if (await apply({ kind: 'deleteAssets', assetIds: [a.assetId] })) props.onClose(); }}>지우기</button>
-                <button type="button" class="btn sm ghost" onClick={() => setConfirmDelete(false)}>그만두기</button></div>
-              : <button type="button" class="btn sm" onClick={() => setConfirmDelete(true)}>이 에셋 지우기</button>)}
+            <div class="cw-props">
+              <div class="cw-prop"><span class="cw-side-h">단계</span>
+                <select class="field" aria-label="단계 옮기기" value={a.stage} disabled={ro} onChange={e => props.move([a.assetId], (e.target as HTMLSelectElement).value)}>
+                  {stagesOf(a, view.parts, view.pipelines).map(s => <option value={s.id}>{s.name}</option>)}
+                </select></div>
+              <div class="cw-prop"><span class="cw-side-h">세부 상태</span>
+                {a.stage !== 'TODO' && a.stage !== 'DONE'
+                  ? <StatusSelect value={a.sub} label="세부 상태" disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
+                  : <span class="small faint cw-prop-none">{a.stage === 'DONE' ? '모두 완료' : '시작 전'}</span>}</div>
+              <div class="cw-prop"><span class="cw-side-h">배치</span>
+                <select class="field" aria-label="배치" value={a.batchId ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'batch_id', value: (e.target as HTMLSelectElement).value || null })}>
+                  <option value="">미배정</option>
+                  {view.batches.map(b => <option value={b.batchId} title={b.dueDate ? `마감 ${fmtShortDate(b.dueDate)}` : '마감 없음'}>{b.name}</option>)}
+                </select></div>
+              <div class="cw-prop"><span class="cw-side-h" title={!a.dueDate && batch?.dueDate ? `비워 두면 배치 마감일(${batch.dueDate})을 따릅니다` : undefined}>마감일{!a.dueDate && batch?.dueDate ? <span class="cw-prop-note">배치 {fmtShortDate(batch.dueDate)}</span> : ''}</span>
+                <input class="field" type="date" aria-label="에셋 마감일" value={a.dueDate ?? ''} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'due_date', value: (e.target as HTMLInputElement).value || null })} /></div>
+            </div>
+            <details class="cw-more" open={more} onToggle={e => { const o = (e.currentTarget as HTMLDetailsElement).open; setMore(o); try { localStorage.setItem('arp.card.more', o ? '1' : '0'); } catch { /* 기억 못 해도 된다 */ } }}>
+              <summary><span class="cw-more-h">더 보기</span><span class="small faint cw-more-sum">{[MODE_LABEL[a.tier], a.jiraKey ? `Jira ${a.jiraKey}` : '', a.category ?? '', a.code ?? ''].filter(Boolean).join(' · ')}</span></summary>
+              <div class="cw-props">
+                <div class="cw-prop"><span class="cw-side-h">포함 템플릿</span>
+                  <select class="field" aria-label="포함 템플릿" value={a.tier} disabled={ro} onChange={e => void apply({ kind: 'assetField', assetIds: [a.assetId], field: 'tier', value: (e.target as HTMLSelectElement).value })}>
+                    {TIERS.map(t => <option value={t}>{MODE_LABEL[t]}</option>)}
+                  </select></div>
+                <div class="cw-prop"><span class="cw-side-h">Jira 키</span>
+                  <Field value={a.jiraKey ?? ''} label="에셋 Jira 키" placeholder="ABC-123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'jira_key', value: t })} /></div>
+                <div class="cw-prop"><span class="cw-side-h">세부 분류</span>
+                  <Field value={a.category ?? ''} label="세부 분류" placeholder="예: 코스튬 · 상의" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'category', value: t })} /></div>
+                <div class="cw-prop"><span class="cw-side-h">에셋 코드</span>
+                  <Field value={a.code ?? ''} label="에셋 코드" placeholder="예: CH_0123" disabled={ro} onCommit={t => apply({ kind: 'assetField', assetIds: [a.assetId], field: 'code', value: t })} /></div>
+              </div>
+            </details>
           </aside>
         </div>
       </Dialog>
