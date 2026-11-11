@@ -495,6 +495,9 @@ export function AssetsPage(props: {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const density = useDensity('assets');
+  // 물량 대조 기준 템플릿(하나만 골라 본다), 이 브라우저에 기억
+  const [volMode, setVolMode] = useState<'MIN' | 'TARGET' | 'STRETCH'>(() => { const m = pref<string>('volMode', 'TARGET'); return m === 'MIN' || m === 'STRETCH' ? m : 'TARGET'; });
+  const pickVolMode = (m: 'MIN' | 'TARGET' | 'STRETCH') => { setVolMode(m); try { localStorage.setItem('arp.assets.volMode', m); } catch { /* 기억 못 해도 된다 */ } };
   const [adding, setAdding] = useState(false);
   const [add, setAdd] = useState({ rt: '', names: '' });
   const [newBatch, setNewBatch] = useState({ name: '', due: '' });
@@ -928,31 +931,41 @@ export function AssetsPage(props: {
 
       {tab === 'volumes' && (
         <section class="card">
-          <div class="card-head"><div><h2>물량 대조</h2><p class="small muted" style="margin-top: 2px">계획 물량과 등록 에셋 수를 비교합니다. 물량이 계획의 기준이고, 에셋은 그 안의 실제 목록입니다.</p></div></div>
+          <div class="card-head">
+            <div><h2>물량 대조</h2><p class="small muted" style="margin-top: 2px">계획 물량과 등록 에셋 수를 템플릿 하나씩 비교합니다. 물량이 계획의 기준이고, 에셋은 그 안의 실제 목록입니다.</p></div>
+            <div class="inline" style="gap: 8px"><span class="small faint">기준</span>
+              <div class="segmented wide" role="radiogroup" aria-label="비교할 물량 템플릿">
+                {(['MIN', 'TARGET', 'STRETCH'] as const).map(m => <button type="button" role="radio" aria-checked={volMode === m} class={volMode === m ? 'on' : ''} onClick={() => pickVolMode(m)}>{MODE_LABEL[m]}</button>)}
+              </div></div>
+          </div>
           <div class="card-body" style="padding-top: 4px">
+            <p class="small faint vol-note">에셋은 "포함 템플릿"에 따라 셉니다: {MODE_LABEL.MIN} 에셋은 세 템플릿 모두에, {MODE_LABEL.TARGET} 에셋은 {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH}에, {MODE_LABEL.STRETCH} 에셋은 {MODE_LABEL.STRETCH}에만 들어갑니다. 칸에 올리면 세 템플릿 값을 모두 봅니다.</p>
             <div class="table-wrap ref-wrap">
               <table class="grid ref vol-compare">
-                <colgroup><col /><col class="tri-col" /><col class="tri-col" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 270px" /></colgroup>
-                <thead><tr><th>리소스 종류</th><th class="n">물량 <span class="unit">{MODE_LABEL.MIN} · {MODE_LABEL.TARGET} · {MODE_LABEL.STRETCH}</span></th><th class="n">등록 에셋 <span class="unit">같은 순서</span></th><th class="n">차이 <span class="unit">{MODE_LABEL.STRETCH}</span></th><th class="n">완료</th><th>맞추기</th></tr></thead>
+                <colgroup><col /><col style="width: 120px" /><col style="width: 150px" /><col style="width: 120px" /><col style="width: 90px" /><col style="width: 270px" /></colgroup>
+                <thead><tr><th>리소스 종류</th><th class="n">{MODE_LABEL[volMode]} 물량</th><th class="n" title={`포함 템플릿이 ${MODE_LABEL[volMode]}에 드는 에셋 수`}>{MODE_LABEL[volMode]}에 드는 에셋</th><th class="n" title="에셋 − 물량">차이</th><th class="n">완료</th><th>맞추기</th></tr></thead>
                 <tbody>
                   {v.groups.map(g => (
                     <>
                       <tr class="group group-strong"><td colSpan={6}><span class="group-head"><b>{g.name}</b><span class="group-count">{g.resources.length}종</span></span></td></tr>
                       {g.resources.map(r => {
                         const reg = [r.registered.MIN, r.registered.MIN + r.registered.TARGET, r.registered.total];
-                        const diff = r.registered.total - (r.volume.stretch ?? 0);
+                        const vols = [r.volume.min, r.volume.target, r.volume.stretch];
+                        const mi = volMode === 'MIN' ? 0 : volMode === 'TARGET' ? 1 : 2;
+                        const diff = reg[mi] - (vols[mi] ?? 0);
+                        const all = (xs: (number | null)[]) => (['MIN', 'TARGET', 'STRETCH'] as const).map((m, i) => `${MODE_LABEL[m]} ${xs[i] ?? '—'}`).join(' · ');
                         return (
                           <tr class="row in-group">
                             <td><b>{r.name}</b>{r.manualProgress && <span class="tag" title="에셋을 만들면 완료 수량은 에셋 상태로 다시 셉니다. '빈 에셋 만들기'는 손으로 넣은 완료 수량을 앞 에셋부터 완료로 옮깁니다" style="margin-left: 6px">손 입력 진척 있음</span>}</td>
-                            <td class="n num">{[r.volume.min, r.volume.target, r.volume.stretch].map(x => (x == null ? '—' : x)).join(' · ')}</td>
-                            <td class="n num">{reg.join(' · ')}</td>
-                            <td class={`n num${diff < 0 ? ' warn-num' : diff > 0 ? ' bad-num' : ''}`}>{diff === 0 ? '0' : diff > 0 ? `+${diff}` : `−${-diff}`}</td>
+                            <td class="n num" title={`물량: ${all(vols)}`}>{vols[mi] ?? '—'}</td>
+                            <td class="n num" title={`에셋: ${all(reg)}`} data-all={reg.join('·')}>{reg[mi]}</td>
+                            <td class={`n num${diff < 0 ? ' warn-num' : diff > 0 ? ' bad-num' : ''}`}>{diff === 0 ? <span class="faint">맞음</span> : diff > 0 ? <>+{diff} <span class="vol-word">많음</span></> : <>−{-diff} <span class="vol-word">모자람</span></>}</td>
                             <td class="n num">{r.done}</td>
                             <td>{!ro && <span class="inline nowrap">
                               <button type="button" class="btn sm" disabled={reg[2] >= (r.volume.stretch ?? 0) && reg[0] >= (r.volume.min ?? 0) && reg[1] >= (r.volume.target ?? 0)}
-                                title="물량만큼 이름 미정 에셋을 만듭니다(템플릿 구간별로 모자란 만큼)" onClick={() => void apply({ kind: 'fillAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>빈 에셋 만들기</button>
+                                title="세 템플릿 모두 모자란 만큼 이름 미정 에셋을 만듭니다(포함 템플릿 구간별로)" onClick={() => void apply({ kind: 'fillAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>빈 에셋 만들기</button>
                               <button type="button" class="btn sm" disabled={r.registered.total === 0 || (reg[0] === r.volume.min && reg[1] === r.volume.target && reg[2] === r.volume.stretch)}
-                                title="물량(최소안 · 기본안 · 최대안)을 등록 에셋 수에 맞춥니다" onClick={() => void apply({ kind: 'volumeFromAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>물량을 에셋에</button>
+                                title="세 템플릿 물량을 모두 등록 에셋 수에 맞춥니다" onClick={() => void apply({ kind: 'volumeFromAssets', updateId: v.updateId!, resourceTypeId: r.resourceTypeId })}>물량을 에셋에</button>
                             </span>}</td>
                           </tr>
                         );

@@ -1931,3 +1931,10 @@ table.grid.asset-parts-table .field, table.grid.asset-parts-table .st-select { h
 .kb-title .kb-name { flex: 1; min-width: 0; }
 .kb-title .kb-av { margin-top: -1px; }
 .kb-badges .st-select { padding: 0 16px 0 6px; background-position: right 3px center; }
+
+/* 물량 대조: 템플릿 하나씩 */
+.vol-note { margin: 0 0 8px; }
+.vol-word { font-size: var(--fs-12); font-weight: 600; }
+@media (max-width: 640px) { table.grid.vol-compare { min-width: 660px; } }
+table.grid.vol-compare { min-width: 760px; }
+@media (max-width: 640px) { table.grid.vol-compare { min-width: 660px; } }

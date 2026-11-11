@@ -165,8 +165,8 @@ await withBrowser(async (cdp, base) => {
   await cdp.eval("[...document.querySelectorAll('.sub-tabs button')].find(b => b.textContent.startsWith('물량 대조')).click()");
   await cdp.waitUntil("document.querySelector('table.vol-compare')", 8000);
   await cdp.eval("[...document.querySelectorAll('table.vol-compare tbody tr.row')].find(r => r.textContent.startsWith('코스튬')).querySelector('button').click()");
-  await cdp.waitUntil("[...document.querySelectorAll('table.vol-compare tbody tr.row')].find(r => r.textContent.startsWith('코스튬'))?.querySelectorAll('td')[2]?.textContent.replace(/\\s/g, '') === '10·15·20'", 10000).catch(() => {});
-  const reg = await cdp.eval("[...document.querySelectorAll('table.vol-compare tbody tr.row')].find(r => r.textContent.startsWith('코스튬')).querySelectorAll('td')[2].textContent.replace(/\\s/g, '')");
+  await cdp.waitUntil("[...document.querySelectorAll('table.vol-compare tbody tr.row')].find(r => r.textContent.startsWith('코스튬'))?.querySelectorAll('td')[2]?.dataset.all === '10·15·20'", 10000).catch(() => {});
+  const reg = await cdp.eval("[...document.querySelectorAll('table.vol-compare tbody tr.row')].find(r => r.textContent.startsWith('코스튬')).querySelectorAll('td')[2].dataset.all");
   check('물량 대조 탭: 빈 에셋 만들기(10 · 15 · 20)', reg === '10·15·20', reg);
   await cdp.eval("[...document.querySelectorAll('.sub-tabs button')].find(b => b.textContent.startsWith('배치')).click()");
   await cdp.waitUntil("document.querySelector('table.batch-table')", 8000);
