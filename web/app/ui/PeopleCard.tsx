@@ -96,7 +96,7 @@ export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandid
               <button type="button" class={`btn sm${teamPanel ? ' on' : ''}`} aria-expanded={teamPanel} title="목록에 없는 팀(PM · 기획 등)을 더합니다" onClick={() => setTeamPanel(x => !x)}><IconPlus />팀</button>
             </span>
             <input class="field" type="email" aria-label="새 작업자 이메일" placeholder="이메일(선택)" value={add.email} onInput={set('email')} onKeyDown={enter} />
-            <input class="field" aria-label="새 작업자 특이사항" placeholder="특이사항(선택, 예: 12월 휴가)" value={add.note} onInput={set('note')} onKeyDown={enter} />
+            <input class="field" aria-label="새 작업자 특이사항" placeholder="특이사항(선택)" title="예: 12월 휴가 · 신규 입사 · 외주" value={add.note} onInput={set('note')} onKeyDown={enter} />
             <button type="button" class="btn sm primary" disabled={!add.name.trim()} onClick={() => void create()}><IconPlus />작업자 더하기</button>
           </div>
         )}
@@ -138,7 +138,7 @@ export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandid
         ) : (
           <div class="table-wrap ref-wrap">
             <table class="grid edit ref people-table">
-              <colgroup><col style="width: 210px" /><col style="width: 140px" /><col style="width: 250px" /><col /><col style="width: 104px" /><col style="width: 44px" /></colgroup>
+              <colgroup><col style="width: 200px" /><col style="width: 156px" /><col style="width: 240px" /><col /><col style="width: 104px" /><col style="width: 44px" /></colgroup>
               <thead><tr><th>이름</th><th>소속팀</th><th>이메일</th><th>특이사항</th><th>참여</th><th aria-label="행 작업" /></tr></thead>
               <tbody>
                 {groups.map(g => (
@@ -151,7 +151,7 @@ export function PeopleCard(props: { people: Person[]; candidates: AssigneeCandid
                             onCommit={t => { if (p.assigned > 0 && t.trim() && t.trim() !== p.name) { setRename({ person: p, to: t.trim() }); return false; } return apply({ kind: 'personField', personId: p.personId, field: 'name', value: t }); }} /></span></td>
                         <td><TeamSelect class="field ghost-field" value={p.team ?? ''} teams={props.teams} label={`${p.name} 소속팀`} disabled={ro} onChange={v => void apply({ kind: 'personField', personId: p.personId, field: 'team', value: v })} /></td>
                         <td><Field class="field ghost-field" value={p.email ?? ''} label={`${p.name} 이메일`} placeholder="name@company.com" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'email', value: t })} /></td>
-                        <td><Field class="field ghost-field" value={p.note ?? ''} label={`${p.name} 특이사항`} placeholder="예: 12월 휴가 · 신규 입사 · 외주" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'note', value: t })} /></td>
+                        <td><Field class="field ghost-field" value={p.note ?? ''} label={`${p.name} 특이사항`} placeholder="특이사항" disabled={ro} onCommit={t => apply({ kind: 'personField', personId: p.personId, field: 'note', value: t })} /></td>
                         <td>
                           <label class={`switch${p.active ? ' on' : ''}`} title={p.active ? '참여 중: 담당 고르기에 나옵니다' : '빠짐: 담당 고르기에서 빠집니다(기록은 남음)'}>
                             <input type="checkbox" role="switch" aria-label={`${p.name} 참여`} checked={p.active} disabled={ro}

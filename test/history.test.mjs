@@ -38,6 +38,12 @@ test('이력: 묶음마다 요약·편집자·항목, 최신이 위', () => {
   assert.equal(h.batches[0].count, 7);
   assert.equal(h.batches[1].summary, '물량 기본안');
   assert.deepEqual([h.batches[1].entries[0].old, h.batches[1].entries[0].next], [60, 70]);
+  // 분류 · 무엇을 · 바뀐 값(화면에서 거르고 묶는 기준)
+  assert.equal(h.batches[0].area, 'plan');
+  assert.ok(h.batches[0].subject.startsWith('시즌 3'), h.batches[0].subject);
+  assert.equal(h.batches[0].change, null);
+  assert.equal(h.batches[1].area, 'plan');
+  assert.match(h.batches[1].change, /기본안 60 → 70$/);
 });
 
 test('되돌리기: 값 고치기 · 업데이트 만들기 · 업데이트 지우기(물량까지) · 계획 기간 늘리기', () => {

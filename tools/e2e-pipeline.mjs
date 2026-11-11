@@ -171,19 +171,23 @@ await withBrowser(async (cdp, base) => {
   await nav(cdp, '에셋 제작 현황');
   await cdp.waitUntil("document.querySelector('.asset-bar')", 10000);
   await cdp.eval("[...document.querySelectorAll('button[role=radio]')].find(b => b.textContent.includes('보드')).click()");
-  await cdp.waitUntil(`!!document.querySelector('select[aria-label="보드 파이프라인"]')`, 8000);
-  await select(cdp, 'select[aria-label="보드 파이프라인"]', pid);
+  await cdp.waitUntil(`!!document.querySelector('select[aria-label="파이프라인 거르기"]')`, 8000);
+  await select(cdp, 'select[aria-label="파이프라인 거르기"]', pid);
   const cols = await cdp.eval("[...document.querySelectorAll('.kb-col')].map(c => c.dataset.col).join(',')");
   const cards = await cdp.eval("document.querySelectorAll('.kb-card').length");
   check('보드 파이프라인: 열 = 대기 · 모델링 · 원화 · 완료, 그 파이프라인 에셋(신규 캐릭터 12)', cols === 'TODO,MODELING,CONCEPT,DONE' && cards === 12, `${cols} · ${cards}장`);
   await shot(cdp, 'pipeline-board-1440');
   // 병렬 묶음이 있는 파이프라인: 열 = 묶음(애니메이션 ∥ FX 한 열)
-  await select(cdp, 'select[aria-label="보드 파이프라인"]', 'L00');
+  await select(cdp, 'select[aria-label="파이프라인 거르기"]', 'L00');
   const gcols = await cdp.eval("[...document.querySelectorAll('.kb-col')].map(c => c.dataset.col).join(',')");
   const ghead = await cdp.eval("[...document.querySelectorAll('.kb-col .kb-head b')].map(b => b.textContent).join(',')");
   check('보드: 병렬 묶음은 한 열(애니메이션 ∥ FX)', gcols === 'TODO,CONCEPT,MODELING,ANIMATION,DONE' && ghead.includes('애니메이션 ∥ FX'), `${gcols} · ${ghead}`);
-  await select(cdp, 'select[aria-label="보드 파이프라인"]', 'all');
   await cdp.eval("[...document.querySelectorAll('button[role=radio]')].find(b => b.textContent.includes('리스트')).click()");
+  await sleep(400);
+  await select(cdp, 'select[aria-label="파이프라인 거르기"]', pid);
+  const listRows = await cdp.eval("document.querySelectorAll('table.asset-list tbody tr.row').length");
+  check('리스트에서도 파이프라인 거르기(보드와 같은 고르기)', listRows === 12, `${listRows}줄`);
+  await select(cdp, 'select[aria-label="파이프라인 거르기"]', 'all');
 
   // 6. 배치 순서: 손잡이 키보드
   await cdp.eval("[...document.querySelectorAll('[role=tab]')].find(b => b.textContent.trim().startsWith('배치')).click()");

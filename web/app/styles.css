@@ -1778,3 +1778,75 @@ table.grid.list td.n.num { white-space: nowrap; }
 /* 현황판 배치 표: 진행은 숫자만(막대는 첫 칸 판정 알약 자리를 위해 뺌) */
 table.grid.dash-batch-table .share .bar { display: none; }
 .dash-batch-table .batch-when { flex-direction: column; align-items: flex-start; }
+
+/* ───────── 글자 잘림 · 넘침 고침(tools/find-clipped.mjs로 검출) ───────── */
+/* 단추 · 고르기 · 탭 글자는 한 줄, 상자가 글자만큼 */
+.btn, .segmented button, .sub-tabs button, .chip, .pill, .tag, .label-chip { white-space: nowrap; }
+.segmented.mini button { width: auto; }
+.sub-tabs { overflow-x: auto; scrollbar-width: none; }
+.sub-tabs::-webkit-scrollbar { display: none; }
+.sub-tabs button { flex: none; }
+/* 데이터 점검 줄: 고치기 단추는 오른쪽 셋째 칸(좁은 첫 칸으로 밀려 글자가 넘치던 것) */
+.finding { grid-template-columns: 56px minmax(0, 1fr) auto; align-items: start; }
+.finding > .btn { align-self: center; }
+@media (max-width: 640px) { .finding { grid-template-columns: 56px minmax(0, 1fr); } .finding > .btn { grid-column: 2; justify-self: start; } }
+/* 마감 칸: 배치 마감을 따르면 흐린 글자 + 점선 밑줄 */
+.due-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.due-btn.inherited { color: var(--text-2); text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+.filter-none { display: inline-flex; align-items: center; height: 30px; padding: 0 6px; }
+/* 에셋 카드 패널: 체크리스트가 들어가게 조금 넓게 */
+.asset-card-window { width: min(720px, 100%); }
+table.grid.asset-parts-table td:first-child b { white-space: nowrap; }
+/* 휴대폰: 칸이 많은 편집 표는 가로로 밀되 칸은 글자만큼 */
+@media (max-width: 640px) {
+  table.grid.setup-parts { min-width: 1000px; }
+  table.grid.people-table { min-width: 980px; }
+}
+
+/* 변경 이력: 날짜별 · 분류 · 묶음 */
+.hist-tools { align-items: center; padding-bottom: 4px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-13); font-weight: 600; cursor: pointer; }
+.chip:hover { background: var(--hover); color: var(--text); }
+.chip:focus-visible { outline: none; box-shadow: var(--ring); }
+.chip.on { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); color: var(--accent-ink); }
+.chip-n { font-size: var(--fs-12); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.chip.on .chip-n { color: var(--accent-ink); }
+.hist-search { width: 240px; height: 32px; }
+.hist-day + .hist-day { margin-top: 18px; }
+.hist-day-h { display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; padding: 0 4px 6px; font-size: var(--fs-13); font-weight: 700; color: var(--text-2); border-bottom: 1px solid var(--line-strong); }
+.hist-toggle { padding: 8px 4px; }
+.hist-time { flex: none; width: 82px; }
+.hist-area { flex: none; min-width: 64px; justify-content: center; }
+.hist-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.hist-summary { flex: none; max-width: 50%; }
+.hist-subject { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.hist-who { flex: none; white-space: nowrap; }
+.hist-times { font-weight: 700; color: var(--accent-ink); margin-left: 2px; }
+.hist-undo { flex: none; }
+.hist-force { flex-basis: 100%; }
+.hist-run-open { flex: none; padding-right: 4px; }
+.hist-run-items { margin: 0 0 6px 92px; padding-left: 12px; border-left: 2px solid var(--line); }
+.hist-item.sub .hist-time { width: 48px; }
+.hist-detail { margin: 0 0 8px 92px; }
+.hist-area.a-setup { background: var(--hover); color: var(--text-2); }
+.hist-area.a-capacity { background: color-mix(in srgb, #2a93a8 14%, var(--surface)); color: color-mix(in srgb, #2a93a8 80%, var(--text)); }
+.hist-area.a-plan { background: var(--accent-soft); color: var(--accent-ink); }
+.hist-area.a-progress { background: var(--ok-soft); color: var(--ok); }
+.hist-area.a-assets { background: color-mix(in srgb, #d07a2d 14%, var(--surface)); color: color-mix(in srgb, #d07a2d 85%, var(--text)); }
+.hist-area.a-scenario { background: color-mix(in srgb, #9a5bd0 14%, var(--surface)); color: color-mix(in srgb, #9a5bd0 85%, var(--text)); }
+@media (max-width: 640px) {
+  .hist-search { width: 100%; }
+  .hist-toggle { flex-wrap: wrap; row-gap: 2px; }
+  .hist-time { width: auto; }
+  .hist-main { flex-basis: 100%; flex-direction: column; gap: 0; }
+  .hist-summary { max-width: 100%; }
+  .hist-run-items, .hist-detail { margin-left: 0; }
+  .hist-run-open { display: none; }
+}
+
+/* 작업자: 소속팀 고르기가 칸 폭만큼(소속팀 없음이 잘리지 않게) */
+table.grid.people-table select.field { width: 100%; }
+.people-add { grid-template-columns: minmax(120px, 1fr) minmax(190px, 1fr) minmax(160px, 1.2fr) minmax(160px, 1.4fr) auto; }
+@media (max-width: 860px) { .people-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 640px) { .people-add { grid-template-columns: minmax(0, 1fr); } }

@@ -124,12 +124,32 @@ const groupRank = (a: AssetItem, partId: string, pipelines: AssetsView['pipeline
 const stagesOf = (a: AssetItem, parts: AssetsView['parts'], pipelines: AssetsView['pipelines']): { id: Stage; name: string }[] =>
   [{ id: 'TODO', name: '대기' }, ...partsInOrder(a, parts, pipelines).map(p => ({ id: p.partId, name: p.name })), { id: 'DONE', name: '완료' }];
 
+/** 파트 줄임말 두 글자: 겹치면 마지막 낱말(원화 · 모델), 그래도 겹치면 첫 낱말 첫 글자 + 마지막 낱말 첫 글자 */
+export function shortPartNames(parts: { partId: string; name: string }[]): Map<string, string> {
+  const first = (n: string) => n.replace(/\s+/g, '').slice(0, 2);
+  const words = (n: string) => n.trim().split(/\s+/);
+  const pick = (n: string, level: number) => {
+    const w = words(n);
+    if (level === 0 || w.length < 2) return first(n);
+    if (level === 1) return w[w.length - 1].slice(0, 2);
+    return w[0].slice(0, 1) + w[w.length - 1].slice(0, 1);
+  };
+  const out = new Map<string, string>();
+  for (const p of parts) {
+    let s = pick(p.name, 0);
+    for (let lv = 1; lv <= 2 && parts.some(o => o.partId !== p.partId && pick(o.name, 0) === s); lv++) s = pick(p.name, lv);
+    out.set(p.partId, s);
+  }
+  return out;
+}
+
 function PartDots(props: { asset: AssetItem; parts: AssetsView['parts']; pipelines: AssetsView['pipelines'] }) {
+  const short = shortPartNames(props.parts);
   return (
     <span class="part-dots">
       {partsInOrder(props.asset, props.parts, props.pipelines).map(p => {
         const s = props.asset.parts[p.partId];
-        return <span class={`pdot st-${s.status}`} title={`${p.name}: ${LABEL[s.status]}${s.doneAt ? ` · ${s.doneAt}` : ''}`}><span class="pdot-name">{p.name.slice(0, 2)}</span></span>;
+        return <span class={`pdot st-${s.status}`} title={`${p.name}: ${LABEL[s.status]}${s.doneAt ? ` · ${s.doneAt}` : ''}`}><span class="pdot-name">{short.get(p.partId) ?? p.name.slice(0, 2)}</span></span>;
       })}
     </span>
   );
@@ -149,7 +169,7 @@ function DueCell(props: { own: string | null; batchDue: string | null; done: boo
   return (
     <button type="button" class={`due-btn${late ? ' overdue' : ''}${props.own ? '' : ' inherited'}`} aria-label={props.label} disabled={props.disabled}
       title={props.own ? '에셋 마감일(눌러서 변경)' : due ? '배치 마감일을 따릅니다(눌러서 에셋 마감일 지정)' : '눌러서 마감일 지정'} onClick={() => setEdit(true)}>
-      {due ? (props.own ? fmtShortDate(due) : `배치 ${fmtShortDate(due)}`) : '—'}
+      {due ? fmtShortDate(due) : '—'}
     </button>
   );
 }
@@ -259,7 +279,7 @@ function CardWindow(props: { view: AssetsView; asset: AssetItem; stages: { id: S
               <div class="cw-progress"><span style={{ width: `${Math.round(a.progress * 100)}%` }} /></div>
               <div class="table-wrap ref-wrap">
                 <table class="grid edit ref asset-parts-table">
-                  <colgroup><col style="width: 88px" /><col style="width: 112px" /><col style="width: 136px" /><col /><col style="width: 108px" /><col style="width: 56px" /></colgroup>
+                  <colgroup><col /><col style="width: 112px" /><col style="width: 140px" /><col style="width: 128px" /><col style="width: 112px" /><col style="width: 64px" /></colgroup>
                   <thead><tr><th>파트</th><th>상태</th><th>완료일</th><th>담당</th><th>Jira</th><th class="n">리테이크</th></tr></thead>
                   <tbody>
                     {partsInOrder(a, view.parts, view.pipelines).map(p => {
@@ -473,7 +493,7 @@ export function AssetsPage(props: {
   }, [v, focusRt]);
   useEffect(() => { setSel(new Set()); setLimit(300); }, [updateId, group, batch, who, q, team, cat, status, attrF]);
 
-  function clearFilters() { setGroup('all'); setBatch('all'); setWho('all'); setTeam('all'); setCat('all'); setStatus('all'); setAttrF('all'); setQ(''); }
+  function clearFilters() { setGroup('all'); setBatch('all'); setWho('all'); setTeam('all'); setCat('all'); setStatus('all'); setAttrF('all'); setPipe('all'); setQ(''); }
   if (!v) return <div class="page"><p class="muted">불러오는 중…</p></div>;
   const apply = props.onApply;
   const groupKey = (g: AssetsView['groups'][number]) => g.groupId ?? '_';
@@ -495,9 +515,11 @@ export function AssetsPage(props: {
   for (const a of v.assets) for (const x of a.attrs) { if (!attrOptions.has(x.name)) attrOptions.set(x.name, new Set()); attrOptions.get(x.name)!.add(x.value); }
   const [attrName, attrValue] = attrF === 'all' ? ['', ''] : JSON.parse(attrF) as [string, string];
   const isOverdue = (a: AssetItem) => { const d = a.dueDate ?? (a.batchId ? v.batches.find(b => b.batchId === a.batchId)?.dueDate ?? null : null); return !!d && d < today() && a.stage !== 'DONE'; };
-  const filtered = [group, cat, batch, team, who, status, attrF].filter(x => x !== 'all').length + (q.trim() ? 1 : 0);
+  const filtered = [group, pipe, cat, batch, team, who, status, attrF].filter(x => x !== 'all').length + (q.trim() ? 1 : 0);
+  const noPipe = (a: AssetItem) => !a.pipelineId || !v.pipelines.some(p => p.pipelineId === a.pipelineId);
   const query = q.trim().toLowerCase();
   const shown = v.assets.filter(a => rtIds.has(a.resourceTypeId)
+    && (pipe === 'all' || (pipe === 'base' ? noPipe(a) : a.pipelineId === pipe))
     && (batch === 'all' || (batch === 'none' ? !a.batchId : a.batchId === batch))
     && (cat === 'all' || (cat === 'none' ? !a.category : a.category === cat))
     && (team === 'all' || (a.parts[team] && a.parts[team].status !== 'OMIT'))
@@ -528,7 +550,7 @@ export function AssetsPage(props: {
   // ───── 보드 ─────
   // 파이프라인을 고르면 그 파이프라인 에셋만, 열 = 그 단계(docs/28). "모두"면 전체 파트 순서
   const pipeSel = pipe === 'all' ? null : pipe === 'base' ? { pipelineId: null as string | null, steps: v.parts.map(p => p.partId), groups: v.parts.map(p => [p.partId]) } : v.pipelines.find(p => p.pipelineId === pipe) ?? null;
-  const boardShown = pipeSel ? shown.filter(a => a.pipelineId === pipeSel.pipelineId) : shown;
+  const boardShown = shown;
   // 파이프라인을 고르면 열 = 묶음(병렬 단계는 한 열, 열 id = 묶음 첫 파트)
   const colOf = (stage: Stage): string => (pipeSel ? pipeSel.groups.find(g => g.includes(stage))?.[0] ?? stage : stage);
   const boardStages = pipeSel
@@ -633,6 +655,11 @@ export function AssetsPage(props: {
               <option value="all">모든 항목</option>
               {v.groups.map(g => <option value={groupKey(g)}>{g.name} ({g.total})</option>)}
             </select>
+            {v.pipelines.length > 0 && <select class={`field${pipe !== 'all' ? ' on' : ''}`} aria-label="파이프라인 거르기" title="그 파이프라인을 쓰는 리소스의 에셋만. 보드에서는 열이 그 단계 순서가 됩니다" value={pipe === 'all' || pipe === 'base' || v.pipelines.some(p => p.pipelineId === pipe) ? pipe : 'all'} onChange={e => setPipe((e.target as HTMLSelectElement).value)}>
+              <option value="all">모든 파이프라인</option>
+              {v.pipelines.map(p => <option value={p.pipelineId}>{p.name}</option>)}
+              {v.assets.some(noPipe) && <option value="base">파이프라인 없음</option>}
+            </select>}
             <select class={`field${cat !== 'all' ? ' on' : ''}`} aria-label="세부 분류 거르기" value={cat} onChange={e => setCat((e.target as HTMLSelectElement).value)}>
               <option value="all">모든 세부 분류</option><option value="none">세부 분류 없음</option>
               {categories.map(c => <option value={c}>{c}</option>)}
@@ -654,10 +681,10 @@ export function AssetsPage(props: {
               {STATUS.map(x => <option value={x.s}>{x.label}</option>)}
               <option value="OVERDUE">마감 지남</option>
             </select>
-            <select class={`field${attrF !== 'all' ? ' on' : ''}`} aria-label="속성 거르기" value={attrF} onChange={e => setAttrF((e.target as HTMLSelectElement).value)} disabled={attrOptions.size === 0}>
-              <option value="all">{attrOptions.size ? '모든 속성' : '속성 없음'}</option>
+            {attrOptions.size === 0 ? <span class="small faint filter-none" title="제작 리스트의 추가 칸(속성)이 있는 에셋이 없습니다">속성 없음</span> : <select class={`field${attrF !== 'all' ? ' on' : ''}`} aria-label="속성 거르기" value={attrF} onChange={e => setAttrF((e.target as HTMLSelectElement).value)}>
+              <option value="all">모든 속성</option>
               {[...attrOptions.entries()].map(([n, vals]) => <optgroup label={n}>{[...vals].sort((x, y) => x.localeCompare(y, 'ko')).map(x => <option value={JSON.stringify([n, x])}>{n}: {x}</option>)}</optgroup>)}
-            </select>
+            </select>}
             <button type="button" class="btn sm ghost" disabled={filtered === 0} onClick={clearFilters}>거르기 풀기{filtered ? ` (${filtered})` : ''}</button>
           </div>
           {adding && !ro && (
@@ -768,20 +795,12 @@ export function AssetsPage(props: {
           {view === 'board' && shown.length > 0 && (
             <>
               <div class="list-opts small">
-                {v.pipelines.length > 0 && <>
-                  <span class="faint">파이프라인</span>
-                  <select class="field ghost-field" aria-label="보드 파이프라인" value={pipeSel || pipe === 'all' ? pipe : 'all'} onChange={e => setPipe((e.target as HTMLSelectElement).value)}>
-                    <option value="all">모두(전체 파트 순서)</option>
-                    {v.assets.some(a => !a.pipelineId || !v.pipelines.some(p => p.pipelineId === a.pipelineId)) && <option value="base">파이프라인 고르지 않음</option>}
-                    {v.pipelines.map(p => <option value={p.pipelineId}>{p.name}</option>)}
-                  </select>
-                </>}
                 <span class="faint">열</span>
                 <div class="segmented wide" role="radiogroup" aria-label="보드 열">
                   <button type="button" role="radio" aria-checked={!partBoard} class={!partBoard ? 'on' : ''} onClick={() => setBoardBy('stage')}>제작 단계</button>
                   {boardParts.map(p => <button type="button" role="radio" aria-checked={boardBy === p.partId} class={boardBy === p.partId ? 'on' : ''} onClick={() => setBoardBy(p.partId)}>{p.name} 상태</button>)}
                 </div>
-                <span class="faint">{partBoard ? `${partBoard.name} 파트의 상태별 열입니다. 이 파트가 "해당 없음"인 에셋은 빠집니다.` : '카드는 지금 작업 중인 파트 열에 있습니다. 앞 열로 끌면 지나친 파트는 완료, "해당 없음"인 파트 열에 놓으면 그 파트가 켜집니다.'}{pipeSel && boardShown.length < shown.length ? ` 다른 파이프라인 에셋 ${shown.length - boardShown.length}개는 이 보드에 없습니다.` : ''}</span>
+                <span class="faint">{partBoard ? `${partBoard.name} 파트의 상태별 열입니다. 이 파트가 "해당 없음"인 에셋은 빠집니다.` : '카드는 지금 작업 중인 파트 열에 있습니다. 앞 열로 끌면 지나친 파트는 완료, "해당 없음"인 파트 열에 놓으면 그 파트가 켜집니다.'}{pipeSel ? ` 열은 ${pipeSel.pipelineId ? v.pipelines.find(p => p.pipelineId === pipeSel.pipelineId)?.name ?? '' : '기본'} 파이프라인 단계 순서입니다.` : v.pipelines.length > 0 ? ' 거르기에서 파이프라인을 고르면 열이 그 단계 순서가 됩니다.' : ''}</span>
               </div>
               <div class="kanban" role="list" aria-label="보드">
                 {boardCols.map(col => {

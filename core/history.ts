@@ -43,8 +43,29 @@ const showValue = (field: string | null, v: unknown): string => {
   if (v === 0 && field === 'active') return '사용 안 함';
   return String(v);
 };
+/** 이력 분류(docs/34 후속): 화면에서 거르고 묶는 기준 */
+export type HistoryArea = 'setup' | 'capacity' | 'plan' | 'progress' | 'assets' | 'scenario' | 'news' | 'other';
+export const HISTORY_AREA: Record<HistoryArea, string> = {
+  setup: '기준 정보', capacity: '인력', plan: '물량 · 계획', progress: '작업 진척', assets: '에셋', scenario: '시나리오', news: '소식', other: '그 밖',
+};
+const AREA_OF: Record<string, HistoryArea> = {
+  meta: 'setup', settings: 'setup', holidays: 'setup', parts: 'setup', part_overlaps: 'setup', pipelines: 'setup', pipeline_steps: 'setup', resource_groups: 'setup',
+  resource_types: 'setup', resource_parts: 'setup', effort_profiles: 'setup', efforts: 'setup', effort_mix: 'setup',
+  capacity: 'capacity', people: 'capacity', teams: 'capacity',
+  update_types: 'plan', type_templates: 'plan', updates: 'plan', volumes: 'plan',
+  progress: 'progress',
+  batches: 'assets', assets: 'assets', asset_parts: 'assets', asset_thumbs: 'assets', asset_links: 'assets', asset_comments: 'assets', asset_attrs: 'assets',
+  scenarios: 'scenario', scenario_changes: 'scenario', news: 'news',
+};
+
 export interface HistoryBatch {
   batchId: string;
+  /** 분류: 가장 많이 바뀐 표 기준 */
+  area: HistoryArea;
+  /** 무엇을: 더하고 지운 행의 이름, 바꾼 칸의 위치(리소스 · 파트 · 달 …) */
+  subject: string;
+  /** 칸 하나만 바꿨으면 "항목 이전 → 이후" */
+  change: string | null;
   at: string;
   editor: string;
   reason: string | null;
@@ -89,8 +110,21 @@ export function historyView(db: SqlDb, limit = 200): { batches: HistoryBatch[]; 
       ? `${TARGET_NAME[e.target] ?? e.target} ${QTY_NAME[e.field ?? ''] ?? FIELD_NAME[e.field ?? ''] ?? e.field ?? ''}`.trim()
       : `${TARGET_NAME[e.target] ?? e.target} ${e.action === 'INSERT' ? '더함' : '지움'}`)))];
     const reason = rows[0]?.reason == null ? null : String(rows[0].reason);
+    // 분류: 가장 많이 나온 표
+    const tally = new Map<HistoryArea, number>();
+    for (const e of entries) { const a = AREA_OF[e.target] ?? 'other'; tally.set(a, (tally.get(a) ?? 0) + 1); }
+    const area = [...tally.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? 'other';
+    // 무엇을: 행 이름(더함 · 지움) 또는 위치(바꿈), 겹치지 않게 3개까지
+    const subj: string[] = [];
+    for (const e of entries) {
+      const row = (e.action === 'INSERT' ? e.next : e.action === 'DELETE' ? e.old : null) as Record<string, unknown> | null;
+      const t = row && typeof row === 'object' ? (typeof row.name === 'string' ? (row.name.trim() || `이름 없는 ${e.targetName}`) : e.where) : e.where;
+      if (t && !subj.includes(t)) subj.push(t);
+    }
+    const subject = subj.length > 3 ? `${subj.slice(0, 3).join(' · ')} 외 ${subj.length - 3}` : subj.join(' · ');
+    const one = entries.length === 1 && entries[0].action === 'UPDATE' ? entries[0] : null;
     return {
-      batchId: id,
+      batchId: id, area, subject, change: one ? `${one.fieldName} ${one.oldText} → ${one.nextText}` : null,
       at: String(rows[0]?.at ?? ''),
       editor: String(rows[0]?.editor ?? ''),
       reason,

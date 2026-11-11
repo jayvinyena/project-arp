@@ -89,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File .\release.ps1 -E2E -Deploy -ProjectName
 npm run dev                               # 앱 개발 서버 → /app/index.html?sample=normal
 npm run check                             # 형식 검사(TypeScript, 오류 0)
 npm test                                  # 검사 181개
-npm run e2e                               # 크롬 시험 271개(동시 3개, 1분 안팎, 시간 초과로 멈춘 묶음은 혼자 한 번 더): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 21 · 보기 모드 · 소식 11 · 업데이트 계획 17 · 작업 진척 5 · 에셋 26 · 제작 리스트 가져오기 · 거르기 32 · 현황판 22 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 15 · 공정 순서 · 파이프라인 22 · 배포 12
+npm run e2e                               # 크롬 시험 272개(동시 3개, 1분 안팎, 시간 초과로 멈춘 묶음은 혼자 한 번 더): 저장 9 · 새 프로젝트 11 · 사용 동선 8 · 작업자 21 · 보기 모드 · 소식 11 · 업데이트 계획 17 · 작업 진척 5 · 에셋 26 · 제작 리스트 가져오기 · 거르기 32 · 현황판 22 · 시뮬레이션 11 · 가져오기 15 · 안정화 10 · 확장 10 · 마감 맞추기 14 · 만든 뒤 고치기 15 · 공정 순서 · 파이프라인 23 · 배포 12
 npm run build                             # 배포용 → dist-web/ → Cloudflare Pages에 올리기 (docs/12-deploy.md)
 npm run compare-legacy -- private/운영시트.xlsx   # 옛 엔진 ↔ 새 엔진 대조 (../arp 필요, 파일 없으면 옛 샘플)
 npm run review-data -- private/운영시트.xlsx      # 운영 시트 → .arp + PM 데이터 점검 엑셀(docs/15-operating-sheet.md)
@@ -178,6 +178,7 @@ Node 24 이상(내장 `node:sqlite`, TypeScript 바로 실행)과 `npm install`.
 | [docs/20-asset-management.md](docs/20-asset-management.md) · [core/assets.ts](core/assets.ts) · [web/app/ui/AssetsPage.tsx](web/app/ui/AssetsPage.tsx) | **에셋 관리 · 제작 현황판**(2026-11-09 요청): 현황판(진행률 · 추이 · 처리할 것 · 항목 × 파트) · 에셋 리스트 · 트렐로식 보드(끌어서 단계 변경) · 카드 창(썸네일 · 설명 · 체크리스트 · 링크 · 댓글) · 배치 · 작업 진척 자동 집계 · 에셋 엑셀 · 팀 제작 리스트(구글 시트) 형식 그대로 가져오기 · 세부 분류 · 속성 · 검사 11 + 6개 · 크롬 시험 20 + 16개 · 저장 시간 측정 [tools/bench-assets.mjs](tools/bench-assets.mjs) |
 | [docs/19-import-template.md](docs/19-import-template.md) · [core/import-spec.ts](core/import-spec.ts) | **엑셀 가져오기 양식 · 편집용 엑셀 내보내기**(2026-11-06 요청): 규격 한 곳 정의 → 양식 파일 · 한글 머리글 읽기 · 가져오기 창 규격 표 · 지금 프로젝트를 양식으로(왕복) |
 | [docs/18-layout-help.md](docs/18-layout-help.md) · [tools/capture-pages.mjs](tools/capture-pages.mjs) · [tools/find-overflow.mjs](tools/find-overflow.mjs) | **화면 배치 점검 · 화면 안내 · 용어(작업 진척)**(2026-11-06 요청) · 메뉴별 캡처 · 좁은 화면 넘침 찾기 |
+| [docs/34-uiux-audit.md](docs/34-uiux-audit.md) · [tools/ux-capture.mjs](tools/ux-capture.mjs) · [tools/find-clipped.mjs](tools/find-clipped.mjs) | **UI/UX 전수 검사 · 1 ~ 4단계 고침**(2026-11-11) · 전 화면 1440 · 390 캡처 · 글자 잘림 검출(단추 · 알약 · 탭 글자 넘침 · 짧은 글 꺾임, 입력 · 고르기 값 잘림, 0개여야 통과) |
 | [docs/17-setup-templates-ai.md](docs/17-setup-templates-ai.md) | **만든 뒤 고치기 · 물량 템플릿 · AI 공수**(2026-11-05 요청) |
 | [docs/16-review.md](docs/16-review.md) | **전체 점검**: 독립 점검 3개(계산·데이터·화면)로 찾은 문제와 고친 것 |
 | [docs/15-operating-sheet.md](docs/15-operating-sheet.md) | **운영 시트 준비 가이드**: 읽는 시트·칸, 점검표, 옛 도구와 달라지는 곳, 운영 규모 시험 결과 |
