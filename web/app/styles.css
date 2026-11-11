@@ -1897,3 +1897,37 @@ table.grid.asset-parts-table .field, table.grid.asset-parts-table .st-select { h
 @media (max-width: 640px) { table.grid.asset-parts-table tr.row.current td { background: transparent; } table.grid.asset-parts-table tr.row.current { background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface)); } }
 .cw-prop { grid-template-columns: 88px minmax(0, 1fr); }
 @media (max-width: 640px) { .cw-prop { grid-template-columns: minmax(0, 1fr); } }
+
+/* ───────── 보드 카드 다시 짜기(트렐로 · 리니어 참고) ─────────
+   윗줄 분류 · 배치 + 작은 체크(올릴 때 · 고르는 중), 제목 두 줄, 아랫줄 배지 + 담당 얼굴, 맨 아래 파트 진행 막대 */
+.kb-card { border-radius: 10px; box-shadow: 0 1px 1px rgb(16 16 24 / 4%); }
+.kb-card:hover { box-shadow: 0 2px 8px rgb(16 16 24 / 8%); }
+.kb-body { gap: 4px; padding: 9px 11px 10px; }
+.kb-card.no-cover .kb-body { padding-left: 11px; }
+.kb-top { display: flex; align-items: center; gap: 8px; min-height: 16px; }
+.kb-meta { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-11); font-weight: 600; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-check, .kb-card.no-cover .kb-check { position: static; flex: none; width: 14px; height: 14px; margin: 0; border-radius: 4px; opacity: 0; transition: opacity .1s; }
+.kb-card:hover .kb-check, .kb-card:focus-within .kb-check, .kb-card.picked .kb-check, .kanban.selecting .kb-check, .kb-check:focus-visible { opacity: 1; }
+@media (hover: none) { .kb-check, .kb-card.no-cover .kb-check { opacity: 1; width: 18px; height: 18px; } }
+.kb-name { font-size: var(--fs-14); font-weight: 600; line-height: 1.35; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.kb-foot { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.kb-badges { flex: 1; min-width: 0; gap: 4px; }
+.kb-badges .st-select { height: 22px; border-radius: 6px; padding: 0 18px 0 7px; font-size: var(--fs-12); }
+.kb-badge { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: var(--fs-12); font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kb-badge .icon { width: 12px; height: 12px; color: var(--text-3); }
+.kb-badge.overdue { background: var(--bad-soft); color: var(--bad); }
+.kb-badge.overdue .icon { color: var(--bad); }
+.kb-badge.all { background: var(--ok-soft); color: var(--ok); }
+.kb-badge.all .icon { color: var(--ok); }
+.kb-av { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-11); font-weight: 700; letter-spacing: -0.02em; color: var(--hue); background: color-mix(in srgb, var(--hue) 16%, var(--surface)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--hue) 25%, transparent); }
+.kb-partbar { display: flex; gap: 2px; height: 4px; margin-top: 6px; }
+.kb-pseg { flex: 1; border-radius: 2px; background: var(--st-fg); opacity: .85; }
+.kb-pseg.st-TODO { background: var(--line-strong); opacity: 1; }
+.kb-pseg.st-OMIT { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.kb-pseg.st-HOLD { background: var(--text-3); opacity: .5; }
+.kb-foot { align-items: flex-end; }
+.kb-badges { row-gap: 2px; }
+.kb-title { display: flex; align-items: flex-start; gap: 8px; }
+.kb-title .kb-name { flex: 1; min-width: 0; }
+.kb-title .kb-av { margin-top: -1px; }
+.kb-badges .st-select { padding: 0 16px 0 6px; background-position: right 3px center; }

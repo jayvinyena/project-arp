@@ -13,7 +13,7 @@ import type { AssetsView, AssetItem, AssetStatus, Tier, Stage, AssetDetail } fro
 import type { Edit } from '../../../core/edits.ts';
 import { fmtPct, fmtDate, fmtShortDate } from '../lib/format.ts';
 import { MODE_LABEL } from '../lib/modes.ts';
-import { IconPlus, IconX, IconDownload, IconFolder, IconImage, IconGrid, IconList } from './icons.tsx';
+import { IconPlus, IconX, IconDownload, IconFolder, IconImage, IconGrid, IconList, IconCalendar, IconCheck } from './icons.tsx';
 import { useReorder, Grip } from './reorder.tsx';
 import type { JSX } from 'preact';
 
@@ -153,6 +153,25 @@ function PartDots(props: { asset: AssetItem; parts: AssetsView['parts']; pipelin
       })}
     </span>
   );
+}
+
+/** 보드 카드 아래 파트 진행 막대(트렐로 체크리스트 배지 · 리니어 진행 막대 참고): 파트마다 한 칸, 색 = 상태 */
+function PartBar(props: { asset: AssetItem; parts: AssetsView['parts']; pipelines: AssetsView['pipelines'] }) {
+  const list = partsInOrder(props.asset, props.parts, props.pipelines);
+  const text = list.map(p => `${p.name} ${LABEL[props.asset.parts[p.partId].status]}`).join(' · ');
+  return (
+    <span class="kb-partbar" role="img" aria-label={`파트: ${text}`} title={text}>
+      {list.map(p => <span class={`kb-pseg st-${props.asset.parts[p.partId].status}`} />)}
+    </span>
+  );
+}
+/** 담당 얼굴: 한글 이름은 뒤 두 글자, 그 밖은 앞 두 글자. 색은 이름마다 같게 */
+function Avatar(props: { name: string }) {
+  const n = props.name.trim();
+  const ko = /^[가-힣]{3,4}$/.test(n);
+  const short = ko ? n.slice(-2) : n.replace(/\s+/g, '').slice(0, 2).toUpperCase();
+  let h = 0; for (const ch of n) h = (h * 31 + ch.charCodeAt(0)) % 997;
+  return <span class={`kb-av av-${h % 6}`} title={`담당 ${n}`} aria-label={`담당 ${n}`}>{short}</span>;
 }
 
 const jiraHref = (base: string | null, key: string | null) => (base && key ? `${base}${encodeURIComponent(key)}` : null);
@@ -815,7 +834,7 @@ export function AssetsPage(props: {
                 </div>
                 <span class="faint">{partBoard ? `${partBoard.name} 파트의 상태별 열입니다. 이 파트가 "해당 없음"인 에셋은 빠집니다.` : '카드는 지금 작업 중인 파트 열에 있습니다. 앞 열로 끌면 지나친 파트는 완료, "해당 없음"인 파트 열에 놓으면 그 파트가 켜집니다.'}{pipeSel ? ` 열은 ${pipeSel.pipelineId ? v.pipelines.find(p => p.pipelineId === pipeSel.pipelineId)?.name ?? '' : '기본'} 파이프라인 단계 순서입니다.` : v.pipelines.length > 0 ? ' 거르기에서 파이프라인을 고르면 열이 그 단계 순서가 됩니다.' : ''}</span>
               </div>
-              <div class="kanban" role="list" aria-label="보드">
+              <div class={`kanban${sel.size ? ' selecting' : ''}`} role="list" aria-label="보드">
                 {boardCols.map(col => {
                   const blocked = dragIds.length > 0 && !canDrop(col.id);
                   return (
@@ -836,20 +855,25 @@ export function AssetsPage(props: {
                                 onDragEnd={() => { setDragIds([]); setOver(null); }}
                                 onClick={e => { if ((e.target as HTMLElement).closest('input, select, a, button')) return; if (e.shiftKey) toggle(a.assetId); else setOpenId(a.assetId); }}>
                                 {a.thumbAt && <Thumb asset={a} size="cover" />}
-                                <input type="checkbox" class="kb-check" aria-label={`${a.name} 고르기`} checked={sel.has(a.assetId)} onChange={() => toggle(a.assetId)} />
                                 <div class="kb-body">
-                                  <span class="kb-name">{a.name}</span>
-                                  <span class="kb-meta small faint">{a.category ?? rtName.get(a.resourceTypeId)}{a.batchId ? ` · ${batchById.get(a.batchId)?.name}` : ''}</span>
-                                  <div class="kb-badges">
-                                    {!partBoard && a.stage !== 'TODO' && a.stage !== 'DONE'
-                                      ? <StatusSelect value={a.sub} label={`${a.name} 세부 상태`} disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
-                                      : null}
-                                    {due && <span class={`label-chip${late ? ' overdue' : ''}`}>{fmtShortDate(due)}</span>}
-                                    {a.assignee && <span class="label-chip">{a.assignee}</span>}
-                                    {a.jiraKey && <span class="label-chip">{a.jiraKey}</span>}
-                                    {a.comments > 0 && <span class="label-chip" title="댓글">💬 {a.comments}</span>}
+                                  {/* 윗줄: 분류 · 배치(흐리게), 고르기 체크는 오른쪽 위 작게 — 올리거나 고르는 중일 때만 */}
+                                  <div class="kb-top">
+                                    <span class="kb-meta">{a.category ?? rtName.get(a.resourceTypeId)}{a.batchId ? ` · ${batchById.get(a.batchId)?.name}` : ''}</span>
+                                    <input type="checkbox" class="kb-check" aria-label={`${a.name} 고르기`} checked={sel.has(a.assetId)} onChange={() => toggle(a.assetId)} />
                                   </div>
-                                  <PartDots asset={a} parts={v.parts} pipelines={v.pipelines} />
+                                  <div class="kb-title"><span class="kb-name" title={a.name}>{a.name}</span>{a.assignee && <Avatar name={a.assignee} />}</div>
+                                  {/* 아랫줄: 상태 · 마감 · 체크리스트 · 댓글 배지, 오른쪽 끝 담당 얼굴 */}
+                                  <div class="kb-foot">
+                                    <div class="kb-badges">
+                                      {!partBoard && a.stage !== 'TODO' && a.stage !== 'DONE'
+                                        ? <StatusSelect value={a.sub} label={`${a.name} 세부 상태`} disabled={ro} options={SUBS} onChange={st => void apply({ kind: 'assetPart', assetIds: [a.assetId], partId: a.stage, status: st })} />
+                                        : null}
+                                      {due && <span class={`kb-badge${late ? ' overdue' : ''}`} title={`${late ? '마감 지남' : '마감'} ${fmtShortDate(due)}`}><IconCalendar />{Number(due.slice(5, 7))}월 {Number(due.slice(8, 10))}일</span>}
+                                      {(() => { const on = Object.values(a.parts).filter(p => p.status !== 'OMIT'); const done = on.filter(p => p.status === 'DONE').length; return on.length > 0 && <span class={`kb-badge${done === on.length ? ' all' : ''}`} title="끝낸 파트 / 하는 파트"><IconCheck />{done}/{on.length}</span>; })()}
+                                      {a.comments > 0 && <span class="kb-badge" title="댓글">💬 {a.comments}</span>}
+                                    </div>
+                                  </div>
+                                  <PartBar asset={a} parts={v.parts} pipelines={v.pipelines} />
                                 </div>
                               </div>
                             </>
